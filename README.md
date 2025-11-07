@@ -4,6 +4,10 @@ A comprehensive multi-tenant SaaS IoT platform combining edge device management 
 
 ![System Metrics Dashboard](docs/images/system_metrics.JPG)
 
+![API Usage](docs/images/api_usage.JPG)
+
+![Digital Twin Graph Model](docs/images/digital_twin_graph.JPG)
+
 ## Features
 
 ### Multi-Tenant SaaS Architecture
