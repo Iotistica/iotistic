@@ -1,4 +1,4 @@
-import { Server, User, LogIn, Settings, HelpCircle, LogOut, RefreshCw, XCircle, Save, MessageSquare } from "lucide-react";
+import { Server, User, LogIn, Settings, HelpCircle, LogOut, RefreshCw, XCircle, Save, MessageSquare, Tag, Building2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import {
@@ -24,6 +24,8 @@ interface HeaderProps {
   onAccountClick?: () => void; // Callback for opening account page
   onUsersClick?: () => void; // Callback for opening user management page
   onProfileClick?: () => void; // Callback for opening profile page
+  onTagDefinitionsClick?: () => void; // Callback for opening tag definitions page
+  onDigitalTwinClick?: () => void; // Callback for opening digital twin page
   userRole?: string; // User role for conditional UI
 }
 
@@ -36,6 +38,8 @@ export function Header({
   onAccountClick = () => {},
   onUsersClick = () => {},
   onProfileClick = () => {},
+  onTagDefinitionsClick = () => {},
+  onDigitalTwinClick = () => {},
   userRole = 'viewer'
 }: HeaderProps) {
   // AI Chat state
@@ -217,11 +221,21 @@ export function Header({
                     Account & License
                   </DropdownMenuItem>
                   {(userRole === 'owner' || userRole === 'admin' || userRole === 'manager') && (
-                    <DropdownMenuItem onClick={onUsersClick}>
-                      <User className="w-4 h-4 mr-2" />
-                      User Management
-                    </DropdownMenuItem>
+                    <>
+                      <DropdownMenuItem onClick={onUsersClick}>
+                        <User className="w-4 h-4 mr-2" />
+                        User Management
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={onTagDefinitionsClick}>
+                        <Tag className="w-4 h-4 mr-2" />
+                        Tag Definitions
+                      </DropdownMenuItem>
+                    </>
                   )}
+                  <DropdownMenuItem onClick={onDigitalTwinClick}>
+                    <Building2 className="w-4 h-4 mr-2" />
+                    Digital Twin
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => toast.info("Opening help...")}>
                     <HelpCircle className="w-4 h-4 mr-2" />
                     Help & Support

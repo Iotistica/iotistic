@@ -27,6 +27,7 @@ import { ProfilePage } from "./pages/ProfilePage";
 import { GlobalDashboardPage } from "./pages/GlobalDashboardPage";
 import DeviceTagsPage from "./pages/DeviceTagsPage";
 import TagDefinitionsPage from "./pages/TagDefinitionsPage";
+import { DigitalTwinPage } from "./pages/DigitalTwinPage";
 
 import { toast } from "sonner";
 import { Header } from "./components/Header";
@@ -60,7 +61,7 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [deviceDialogOpen, setDeviceDialogOpen] = useState(false);
   const [editingDevice, setEditingDevice] = useState<Device | null>(null);
-  const [currentView, setCurrentView] = useState<'metrics' | 'sensors' | 'mqtt' | 'jobs' | 'applications' | 'timeline' | 'usage' | 'analytics' | 'security' | 'maintenance' | 'logs' | 'settings' | 'tags' | 'tag-definitions' | 'account' | 'users' | 'profile' | 'dashboard'>('dashboard');
+  const [currentView, setCurrentView] = useState<'metrics' | 'sensors' | 'mqtt' | 'jobs' | 'applications' | 'timeline' | 'usage' | 'analytics' | 'security' | 'maintenance' | 'logs' | 'settings' | 'tags' | 'tag-definitions' | 'account' | 'users' | 'profile' | 'dashboard' | 'digital-twin'>('dashboard');
   const [debugMode, setDebugMode] = useState(false);
   
   // Memoize selected device to prevent unnecessary re-renders
@@ -287,6 +288,12 @@ export default function App() {
         
         // Update tags if provided
         if (deviceData.tags !== undefined) {
+          console.log('[DEBUG] Updating tags for device:', {
+            deviceUuid: deviceData.deviceUuid,
+            tags: deviceData.tags,
+            url: buildApiUrl(`/api/v1/devices/${deviceData.deviceUuid}/tags`)
+          });
+          
           const tagsResponse = await fetch(buildApiUrl(`/api/v1/devices/${deviceData.deviceUuid}/tags`), {
             method: 'PUT',
             headers: {
@@ -299,11 +306,14 @@ export default function App() {
           
           if (!tagsResponse.ok) {
             const error = await tagsResponse.json();
-            console.error('Failed to update tags:', error);
+            console.error('[DEBUG] Failed to update tags:', error);
             // Don't throw - device update succeeded, just log tag update failure
             toast.warning('Device updated but tags may not have saved', { id: 'update-device' });
             return;
           }
+          
+          const tagsResult = await tagsResponse.json();
+          console.log('[DEBUG] Tags updated successfully:', tagsResult);
           
           // Dispatch event to notify DeviceTagsPage to reload tags
           window.dispatchEvent(new CustomEvent('device-tags-updated', { 
@@ -458,6 +468,8 @@ export default function App() {
         onAccountClick={() => setCurrentView('account')}
         onUsersClick={() => setCurrentView('users')}
         onProfileClick={() => setCurrentView('profile')}
+        onTagDefinitionsClick={() => setCurrentView('tag-definitions')}
+        onDigitalTwinClick={() => setCurrentView('digital-twin')}
         userRole={user?.role || 'viewer'}
       />
 
@@ -706,6 +718,9 @@ export default function App() {
           )}
           {currentView === 'tag-definitions' && (
             <TagDefinitionsPage />
+          )}
+          {currentView === 'digital-twin' && (
+            <DigitalTwinPage />
           )}
           {currentView === 'account' && (
             <AccountPage />

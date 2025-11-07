@@ -13,9 +13,11 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
 import { Badge } from "./ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { toast } from "sonner";
 import { Device } from "./DeviceSidebar";
 import { buildApiUrl } from "../config/api";
+import { getTagDefinitions, type TagDefinition } from "../services/deviceTags";
 
 interface AddEditDeviceDialogProps {
   open: boolean;
@@ -46,8 +48,10 @@ export function AddEditDeviceDialog({
   const [provisioningKeyId, setProvisioningKeyId] = useState<string | null>(null);
   const [isLoadingKey, setIsLoadingKey] = useState(false);
   const [tags, setTags] = useState<Record<string, string>>({});
+  const [tagDefinitions, setTagDefinitions] = useState<TagDefinition[]>([]);
   const [newTagKey, setNewTagKey] = useState("");
   const [newTagValue, setNewTagValue] = useState("");
+  const [selectedTagDefinition, setSelectedTagDefinition] = useState<TagDefinition | null>(null);
   const [formData, setFormData] = useState({
     name: "",
     type: "server" as Device['type'],
@@ -63,6 +67,22 @@ export function AddEditDeviceDialog({
 
   // Install command
   const installCommand = `bash <(curl -H 'Cache-Control: no-cache' -sL --proto '=https' https://apps.iotistic.ca/install-agent)`;
+
+  // Load tag definitions
+  const loadTagDefinitions = async () => {
+    try {
+      const definitions = await getTagDefinitions();
+      setTagDefinitions(definitions);
+    } catch (error) {
+      console.error('Error loading tag definitions:', error);
+      toast.error('Failed to load tag definitions');
+    }
+  };
+
+  // Get available tag keys (exclude already used ones)
+  const availableTagKeys = tagDefinitions.filter(
+    def => !tags[def.key]
+  );
 
   // Fetch provisioning key from API
   const fetchProvisioningKey = async (isRegenerate = false) => {
@@ -116,12 +136,15 @@ export function AddEditDeviceDialog({
       // Fetch tags from API for this device
       const fetchDeviceTags = async () => {
         try {
+          console.log('[DEBUG AddEditDeviceDialog] Fetching tags for device:', device.deviceUuid);
           const response = await fetch(buildApiUrl(`/api/v1/devices/${device.deviceUuid}/tags`));
           if (response.ok) {
             const data = await response.json();
+            console.log('[DEBUG AddEditDeviceDialog] Fetched tags:', data.tags);
             setTags(data.tags || {});
           } else {
             // Device might not have tags yet, that's okay
+            console.log('[DEBUG AddEditDeviceDialog] No tags found for device');
             setTags({});
           }
         } catch (error) {
@@ -149,6 +172,11 @@ export function AddEditDeviceDialog({
       if (open && !provisioningKey) {
         fetchProvisioningKey(false);
       }
+    }
+
+    // Load tag definitions when dialog opens
+    if (open) {
+      loadTagDefinitions();
     }
   }, [device, open]);
 
@@ -181,7 +209,7 @@ export function AddEditDeviceDialog({
       }
     }
 
-    onSave({
+    const deviceDataToSave = {
       ...(device?.id ? { id: device.id } : {}),
       deviceUuid: device?.deviceUuid || generateUuid(),
       name: formData.name,
@@ -194,7 +222,17 @@ export function AddEditDeviceDialog({
       memory: formData.memory,
       disk: formData.disk,
       tags: tags,
+    };
+    
+    console.log('[DEBUG AddEditDeviceDialog] Saving device with data:', {
+      ...deviceDataToSave,
+      deviceProp: device,
+      deviceId: device?.id,
+      deviceUuid: device?.deviceUuid,
+      tagsCount: Object.keys(tags).length
     });
+    
+    onSave(deviceDataToSave);
 
     // Note: Don't show success toast here - let the parent handle it since it's async now
     onOpenChange(false);
@@ -219,8 +257,10 @@ export function AddEditDeviceDialog({
   };
 
   const handleAddTag = () => {
+    console.log('[DEBUG handleAddTag] Called with:', { newTagKey, newTagValue, currentTags: tags });
+    
     if (!newTagKey.trim()) {
-      toast.error("Tag key cannot be empty");
+      toast.error("Please select a tag key");
       return;
     }
     if (!newTagValue.trim()) {
@@ -231,11 +271,30 @@ export function AddEditDeviceDialog({
       toast.error(`Tag "${newTagKey}" already exists`);
       return;
     }
+
+    // Warn if value is not in allowed values (but still allow it)
+    if (selectedTagDefinition?.allowedValues && selectedTagDefinition.allowedValues.length > 0) {
+      if (!selectedTagDefinition.allowedValues.includes(newTagValue)) {
+        toast.warning(`Note: Value "${newTagValue}" is not in the suggested values list`, {
+          description: `Suggested: ${selectedTagDefinition.allowedValues.join(', ')}`
+        });
+      }
+    }
     
-    setTags({ ...tags, [newTagKey]: newTagValue });
+    const updatedTags = { ...tags, [newTagKey]: newTagValue };
+    console.log('[DEBUG handleAddTag] Setting tags to:', updatedTags);
+    setTags(updatedTags);
     setNewTagKey("");
     setNewTagValue("");
+    setSelectedTagDefinition(null);
     toast.success(`Tag "${newTagKey}" added`);
+  };
+
+  const handleTagKeyChange = (key: string) => {
+    setNewTagKey(key);
+    const definition = tagDefinitions.find(def => def.key === key);
+    setSelectedTagDefinition(definition || null);
+    setNewTagValue(""); // Reset value when key changes
   };
 
   const handleRemoveTag = (key: string) => {
@@ -317,18 +376,46 @@ export function AddEditDeviceDialog({
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                <div className="space-y-1">
+                  <Select value={newTagKey} onValueChange={handleTagKeyChange}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select tag key" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableTagKeys.length === 0 ? (
+                        <div className="p-2 text-sm text-muted-foreground">
+                          {tagDefinitions.length === 0 
+                            ? "No tag definitions available" 
+                            : "All tag keys are already used"}
+                        </div>
+                      ) : (
+                        availableTagKeys.map((def) => (
+                          <SelectItem key={def.key} value={def.key}>
+                            <div className="flex flex-col">
+                              <span>{def.key}</span>
+                              {def.description && (
+                                <span className="text-xs text-muted-foreground">{def.description}</span>
+                              )}
+                            </div>
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 <Input
-                  placeholder="Key (e.g., environment)"
-                  value={newTagKey}
-                  onChange={(e) => setNewTagKey(e.target.value)}
-                  onKeyPress={handleTagKeyKeyPress}
-                />
-                <Input
-                  placeholder="Value (e.g., production)"
+                  placeholder={
+                    selectedTagDefinition?.allowedValues && selectedTagDefinition.allowedValues.length > 0
+                      ? `Value (e.g., ${selectedTagDefinition.allowedValues.slice(0, 2).join(', ')})`
+                      : "Value (e.g., production)"
+                  }
                   value={newTagValue}
                   onChange={(e) => setNewTagValue(e.target.value)}
                   onKeyPress={handleTagKeyKeyPress}
+                  disabled={!newTagKey}
                 />
+
                 <Button
                   type="button"
                   variant="outline"
@@ -339,7 +426,21 @@ export function AddEditDeviceDialog({
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                Tags help you organize and filter devices. Common tags: environment, location, type, owner
+                {selectedTagDefinition ? (
+                  <>
+                    {selectedTagDefinition.description}
+                    {selectedTagDefinition.allowedValues && selectedTagDefinition.allowedValues.length > 0 && (
+                      <span className="block mt-1">
+                        Suggested values: {selectedTagDefinition.allowedValues.join(', ')}
+                      </span>
+                    )}
+                    {selectedTagDefinition.isRequired && (
+                      <span className="text-orange-600 dark:text-orange-400 ml-1">(Required)</span>
+                    )}
+                  </>
+                ) : (
+                  "Select a predefined tag key and enter a value"
+                )}
               </p>
             </div>
           </div>
