@@ -14,7 +14,7 @@ A comprehensive multi-tenant SaaS IoT platform combining edge device management 
 - **Usage Metering** - Prometheus metrics collection for billing
 - **Automated Deployment** - Self-signup triggers K8s namespace creation
 
-![Device HTTP and MQTT Trafiic Monitor ](docs/images/traffic_monitor.JPG.JPG)
+![Device HTTP and MQTT Trafiic Monitor ](docs/images/traffic_monitor.JPG)
 
 ![API Usage](docs/images/api_usage.JPG)
 
