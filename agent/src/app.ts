@@ -11,6 +11,10 @@
 
 import process from 'process';
 import DeviceAgent from './agent';
+import { getGlobalLogger } from './logging/index.js';
+import { LogComponents } from './logging/components.js';
+
+const logger = getGlobalLogger();
 
 // Start the device agent
 const supervisor = new DeviceAgent();

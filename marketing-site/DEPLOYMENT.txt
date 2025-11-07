@@ -1,0 +1,299 @@
+# Deploy to Azure Static Web Apps
+
+## Quick Deployment Steps
+
+### Option 1: Azure Portal (Easiest)
+
+1. **Create Static Web App**
+   - Go to [Azure Portal](https://portal.azure.com)
+   - Click "Create a resource" → Search "Static Web App"
+   - Click "Create"
+
+2. **Configure Basic Settings**
+   ```
+   Subscription: [Your subscription]
+   Resource Group: [Create new or select existing]
+   Name: iotistic-marketing
+   Plan type: Free (or Standard for custom domain)
+   Region: Choose closest to your users
+   ```
+
+3. **Connect to GitHub**
+   - Sign in with GitHub
+   - Organization: Iotistica
+   - Repository: iotistic
+   - Branch: master
+
+4. **Build Configuration**
+   ```
+   Build Presets: Custom
+   App location: /marketing-site
+   Api location: (leave empty)
+   Output location: (leave empty - we use plain HTML)
+   ```
+
+5. **Review + Create**
+   - Click "Review + create"
+   - Click "Create"
+
+6. **Wait for Deployment**
+   - Azure will create a GitHub Action automatically
+   - Check GitHub Actions tab for deployment status
+   - Takes ~2-3 minutes
+
+7. **Get Your URL**
+   - Once deployed, go to your Static Web App resource
+   - URL will be: `https://[random-name].azurestaticapps.net`
+
+### Option 2: Azure CLI (Advanced)
+
+```bash
+# Install Azure CLI if needed
+# https://docs.microsoft.com/en-us/cli/azure/install-azure-cli
+
+# Login
+az login
+
+# Create resource group (if needed)
+az group create --name iotistic-rg --location canadacentral
+
+# Create static web app
+az staticwebapp create \
+  --name iotistic-marketing \
+  --resource-group iotistic-rg \
+  --source https://github.com/Iotistica/iotistic \
+  --location canadacentral \
+  --branch master \
+  --app-location "/marketing-site" \
+  --login-with-github
+
+# Get deployment URL
+az staticwebapp show \
+  --name iotistic-marketing \
+  --resource-group iotistic-rg \
+  --query "defaultHostname" -o tsv
+```
+
+### Option 3: Manual Deployment (No GitHub)
+
+```bash
+# Install Azure Static Web Apps CLI
+npm install -g @azure/static-web-apps-cli
+
+# From marketing-site folder
+cd marketing-site
+
+# Deploy
+swa deploy \
+  --app-location . \
+  --deployment-token [YOUR_DEPLOYMENT_TOKEN]
+
+# Get token from Azure Portal:
+# Static Web App → Settings → Deployment tokens
+```
+
+## Custom Domain Setup
+
+### Using iotistic.ca
+
+1. **In Azure Portal**
+   - Go to your Static Web App
+   - Click "Custom domains"
+   - Click "+ Add"
+   - Enter: `www.iotistic.ca`
+
+2. **Get Validation Records**
+   - Azure will show you TXT and CNAME records
+   - Copy these values
+
+3. **Update DNS (Your Domain Provider)**
+   ```
+   Type: TXT
+   Host: _dnsauth.www
+   Value: [Azure validation value]
+   TTL: 3600
+
+   Type: CNAME
+   Host: www
+   Value: [your-app].azurestaticapps.net
+   TTL: 3600
+   ```
+
+4. **For Root Domain (iotistic.ca)**
+   ```
+   Type: TXT
+   Host: _dnsauth
+   Value: [Azure validation value]
+   TTL: 3600
+
+   Type: A or ALIAS (depends on provider)
+   Host: @
+   Value: [Get IP from Azure]
+   TTL: 3600
+   ```
+
+5. **Validate in Azure**
+   - Click "Validate" after DNS propagates (~5-60 min)
+   - Azure will issue free SSL certificate automatically
+
+## Environment-Specific Configuration
+
+### Add Contact Form Backend (Optional)
+
+If you want the contact form to actually send emails:
+
+1. **Create Azure Function**
+   ```bash
+   # In your repo
+   mkdir api
+   cd api
+   func init --javascript
+   func new --template "HTTP trigger" --name ContactForm
+   ```
+
+2. **Update Contact Form**
+   ```javascript
+   // In script.js, update form submission:
+   fetch('/api/ContactForm', {
+       method: 'POST',
+       headers: { 'Content-Type': 'application/json' },
+       body: JSON.stringify(data)
+   });
+   ```
+
+3. **Redeploy**
+   - Azure will automatically detect the /api folder
+   - Functions will be deployed alongside your static site
+
+## GitHub Actions (Auto-Created)
+
+Azure creates this in `.github/workflows/azure-static-web-apps-*.yml`:
+
+```yaml
+name: Azure Static Web Apps CI/CD
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    branches:
+      - master
+
+jobs:
+  build_and_deploy_job:
+    runs-on: ubuntu-latest
+    name: Build and Deploy Job
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Build And Deploy
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: "upload"
+          app_location: "/marketing-site"
+          api_location: ""
+          output_location: ""
+```
+
+## Monitoring & Analytics
+
+### Add Application Insights
+
+1. **In Azure Portal**
+   - Static Web App → Settings → Application Insights
+   - Click "Enable"
+
+2. **Track Custom Events** (Optional)
+   Add to `script.js`:
+   ```javascript
+   // Track form submissions
+   contactForm.addEventListener('submit', () => {
+       if (window.appInsights) {
+           appInsights.trackEvent('ContactFormSubmit');
+       }
+   });
+   ```
+
+## Costs
+
+- **Free Tier**: 
+  - 100 GB bandwidth/month
+  - Custom domain with SSL
+  - Perfect for marketing sites
+
+- **Standard Tier** ($9 USD/month):
+  - 100 GB bandwidth included
+  - Additional bandwidth: $0.20/GB
+  - SLA: 99.95%
+
+## Troubleshooting
+
+### Deployment Failed
+```bash
+# Check GitHub Actions logs
+# Go to: https://github.com/Iotistica/iotistic/actions
+
+# Common issues:
+# 1. Wrong app_location - must be /marketing-site
+# 2. Missing files - check git commit includes all files
+# 3. API token expired - regenerate in Azure Portal
+```
+
+### Custom Domain Not Working
+```bash
+# Check DNS propagation
+dig www.iotistic.ca
+nslookup www.iotistic.ca
+
+# Wait up to 48 hours for DNS propagation
+# Verify TXT records are correct
+```
+
+### Images Not Loading
+```bash
+# Check image paths are relative
+# Good: ../docs/images/traffic_monitor.JPG
+# Bad:  /docs/images/traffic_monitor.JPG
+
+# Or copy images to marketing-site folder
+cp -r ../docs/images ./images
+# Update paths in HTML to ./images/
+```
+
+## Performance Optimization
+
+### Enable Caching
+Already configured in `azure-staticwebapp.config.json`
+
+### Compress Images
+```bash
+# Install tool
+npm install -g imagemin-cli
+
+# Compress JPGs
+imagemin ../docs/images/*.JPG --out-dir=./images --plugin=jpegtran
+```
+
+### Minify Assets
+```bash
+# Install tools
+npm install -g html-minifier clean-css-cli uglify-js
+
+# Minify (before deploy)
+html-minifier index.html -o index.min.html --collapse-whitespace
+cleancss styles.css -o styles.min.css
+uglifyjs script.js -o script.min.js
+```
+
+## Next Steps
+
+1. ✅ Deploy to Azure Static Web Apps
+2. ✅ Add custom domain (iotistic.ca)
+3. 🔲 Set up contact form backend
+4. 🔲 Add Google Analytics
+5. 🔲 Enable Application Insights
+6. 🔲 Add blog section (optional)
