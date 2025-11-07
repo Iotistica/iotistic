@@ -50,27 +50,109 @@ A comprehensive multi-tenant SaaS IoT platform combining edge device management 
 
 ### Two Deployment Models
 
+## Architecture
+
+### Two Deployment Models
+
 #### 1. Edge Device Stack
 Single-tenant deployment on customer hardware:
 
 **Services:**
-- Agent - Edge Container orchestrator (Docker/K3s)
+- Agent - Container orchestrator (Docker/K3s)
 - API - Device management REST API  
 - Dashboard - React web interface
 - Mosquitto - MQTT broker
 - PostgreSQL - Primary database
 - Neo4j - Graph database for Digital Twin
+- VPN Client - OpenVPN tunnel to cloud
 
 #### 2. Multi-Tenant SaaS (Kubernetes)
 Cloud-hosted with isolated customer namespaces:
 
-**Global Services:**
-- Billing Service - Stripe integration, K8s deployment
-- Shared Prometheus - Metrics (Starter/Professional plans)
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     Kubernetes Cluster                          │
+│                                                                 │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │ Global Namespace: billing                                │  │
+│  │                                                          │  │
+│  │  ┌────────────────┐    ┌──────────────────┐            │  │
+│  │  │ Billing API    │    │  PostgreSQL      │            │  │
+│  │  │ (Port 3100)    │───▶│  (Managed/RDS)   │            │  │
+│  │  │                │    │                  │            │  │
+│  │  │ - Stripe       │    │ - Customer data  │            │  │
+│  │  │ - K8s deploy   │    │ - Subscriptions  │            │  │
+│  │  │ - License gen  │    │ - Usage tracking │            │  │
+│  │  └────────────────┘    └──────────────────┘            │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │ Global Namespace: vpn-server                             │  │
+│  │                                                          │  │
+│  │  ┌────────────────┐    ┌──────────────────┐            │  │
+│  │  │ OpenVPN Server │    │  Certificate     │            │  │
+│  │  │ (Port 1194)    │───▶│  Manager API     │            │  │
+│  │  │                │    │  (Port 8080)     │            │  │
+│  │  │ - Device auth  │    │                  │            │  │
+│  │  │ - VPN routing  │    │ - PKI management │            │  │
+│  │  │ - 10.8.0.0/24  │    │ - Cert issuance  │            │  │
+│  │  └────────────────┘    └──────────────────┘            │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │ Customer Namespace: customer-{id}                        │  │
+│  │                                                          │  │
+│  │  ┌────────────┐  ┌───────────┐  ┌──────────────────┐   │  │
+│  │  │ API        │  │ Dashboard │  │  PostgreSQL      │   │  │
+│  │  │ (Port 3002)│  │(Port 3000)│  │  (Dedicated)     │   │  │
+│  │  │            │  │           │  │                  │   │  │
+│  │  │ - Devices  │  │ - React   │  │ - Device shadow  │   │  │
+│  │  │ - MQTT ACL │  │ - Digital │  │ - MQTT ACLs      │   │  │
+│  │  │ - Neo4j    │──┤   Twin    │  │ - Metrics        │   │  │
+│  │  └────────────┘  └───────────┘  └──────────────────┘   │  │
+│  │         │              │                  │             │  │
+│  │         │              │                  │             │  │
+│  │  ┌──────▼──────┐  ┌───▼─────────────────▼──────────┐   │  │
+│  │  │ Mosquitto   │  │        Redis                   │   │  │
+│  │  │ (Port 1883) │  │     (Port 6379)                │   │  │
+│  │  │             │  │                                │   │  │
+│  │  │ - MQTT      │  │  - Real-time metrics          │   │  │
+│  │  │   broker    │  │  - Deployment queue (Bull)    │   │  │
+│  │  │ - Auth via  │  │  - Caching                    │   │  │
+│  │  │   PostgreSQL│  │                                │   │  │
+│  │  └─────────────┘  └────────────────────────────────┘   │  │
+│  │         │                                               │  │
+│  │  ┌──────▼───────────────┐     ┌────────────────────┐   │  │
+│  │  │ Billing Exporter     │     │ Prometheus         │   │  │
+│  │  │ (Metrics collector)  │────▶│ (Shared/Dedicated) │   │  │
+│  │  │                      │     │                    │   │  │
+│  │  │ - Device count       │     │ - Time-series DB   │   │  │
+│  │  │ - MQTT messages      │     │ - Metrics storage  │   │  │
+│  │  │ - Storage usage      │     │                    │   │  │
+│  │  └──────────────────────┘     └────────────────────┘   │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│                           ▲                                    │
+│                           │                                    │
+│                    VPN Tunnel (10.8.0.x)                       │
+│                           │                                    │
+└───────────────────────────┼────────────────────────────────────┘
+                            │
+                    ┌───────▼────────┐
+                    │  Edge Devices  │
+                    │                │
+                    │ - Agent        │
+                    │ - VPN Client   │
+                    │ - Local API    │
+                    └────────────────┘
+```
 
-**Per-Customer Services:**
-- API, Dashboard, PostgreSQL, Mosquitto, Billing Exporter
-- Optional dedicated Prometheus + Grafana (Enterprise)
+**Architecture Highlights:**
+- **Billing Namespace**: Global billing service with managed PostgreSQL (AWS RDS/Cloud SQL)
+- **VPN Namespace**: Centralized OpenVPN server and certificate management
+- **Customer Namespaces**: Isolated per-customer with API, Dashboard, PostgreSQL, Mosquitto, Redis
+- **Shared Prometheus**: Starter/Professional plans (in monitoring namespace)
+- **Dedicated Prometheus**: Enterprise plan (in customer namespace)
+- **VPN Connectivity**: Devices connect via OpenVPN to access customer namespace services
 
 
 ## Quick Start
