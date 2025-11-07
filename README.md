@@ -1,121 +1,91 @@
-# Iotistic IoT Environmental Monitoring System
+# Iotistic IoT Platform
 
-A comprehensive IoT solution for environmental monitoring using Bosch BME688 gas sensors with Raspberry Pi, featuring real-time data visualization, machine learning capabilities, and kiosk mode display. This sensor system was designed with SPE (Single Pair Ethernet) technology by **[Iotistic Inc](https://Iotistic.com)**, the leader in SPE technology solutions. The application software was expertly designed by the IoT software experts team at **[Iotistic Inc](http://www.iotistic.ca)**.
+A comprehensive multi-tenant SaaS IoT platform combining edge device management with cloud-based Kubernetes deployment, featuring real-time monitoring, Digital Twin visualization, and flexible device orchestration.
 
-## 🌟 Features
+## Features
 
-- **Environmental Monitoring**: Real-time sensing using Bosch BME688 4-in-1 environmental sensors (temperature, humidity, pressure, gas/air quality)
-- **SPE Technology**: Designed with Single Pair Ethernet (SPE) connectivity for simplified wiring and power delivery
-- **IoT Stack**: Complete containerized solution with Docker Compose
-- **Data Visualization**: Grafana dashboards for real-time monitoring and historical analysis
-- **Data Storage**: InfluxDB time-series database for sensor data
-- **MQTT Communication**: Eclipse Mosquitto broker for sensor data streaming
-- **Automation**: Node-RED for IoT workflows and data processing
-- **Machine Learning**: Custom Node-RED ML nodes for predictive analytics
-- **Kiosk Mode**: Full-screen dashboard display for dedicated monitoring stations
-- **Web Admin**: Management interface for system configuration
-- **Multi-Platform**: Supports Raspberry Pi (1-5), x86_64, and ARM architectures
+### Multi-Tenant SaaS Architecture
+- **Kubernetes Deployment** - Isolated customer namespaces with automated provisioning
+- **Stripe Billing Integration** - Subscription management with 14-day trials
+- **JWT License Validation** - RS256-signed licenses with feature gating
+- **Plan-Based Features** - Starter, Professional, Enterprise tiers
+- **Usage Metering** - Prometheus metrics collection for billing
+- **Automated Deployment** - Self-signup triggers K8s namespace creation
 
-## 📋 Table of Contents
+### Edge Device Management  
+- **Container Orchestration** - Agent supports Docker Compose and K3s
+- **Declarative State** - Target state JSON with automatic reconciliation
+- **Container State Control** - Running/stopped/paused states
+- **Device API** - REST API on port 48484 for local management
+- **Multi-Platform** - Raspberry Pi (arm64, armv7l), x86_64 support
+- **Cloud Sync** - Pull-based configuration updates
 
-- [Architecture](#-architecture)
-- [Hardware Requirements](#-hardware-requirements)
-- [Software Requirements](#-software-requirements)
-- [Quick Start](#-quick-start)
-- [Installation Methods](#-installation-methods)
-- [Service Configuration](#-service-configuration)
-- [Usage](#-usage)
-- [Remote Device Access](#-remote-device-access)
-- [Development](#-development)
-- [Troubleshooting](#-troubleshooting)
-- [Maintenance](#-maintenance)
-- [Contributing](#-contributing)
-- [License](#-license)
-- [Support](#-support)
-- [Version](#-version)
+### Digital Twin
+- **Graph Database** - Neo4j integration for spatial relationships
+- **IFC File Support** - Import building information models
+- **3D Visualization** - Force-directed graph with device mapping
+- **Device-Space Mapping** - Link IoT devices to physical locations
 
-## 🏗️ Architecture
+### Core IoT Stack
+- **MQTT Broker** - Mosquitto with PostgreSQL ACL authentication
+- **Data Storage** - PostgreSQL for sensor data and device state
+- **Real-Time Metrics** - Redis Streams for live data
+- **Web Dashboard** - React + TypeScript interface
+- **Monitoring** - Shared or dedicated Prometheus based on plan
 
-The system consists of several containerized services:
+## Table of Contents
 
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   BOSCH BME688  │    │   Raspberry Pi  │    │   Web Client    │
-│  Environmental  │───▶│   I2C Reader    │───▶│   Dashboard     │
-│   Sensor        │    │                 │    │                 │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    Docker Container Stack                      │
-├─────────────────┬─────────────────┬─────────────────┬─────────────┤
-│    Mosquitto    │    Node-RED     │    InfluxDB     │   Grafana   │
-│  MQTT Broker    │  Flow Engine    │  Time Series    │ Visualization│
-│   Port: 1883    │  Port: 1880     │   Port: 8086    │ Port: 3000  │
-└─────────────────┴─────────────────┴─────────────────┴─────────────┤
-│                         Nginx Reverse Proxy                     │
-│                           Port: 80                              │
-└─────────────────────────────────────────────────────────────────┘
-```
+- [Architecture](#architecture)
+- [Quick Start](#quick-start)
+- [Service Architecture](#service-architecture)
+- [Configuration](#configuration)
+- [Development](#development)
+- [Deployment](#deployment)
+- [Troubleshooting](#troubleshooting)
+- [Documentation](#documentation)
+- [Support](#support)
+- [License](#license)
 
-### Service Overview
+## Architecture
 
-| Service | Purpose | Default Port | Container Name |
-|---------|---------|--------------|----------------|
-| **Nginx** | Reverse proxy & web server | 80 | nginx |
-| **Mosquitto** | MQTT message broker | 1883/9001 | mosquitto |
-| **Node-RED** | IoT flow programming | 1880 | nodered |
-| **InfluxDB** | Time-series database | 8086 | influxdb |
-| **Grafana** | Data visualization | 3000 | grafana |
-| **BME688** | Environmental sensor reader | - | bme688 |
-| **Admin Panel** | System management | 51850 | admin |
+### Two Deployment Models
 
-## 🔧 Hardware Requirements
+#### 1. Edge Device Stack
+Single-tenant deployment on customer hardware:
 
-### Minimum Requirements
-- **Raspberry Pi 3 or newer** (Pi 3+ required for optimal performance)
-- **8GB+ SD Card** (16GB+ recommended)
-- **Stable power supply** (5V 2.5A minimum for Pi 3+)
-- **Network connectivity** (Ethernet or WiFi)
+**Services:**
+- Agent - Container orchestrator (Docker/K3s)
+- API - Device management REST API  
+- Dashboard - React web interface
+- Mosquitto - MQTT broker
+- PostgreSQL - Primary database
+- Neo4j - Graph database for Digital Twin
 
-### Sensor Hardware
-- **Bosch BME688 Environmental Sensor**
-- **4-in-1 measurements**: Temperature, Humidity, Pressure, Gas/Air Quality
-- **SPE Connectivity**: Single Pair Ethernet for data and power (designed by [Iotistic Inc](https://Iotistic.com))
-- **Ethernet Connection**: Sensor connected to Raspberry Pi via Ethernet interface
-- **Default Network Address**: Configurable via DHCP or static IP assignment
+#### 2. Multi-Tenant SaaS (Kubernetes)
+Cloud-hosted with isolated customer namespaces:
 
-### Alternative Platforms
-- **x86_64 Linux** systems (Ubuntu, Debian)
-- **ARM64** single-board computers
+**Global Services:**
+- Billing Service - Stripe integration, K8s deployment
+- Shared Prometheus - Metrics (Starter/Professional plans)
 
-## 💻 Software Requirements
-
-### Target System (Raspberry Pi)
-- **Debian/Raspbian** 11+ (Bullseye or newer)
-- **NodeJS**
-- **Docker & Docker Compose** (installed automatically)
+**Per-Customer Services:**
+- API, Dashboard, PostgreSQL, Mosquitto, Billing Exporter
+- Optional dedicated Prometheus + Grafana (Enterprise)
 
 
-### Development/Control System
-- **NodeJS**
-- **Ansible** (for automated deployment)
-- **Git**
-- **SSH access** to target system
+## Quick Start
 
-## 🚀 Quick Start
-
-### Option 1: Automated Installation (Recommended)
-
-For a completely automated setup on a fresh Raspberry Pi:
-
+### Option 1: Automated Installation (Raspberry Pi)
 ```bash
-# Download and run the installer
-curl -fsSL https://scripts.iotistic.ca/install | bash
+curl -sSL https://raw.githubusercontent.com/Iotistica/iotistic/master/bin/install.sh | bash
 ```
 
-This will:
-- ✅ Install all dependencies
+The installer will:
+- Detect device architecture (arm64, armv7l, x86_64)
+- Prompt for provisioning API key (first-time setup)
+- Configure cloud endpoint
+- Deploy Docker Compose stack
+- Start all services
 - ✅ Configure the system
 - ✅ Deploy all services
 - ✅ Set up kiosk mode (optional)
@@ -137,50 +107,8 @@ chmod +x bin/install.sh
 
 3. **Follow the interactive prompts** to configure your installation
 
-## 📦 Installation Methods
 
-### Method 1: Direct Installation
-Perfect for single Raspberry Pi setups:
-
-```bash
-# SSH into your Raspberry Pi
-ssh pi@<raspberry-pi-ip>
-
-# Download and run installer
-curl -fsSL https://scripts.iotistic.ca/install | bash
-```
-
-### Method 2: Ansible Controlled Deployment
-Ideal for multiple devices or remote deployment using containerized Ansible:
-
-1. **Configure inventory**:
-```bash
-# Edit ansible/hosts.ini with your Pi's details
-echo "pi@192.168.1.100 ansible_ssh_pass=yourpassword" > ansible/hosts.ini
-```
-
-2. **Configure environment**:
-```bash
-# Copy and edit the environment file
-cp ansible/.env.pi.example ansible/.env.pi
-# Edit .env.pi with your specific configuration
-```
-
-3. **Run deployment** (using containerized Ansible):
-```bash
-# Execute the deployment script
-./ansible/run.sh
-```
-
-The `run.sh` script automatically:
-- Builds the Ansible Docker container
-- Mounts the project workspace
-- Loads environment variables from `.env.pi`
-- Executes the deployment playbook
-
-### Method 3: Development Setup
-For development and testing:
-
+### Option 2: Local Development
 ```bash
 # Clone repository
 git clone https://github.com/Iotistica/iotistic.git
@@ -188,46 +116,132 @@ cd iotistic
 
 # Start development stack
 docker-compose -f docker-compose.dev.yml up -d
+
+# Services available at:
+# - API: http://localhost:4002
+# - Dashboard: http://localhost:3000
+# - MQTT: localhost:5883
+# - PostgreSQL: localhost:5432
+# - Neo4j: http://localhost:7474
 ```
 
-## ⚙️ Service Configuration
-
-### Environment Variables
-
-Create `.env` file to customize port mappings:
-
+### Option 3: Kubernetes Deployment
 ```bash
-# External port mappings
-MOSQUITTO_PORT_EXT=51883
-MOSQUITTO_WS_PORT_EXT=59001
-NODERED_PORT_EXT=51880
-INFLUXDB_PORT_EXT=58086
-GRAFANA_PORT_EXT=53000
-ADMIN_PORT=51850
+# Install billing service
+helm install billing ./charts/billing --namespace billing --create-namespace
 
-# InfluxDB Configuration
-INFLUXDB_INIT_ORG=Iotistic
-INFLUXDB_INIT_BUCKET=ZUS80LP
-
-# Network Configuration
-NTP_SERVER_IP=192.168.1.100
-KIOSK_IP=192.168.1.30/24
+# Customer signup creates namespace automatically
+curl -X POST https://billing.iotistic.cloud/api/customers/signup \
+  -H "Content-Type: application/json" \
+  -d '{"email": "user@example.com", "company": "ACME Corp", "plan": "starter"}'
 ```
 
-### Sensor Configuration
+See [K8S Deployment Guide](docs/K8S-DEPLOYMENT-GUIDE.md) for complete setup.
 
-For complete sensor setup, configuration, and CLI commands, see the comprehensive guide:
+## Service Architecture
 
-📖 **[Sensor Setup Guide](SENSOR.md)** - Complete hardware setup, network configuration, MQTT broker setup, and troubleshooting
+### API Service (`api/`)
+**Port:** 3002 (internal), 4002 (external)
 
-This guide covers:
-- **Hardware Setup**: Physical connections and SPE connectivity
-- **Initial Connection**: Serial and network access methods
-- **CLI Configuration**: Complete command reference for network and MQTT setup
-- **Sensor Validation**: BME688 environmental sensor verification
-- **Troubleshooting**: Common issues and diagnostic commands
+**Key Features:**
+- Device management (CRUD, bulk operations)
+- MQTT ACL management via PostgreSQL
+- Digital Twin graph operations (Neo4j)
+- License validation middleware
+- Real-time metrics (Redis Streams)
+- VPN certificate management
 
-> **Quick Reference**: The BME688 sensor connects via SPE (Single Pair Ethernet) and provides 4-in-1 environmental measurements: temperature, humidity, pressure, and gas/air quality.
+**Environment Variables:**
+```bash
+DB_HOST=postgres
+DB_PORT=5432
+MQTT_BROKER_URL=mqtt://mosquitto:1883
+NEO4J_URI=bolt://neo4j:7687
+LICENSE_PUBLIC_KEY=<RSA public key>
+IOTISTIC_LICENSE_KEY=<JWT token>
+```
+
+### Agent Service (`agent/`)
+**Port:** 48484 (Device API)
+
+**Capabilities:**
+- Container orchestration (Docker/K3s)
+- Target state reconciliation
+- Container state management (running/stopped/paused)
+- Device provisioning
+- Cloud API synchronization
+
+**Container State Control:**
+```json
+{
+  "services": [{
+    "serviceName": "nodered",
+    "state": "paused",
+    "config": {
+      "ports": ["1880:1880"],
+      "volumes": ["nodered-data:/data"]
+    }
+  }]
+}
+```
+
+### Dashboard (`dashboard/`)
+**Port:** 3000
+
+**Pages:**
+- Devices - Device list and management
+- Digital Twin - Graph visualization and device mapping
+- Metrics - Real-time monitoring
+
+**Tech Stack:** React 18 + TypeScript + Vite + Material-UI
+
+### Billing Service (`billing/`)
+**Port:** 3100
+
+**Features:**
+- Stripe checkout integration
+- Customer lifecycle management  
+- Kubernetes namespace deployment via Helm
+- RS256 JWT license generation
+- Deployment queue with Bull + Redis
+
+**Plans:**
+- **Starter** - 10 devices, shared Prometheus, 30-day retention
+- **Professional** - 50 devices, shared Prometheus, 90-day retention  
+- **Enterprise** - Unlimited devices, dedicated Prometheus + Grafana
+
+## Configuration
+
+
+
+### Database Schema
+
+**PostgreSQL Tables:**
+- `devices` - Device registry with shadow state
+- `mqtt_acls` - MQTT topic access control
+- `device_tags` - Flexible key-value device metadata
+- `metrics` - Time-series data storage
+- `vpn_certificates` - VPN CA/cert management
+
+**Neo4j Graph:**
+- Device nodes
+- Space nodes (from IFC files)
+- Relationships: LOCATED_IN, CONTAINS, MONITORS
+
+### Multi-Tenant Settings
+```yaml
+# Customer namespace: customer-{8-char-id}
+# Helm chart: charts/customer-instance/
+# License JWT contains:
+{
+  "customerId": "cust_...",
+  "plan": "starter",
+  "features": {
+    "maxDevices": 10,
+    "hasDedicatedPrometheus": false
+  }
+}
+```
 
 ## 📊 Usage
 
@@ -604,24 +618,115 @@ We welcome contributions! Please:
 4. **Test** thoroughly
 5. **Submit** a pull request
 
-### Development Guidelines
 
-- Follow Python PEP 8 style guide
-- Add unit tests for new features
-- Update documentation
-- Ensure Docker builds work on all platforms
+### Service Communication
+Use container names for inter-service URLs:
+```typescript
+// Internal Docker networking
+const mqttUrl = 'mqtt://mosquitto:1883';
+const dbHost = 'postgres';
+const apiUrl = 'http://api:3002';
+```
 
-## 📄 License
+### MQTT Topics
+```
+sensor/temperature
+sensor/humidity
+sensor/pressure
+system/status
+alerts/environmental
+```
+
+## Development
+
+### Starting Services Locally
+```powershell
+# Start PostgreSQL
+docker-compose up -d postgres
+
+# Start API
+cd api && npm run dev
+
+# Start Dashboard
+cd dashboard && npm run dev
+```
+
+### Database Migrations
+```bash
+# Create migration
+cd api && npx knex migrate:make migration_name
+
+# Run migrations
+npx knex migrate:latest
+```
+
+## Deployment
+
+### Kubernetes
+See [K8S Deployment Guide](docs/K8S-DEPLOYMENT-GUIDE.md)
+
+**Prerequisites:**
+- Kubernetes cluster
+- Helm 3+
+- ServiceMonitor CRD installed
+- Stripe account
+
+### Edge Device (Ansible)
+```bash
+cd ansible && ./run.sh
+```
+
+## Troubleshooting
+
+### License Validation Fails
+```bash
+# Verify keys
+cd billing && npm run verify-keys
+
+# Check JWT
+echo $IOTISTIC_LICENSE_KEY | cut -d'.' -f2 | base64 -d | jq
+```
+
+### K8s Deployment Fails
+```bash
+# Install ServiceMonitor CRD
+kubectl apply -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/main/example/prometheus-operator-crd/monitoring.coreos.com_servicemonitors.yaml
+
+# Check logs
+kubectl logs -n billing deployment/billing-api
+```
+
+### MQTT Connection Issues
+```bash
+# Test connection
+mosquitto_pub -h localhost -p 5883 -t test -m "hello"
+
+# Check ACL
+docker exec -it iotistic-postgres psql -U postgres -d iotistic \
+  -c "SELECT * FROM mqtt_acls;"
+```
+
+## Documentation
+
+- [Complete Implementation Guide](docs/COMPLETE-IMPLEMENTATION-GUIDE.md)
+- [K8s Deployment Guide](docs/K8S-DEPLOYMENT-GUIDE.md)
+- [Customer Signup Flow](docs/CUSTOMER-SIGNUP-K8S-DEPLOYMENT.md)
+- [Helm Chart Documentation](charts/docs/README.md)
+- [Billing System Guide](billing/docs/README.md)
+- [Agent Documentation](agent/README.md)
+- [API Documentation](api/README.md)
+
+## License
 
 This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
 
-## 🆘 Support
+## Support
 
 - **Issues**: [GitHub Issues](https://github.com/Iotistica/iotistic/issues)
 - **Documentation**: [Wiki](https://github.com/Iotistica/iotistic/wiki)
 - **Discussions**: [GitHub Discussions](https://github.com/Iotistica/iotistic/discussions)
 
-## 🏷️ Version
+## Version
 
 Current version: **Latest** (rolling release from master branch)
 
@@ -629,81 +734,7 @@ For stable releases, check: [Releases](https://github.com/Iotistica/iotistic/rel
 
 ---
 
-**Powered by [Iotistic Inc](https://Iotistic.com) SPE Technology** | **Software by [Iotistic Inc](http://www.iotistic.ca) IoT Experts** | **Made with ❤️ for the IoT community**
-
-### About Iotistic Inc
-[Iotistic Inc](https://Iotistic.com) is the industry leader in Single Pair Ethernet (SPE) technology, providing innovative solutions for simplified industrial networking. Our SPE technology enables both data and power transmission over a single pair of wires, reducing installation complexity and costs for IoT deployments.
-
-### About Iotistic Inc 
-The application software was expertly crafted by the IoT software specialists at **[Iotistic Inc](http://www.iotistic.ca)**. Our team brings decades of experience in industrial IoT solutions, containerized applications, and real-time data systems. We specialize in creating robust, scalable IoT platforms for environmental monitoring and industrial automation.
-
-### Looking for tailored IoT solutions?
-Our expert IoT consulting and development services are designed to help you optimize your systems and drive innovation. Contact us today to discuss how we can support your next project!
-
-# 
-
-curl -X POST http://localhost:3002/api/v1/state/target \
-  -H "Content-Type: application/json" \
-  -d '{
-    "apps": {
-      "1001": {
-        "appId": 1001,
-        "appName": "my-nginx-test",
-        "services": [
-          {
-            "serviceId": 1,
-            "serviceName": "nginx",
-            "imageName": "nginx:alpine",
-            "appId": 1001,
-            "appName": "my-nginx-test",
-            "config": {
-              "image": "nginx:alpine",
-              "ports": ["8085:80"],
-              "environment": {
-                "ENV": "production"
-              }
-            }
-          }
-        ]
-      }
-    }
-  }'
-
-# apply target state
-
-curl -X POST http://localhost:3002/api/v1/state/apply
-
-# remove a specific app
-curl -X POST http://localhost:3002/api/v1/state/target \
-  -H "Content-Type: application/json" \
-  -d '{
-    "apps": {
-      "1002": {
-        "appId": 1002,
-        "appName": "other-app",
-        "services": [...]
-      }
-    }
-  }'
-
-  # get current state
-
-  curl http://localhost:3002/api/v1/state
-
-
-  # add new apps
-
-  curl -X POST http://localhost:3002/api/v1/state/target \
-  -H "Content-Type: application/json" \
-  -d '{
-    "apps": {
-      "1001": {
-        "appId": 1001,
-        "appName": "my-nginx-test",
-        "services": [
-          {
-            "serviceId": 1,
-            "serviceName": "nginx",
+**Built with:** Node.js, TypeScript, React, PostgreSQL, Neo4j, Mosquitto MQTT, Docker, Kubernetes, Helm, Stripe
             "imageName": "nginx:alpine",
             "appId": 1001,
             "appName": "my-nginx-test",
