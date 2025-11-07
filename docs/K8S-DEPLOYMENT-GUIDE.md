@@ -38,38 +38,86 @@ The Iotistic platform uses a **multi-tenant architecture** with **namespace-leve
 │                                                                   │
 │  ┌────────────────────────────────────────────────────────────┐ │
 │  │ Ingress Controller (nginx)                                  │ │
-│  │ ├─ billing.iotistic.cloud → billing-service               │ │
+│  │ ├─ billing.iotistic.cloud → billing-api                    │ │
+│  │ ├─ vpn.iotistic.cloud → vpn-cert-manager                   │ │
 │  │ ├─ customer1.iotistic.cloud → customer-customer1           │ │
 │  │ └─ customer2.iotistic.cloud → customer-customer2           │ │
 │  └────────────────────────────────────────────────────────────┘ │
 │                                                                   │
 │  ┌────────────────────────────────────────────────────────────┐ │
-│  │ Namespace: billing                                          │ │
-│  │ ├─ Billing API (Node.js + PostgreSQL)                      │ │
-│  │ ├─ Stripe Integration                                       │ │
-│  │ └─ K8s Deployment Service (Helm orchestration)             │ │
+│  │ Global Namespace: billing                                   │ │
+│  │                                                             │ │
+│  │  ┌────────────────┐    ┌──────────────────┐               │ │
+│  │  │ Billing API    │    │  PostgreSQL      │               │ │
+│  │  │ (Port 3100)    │───▶│  (Managed/RDS)   │               │ │
+│  │  │                │    │                  │               │ │
+│  │  │ - Stripe       │    │ - Customer data  │               │ │
+│  │  │ - K8s deploy   │    │ - Subscriptions  │               │ │
+│  │  │ - License gen  │    │ - Usage tracking │               │ │
+│  │  └────────────────┘    └──────────────────┘               │ │
 │  └────────────────────────────────────────────────────────────┘ │
 │                                                                   │
 │  ┌────────────────────────────────────────────────────────────┐ │
-│  │ Namespace: customer-customer1                               │ │
-│  │ ├─ PostgreSQL (sensor data)                                │ │
-│  │ ├─ Mosquitto (MQTT broker)                                 │ │
-│  │ ├─ API (with license validation)                           │ │
-│  │ ├─ Dashboard (admin panel)                                 │ │
-│  │ └─ Billing Exporter (usage metrics)                        │ │
+│  │ Global Namespace: vpn-server                                │ │
+│  │                                                             │ │
+│  │  ┌────────────────┐    ┌──────────────────┐               │ │
+│  │  │ OpenVPN Server │    │  Certificate     │               │ │
+│  │  │ (Port 1194)    │───▶│  Manager API     │               │ │
+│  │  │                │    │  (Port 8080)     │               │ │
+│  │  │ - Device auth  │    │ - PKI management │               │ │
+│  │  │ - VPN routing  │    │ - Cert issuance  │               │ │
+│  │  │ - 10.8.0.0/24  │    │ - Revocation     │               │ │
+│  │  └────────────────┘    └──────────────────┘               │ │
 │  └────────────────────────────────────────────────────────────┘ │
 │                                                                   │
 │  ┌────────────────────────────────────────────────────────────┐ │
-│  │ Namespace: customer-customer2                               │ │
-│  │ ├─ PostgreSQL (sensor data)                                │ │
-│  │ ├─ Mosquitto (MQTT broker)                                 │ │
-│  │ ├─ API (with license validation)                           │ │
-│  │ ├─ Dashboard (admin panel)                                 │ │
-│  │ └─ Billing Exporter (usage metrics)                        │ │
+│  │ Customer Namespace: customer-{id}                           │ │
+│  │                                                             │ │
+│  │  ┌────────────┐  ┌───────────┐  ┌──────────────────┐      │ │
+│  │  │ API        │  │ Dashboard │  │  PostgreSQL      │      │ │
+│  │  │ (Port 3002)│  │(Port 3000)│  │  (Dedicated)     │      │ │
+│  │  │ - Devices  │  │ - React   │  │ - Device shadow  │      │ │
+│  │  │ - MQTT ACL │  │ - Digital │  │ - MQTT ACLs      │      │ │
+│  │  └────────────┘  │   Twin    │  │ - Metrics        │      │ │
+│  │         │        └───────────┘  └──────────────────┘      │ │
+│  │         │              │                  │                │ │
+│  │  ┌──────▼──────┐  ┌───▼─────────────────▼──────────┐      │ │
+│  │  │ Mosquitto   │  │        Redis                   │      │ │
+│  │  │ (Port 1883) │  │     (Port 6379)                │      │ │
+│  │  │ - MQTT      │  │  - Real-time metrics          │      │ │
+│  │  │   broker    │  │  - Deployment queue (Bull)    │      │ │
+│  │  │ - Auth via  │  │  - Caching                    │      │ │
+│  │  │   PostgreSQL│  │                                │      │ │
+│  │  └─────────────┘  └────────────────────────────────┘      │ │
+│  │         │                                                  │ │
+│  │  ┌──────▼───────────────┐     ┌────────────────────┐      │ │
+│  │  │ Billing Exporter     │────▶│ Prometheus         │      │ │
+│  │  │ (Metrics collector)  │     │ (Shared/Dedicated) │      │ │
+│  │  │ - Device count       │     │ - Time-series DB   │      │ │
+│  │  │ - MQTT messages      │     │ - Metrics storage  │      │ │
+│  │  └──────────────────────┘     └────────────────────┘      │ │
 │  └────────────────────────────────────────────────────────────┘ │
-│                                                                   │
-└─────────────────────────────────────────────────────────────────┘
+│                           ▲                                     │
+│                           │                                     │
+│                    VPN Tunnel (10.8.0.x)                        │
+│                           │                                     │
+└───────────────────────────┼─────────────────────────────────────┘
+                            │
+                    ┌───────▼────────┐
+                    │  Edge Devices  │
+                    │ - Agent        │
+                    │ - VPN Client   │
+                    │ - Local API    │
+                    └────────────────┘
 ```
+
+**Architecture Highlights:**
+- **Billing Namespace**: Global billing service with **managed PostgreSQL** (AWS RDS/Cloud SQL/Azure Database)
+- **VPN Namespace**: Centralized OpenVPN server for all device connectivity
+- **Customer Namespaces**: Isolated per-customer with API, Dashboard, dedicated PostgreSQL, Mosquitto, Redis
+- **Shared Prometheus**: Starter/Professional plans (in `monitoring` namespace)
+- **Dedicated Prometheus**: Enterprise plan (in customer namespace, 30-day retention, 50GB storage)
+- **VPN Connectivity**: Devices connect via OpenVPN tunnel (10.8.0.0/24) to access customer services
 
 ## Prerequisites
 
@@ -201,9 +249,257 @@ provisioner: kubernetes.io/no-provisioner
 volumeBindingMode: WaitForFirstConsumer
 ```
 
+## VPN Server Deployment
+
+The VPN server provides secure device-to-cloud connectivity using OpenVPN with certificate-based authentication.
+
+### 1. Create VPN Namespace
+
+```bash
+kubectl create namespace vpn-server
+```
+
+### 2. Initialize PKI (Certificate Authority)
+
+Generate CA certificates for device authentication:
+
+```bash
+cd vpn-server
+
+# Initialize PKI
+./scripts/init-pki.sh
+
+# This creates:
+# - CA certificate and key
+# - Server certificate and key
+# - Diffie-Hellman parameters
+```
+
+### 3. Create ConfigMaps and Secrets
+
+```bash
+# Create secret for PKI files
+kubectl create secret generic vpn-pki \
+  --from-file=ca.crt=./pki/ca.crt \
+  --from-file=ca.key=./pki/ca.key \
+  --from-file=server.crt=./pki/server.crt \
+  --from-file=server.key=./pki/server.key \
+  --from-file=dh.pem=./pki/dh.pem \
+  --namespace vpn-server
+
+# Create ConfigMap for OpenVPN server config
+kubectl create configmap vpn-config \
+  --from-file=server.conf=./config/server.conf \
+  --namespace vpn-server
+
+# Create database secret (for device registry)
+kubectl create secret generic vpn-db-secret \
+  --from-literal=DB_HOST=postgres.vpn-server.svc.cluster.local \
+  --from-literal=DB_PORT=5432 \
+  --from-literal=DB_NAME=vpn_registry \
+  --from-literal=DB_USER=vpn_admin \
+  --from-literal=DB_PASSWORD=<strong-password> \
+  --namespace vpn-server
+```
+
+### 4. Deploy VPN Server
+
+```bash
+# Deploy using Kubernetes manifests
+kubectl apply -f vpn-server/k8s/
+
+# Or deploy with Helm (if chart exists)
+helm install vpn-server ./charts/vpn-server \
+  --namespace vpn-server
+
+# Verify deployment
+kubectl get pods -n vpn-server
+kubectl get services -n vpn-server
+```
+
+**Expected resources:**
+- **OpenVPN Server**: UDP port 1194 (LoadBalancer or NodePort)
+- **Certificate Manager API**: HTTP port 8080
+- **PostgreSQL**: Device registry database
+- **Web Interface**: Certificate management UI
+
+### 5. Expose VPN Server
+
+```bash
+# Get external IP (LoadBalancer)
+kubectl get service -n vpn-server vpn-server-service
+
+# For NodePort (development)
+NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="ExternalIP")].address}')
+VPN_PORT=$(kubectl get service -n vpn-server vpn-server-service -o jsonpath='{.spec.ports[0].nodePort}')
+echo "VPN Server: $NODE_IP:$VPN_PORT"
+
+# Configure DNS
+# vpn.iotistic.cloud → <EXTERNAL_IP>
+```
+
+### 6. Configure Certificate Manager API
+
+The Certificate Manager API handles device certificate issuance and revocation:
+
+```yaml
+# vpn-cert-manager-ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: vpn-cert-manager
+  namespace: vpn-server
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - vpn.iotistic.cloud
+    secretName: vpn-tls
+  rules:
+  - host: vpn.iotistic.cloud
+    http:
+      paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: vpn-cert-manager
+            port:
+              number: 8080
+```
+
+Apply:
+
+```bash
+kubectl apply -f vpn-cert-manager-ingress.yaml
+```
+
+### 7. Test VPN Server
+
+```bash
+# Check VPN server logs
+kubectl logs -n vpn-server deployment/vpn-server
+
+# Test certificate manager API
+curl https://vpn.iotistic.cloud/api/health
+
+# Generate test device certificate
+curl -X POST https://vpn.iotistic.cloud/api/certificates \
+  -H "Content-Type: application/json" \
+  -d '{
+    "deviceId": "test-device-001",
+    "customerId": "customer-abc123"
+  }'
+
+# Download CA certificate (for devices)
+curl https://vpn.iotistic.cloud/api/ca.crt
+```
+
+### 8. Configure VPN Environment Variables
+
+Update billing service to include VPN server info in customer deployments:
+
+```bash
+# Add to billing service secrets
+kubectl create secret generic billing-vpn-config \
+  --from-literal=VPN_SERVER_HOST=vpn.iotistic.cloud \
+  --from-literal=VPN_SERVER_PORT=1194 \
+  --from-literal=VPN_CA_URL=https://vpn.iotistic.cloud/api/ca.crt \
+  --namespace billing
+```
+
+These values will be passed to customer instances during deployment.
+
 ## Billing Service Deployment
 
-### 1. Build Docker Image
+### 1. Setup Managed PostgreSQL Database
+
+**For production, use a managed database service:**
+
+#### AWS RDS (PostgreSQL)
+
+```bash
+# Create RDS instance via AWS CLI
+aws rds create-db-instance \
+  --db-instance-identifier iotistic-billing-db \
+  --db-instance-class db.t3.micro \
+  --engine postgres \
+  --engine-version 15.3 \
+  --master-username postgres \
+  --master-user-password <strong-password> \
+  --allocated-storage 20 \
+  --vpc-security-group-ids sg-xxxxx \
+  --db-subnet-group-name iotistic-db-subnet \
+  --backup-retention-period 7 \
+  --preferred-backup-window "03:00-04:00" \
+  --preferred-maintenance-window "mon:04:00-mon:05:00"
+
+# Get endpoint
+aws rds describe-db-instances \
+  --db-instance-identifier iotistic-billing-db \
+  --query 'DBInstances[0].Endpoint.Address' \
+  --output text
+```
+
+#### Google Cloud SQL
+
+```bash
+# Create Cloud SQL instance
+gcloud sql instances create iotistic-billing-db \
+  --database-version=POSTGRES_15 \
+  --tier=db-f1-micro \
+  --region=us-central1 \
+  --root-password=<strong-password> \
+  --backup-start-time=03:00 \
+  --enable-bin-log
+
+# Get connection name
+gcloud sql instances describe iotistic-billing-db \
+  --format='value(connectionName)'
+```
+
+#### Azure Database for PostgreSQL
+
+```bash
+# Create Azure PostgreSQL server
+az postgres server create \
+  --resource-group iotistic-rg \
+  --name iotistic-billing-db \
+  --location eastus \
+  --admin-user postgres \
+  --admin-password <strong-password> \
+  --sku-name B_Gen5_1 \
+  --storage-size 51200 \
+  --backup-retention 7
+
+# Get hostname
+az postgres server show \
+  --resource-group iotistic-rg \
+  --name iotistic-billing-db \
+  --query fullyQualifiedDomainName \
+  --output tsv
+```
+
+### 2. Create Database and Schema
+
+```bash
+# Connect to managed database
+psql "postgresql://postgres:<password>@<db-endpoint>:5432/postgres"
+
+# Create database
+CREATE DATABASE billing;
+
+# Connect to billing database
+\c billing
+
+# Run migrations (from billing service)
+cd billing
+npx knex migrate:latest
+```
+
+### 3. Build Docker Image
 
 ```bash
 cd billing
@@ -215,21 +511,36 @@ docker build -t iotistic/billing-api:latest .
 docker push iotistic/billing-api:latest
 ```
 
-### 2. Create Namespace
+### 4. Create Namespace
 
 ```bash
 kubectl create namespace billing
 ```
 
-### 3. Create Secrets
+### 5. Generate License Keys
 
 ```bash
-# Database URL
+cd billing
+
+# Generate RSA key pair for JWT signing
+npm run generate-keys
+
+# This creates:
+# - keys/private.key (keep secure!)
+# - keys/public.key (distributed to customer instances)
+```
+
+### 6. Create Secrets
+
+```bash
+# Database URL (using managed PostgreSQL endpoint)
+# Replace <db-endpoint> with your RDS/Cloud SQL/Azure endpoint
 kubectl create secret generic billing-secrets \
-  --from-literal=DATABASE_URL="postgresql://user:password@postgres:5432/billing" \
-  --from-literal=JWT_PRIVATE_KEY="$(cat /path/to/private.key)" \
-  --from-literal=JWT_PUBLIC_KEY="$(cat /path/to/public.key)" \
+  --from-literal=DATABASE_URL="postgresql://postgres:<password>@<db-endpoint>:5432/billing" \
+  --from-literal=JWT_PRIVATE_KEY="$(cat billing/keys/private.key)" \
+  --from-literal=JWT_PUBLIC_KEY="$(cat billing/keys/public.key)" \
   --from-literal=STRIPE_SECRET_KEY="sk_live_..." \
+  --from-literal=STRIPE_WEBHOOK_SECRET="whsec_..." \
   --namespace billing
 
 # Helm chart path (for K8s deployment service)
@@ -237,9 +548,16 @@ kubectl create configmap billing-config \
   --from-literal=HELM_CHART_PATH="/app/charts/customer-instance" \
   --from-literal=BASE_DOMAIN="iotistic.cloud" \
   --namespace billing
+
+# VPN configuration (passed to customer instances)
+kubectl create configmap billing-vpn-config \
+  --from-literal=VPN_SERVER_HOST="vpn.iotistic.cloud" \
+  --from-literal=VPN_SERVER_PORT="1194" \
+  --from-literal=VPN_CA_URL="https://vpn.iotistic.cloud/api/ca.crt" \
+  --namespace billing
 ```
 
-### 4. Deploy Billing Service
+### 7. Deploy Billing Service
 
 ```yaml
 # billing-deployment.yaml
