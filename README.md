@@ -1,6 +1,6 @@
 # Iotistic IoT Platform
 
-A comprehensive multi-tenant SaaS IoT platform combining edge device management with cloud-based Kubernetes deployment, featuring real-time monitoring, Digital Twin visualization, and flexible device orchestration.
+A comprehensive multi-tenant SaaS IoT platform combining edge device management with cloud-based Kubernetes deployment, featuring real-time monitoring, Digital Twin visualization, and flexible device apps orchestration and configuration.
 
 ![System Metrics Dashboard](docs/images/system_metrics.JPG)
 
