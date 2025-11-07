@@ -403,7 +403,7 @@ docker-compose restart agent  # On device
 | `SSH_AUTO_RECONNECT` | `true` | Auto-reconnect on disconnect |
 | `SSH_RECONNECT_DELAY` | `5000` | Delay before reconnect (ms) |
 
-### Multi-Device Management
+### Multi-Device Management (docker compose testing only)
 
 For managing multiple devices, assign each device a unique port:
 
@@ -467,98 +467,159 @@ For more details, see [`docs/REMOTE-ACCESS.md`](docs/REMOTE-ACCESS.md).
 ### Project Structure
 
 ```
-Iotistic-sensor/
-├── admin/                  # Web admin interface
+iotistic/
+├── agent/                 # Edge device container orchestrator
+│   ├── src/
+│   │   ├── compose/       # Docker Compose orchestration
+│   │   ├── k3s/           # K3s Kubernetes orchestration
+│   │   ├── device-api/    # REST API (port 48484)
+│   │   └── orchestrator/  # State reconciliation logic
+│   └── data/              # SQLite database, logs
+├── api/                   # Cloud/device management API
+│   ├── src/
+│   │   ├── routes/        # REST endpoints
+│   │   ├── services/      # Neo4j, MQTT, VPN
+│   │   ├── middleware/    # License validation, auth
+│   │   └── db/            # PostgreSQL connection
+│   └── database/migrations/
+├── dashboard/             # React web interface
+│   ├── src/
+│   │   ├── pages/         # Devices, Digital Twin
+│   │   ├── components/    # Graph visualization, device mapping
+│   │   └── utils/         # IFC parser, helpers
+│   └── build/             # Production build (gitignored)
+├── billing/               # Multi-tenant SaaS billing service
+│   ├── src/
+│   │   ├── services/      # K8s deployment, license generation
+│   │   ├── workers/       # Bull queue for async deployments
+│   │   └── routes/        # Customer signup, webhooks
+│   ├── keys/              # RSA keys for JWT signing
+│   └── migrations/        # Customer/subscription schema
+├── billing-exporter/      # Prometheus metrics collector
+│   └── src/collectors/    # Device, MQTT, storage metrics
+├── charts/                # Helm charts for K8s deployment
+│   ├── customer-instance/ # Per-customer namespace chart
+│   ├── billing/           # Global billing service chart
+│   └── docs/              # K8s setup guides
 ├── ansible/               # Deployment automation
 │   ├── roles/
 │   │   ├── system/        # System configuration
 │   │   ├── network/       # Network setup
-│   │   └── kiosk/         # Kiosk mode setup
-│   └── deploy.yml         # Main playbook
-├── api/                   # REST API service
-├── bin/                   # Installation scripts
-├── grafana/               # Grafana configuration
-├── influx/                # InfluxDB setup
-├── bme688/                # Environmental sensor code
-├── mosquitto/             # MQTT broker config
-├── nginx/                 # Reverse proxy config
-├── nodered/               # Node-RED flows and nodes
-├── sensor-simulator/      # BME688 sensor simulator (for testing)
-└── portainer/             # Container management
+│   │   └── docker/        # Docker installation
+│   └── run.sh             # Deployment script
+├── docs/                  # Comprehensive documentation
+│   ├── K8S-DEPLOYMENT-GUIDE.md
+│   ├── CUSTOMER-SIGNUP-K8S-DEPLOYMENT.md
+│   ├── provisioning/      # Device provisioning guides
+│   ├── mqtt/              # MQTT architecture docs
+│   └── database/          # PostgreSQL optimization
+├── argocd/                # GitOps continuous deployment
+│   ├── customers/         # Per-customer app configs
+│   └── shared/            # Shared infrastructure
+├── mosquitto/             # MQTT broker configuration
+│   ├── mosquitto.conf     # PostgreSQL ACL integration
+│   └── data/              # Persistence (gitignored)
+├── postgres/              # PostgreSQL configuration
+│   ├── pg_hba.conf        # Client authentication
+│   └── data/              # Database files (gitignored)
+├── sensor-simulator/      # Generic MQTT sensor simulator
+│   └── src/               # Configurable test data generator
+├── bin/                   # Installation and setup scripts
+│   ├── install.sh         # Main installer
+│   └── setup-remote-access.sh
+├── docker-compose.yml     # Production stack
+├── docker-compose.dev.yml # Development stack
+└── .github/
+    └── copilot-instructions.md  # AI coding guidelines
 ```
 
-### Sensor Simulator (Testing Without Hardware)
+### Local Development Setup
 
-For testing the sensor publish feature without physical BME688 sensors, we provide a complete sensor simulator:
+**Start core services:**
+```bash
+# Start PostgreSQL, Mosquitto, Redis, Neo4j
+docker-compose up -d postgres mosquitto redis neo4j
+
+# Start API (Node.js)
+cd api && npm install && npm run dev
+
+# Start Dashboard (React)
+cd dashboard && npm install && npm run dev
+
+# Start Agent (for testing orchestration)
+cd agent && npm install && npm run dev
+```
+
+**Access services:**
+- API: http://localhost:4002
+- Dashboard: http://localhost:3000  
+- Agent Device API: http://localhost:48484
+- PostgreSQL: localhost:5432
+- Mosquitto MQTT: localhost:5883
+- Neo4j Browser: http://localhost:7474
+
+### Testing with Sensor Simulator
+
+For testing MQTT data flows without physical hardware:
 
 ```bash
-# Start the simulator (generates 3 fake sensors by default)
-docker-compose -f docker-compose.dev.yml up -d sensor-simulator
+# Start simulator (publishes to MQTT)
+docker-compose -f docker-compose.simulator.yml up -d
 
-# View logs
+# Configure simulator
+echo "NUM_SENSORS=5" >> .env
+echo "PUBLISH_INTERVAL_MS=10000" >> .env
+
+# View simulated data
 docker-compose logs -f sensor-simulator
-
-# Configure number of sensors
-echo "SIM_NUM_SENSORS=5" > .env
-docker-compose -f docker-compose.dev.yml restart sensor-simulator
 ```
 
-**Features:**
-- ✅ Generates realistic BME688 data (temperature, humidity, pressure, gas resistance)
-- ✅ Multiple sensors with independent data streams
-- ✅ Unix domain socket communication
-- ✅ Simulates sensor failures and recovery
-- ✅ Configurable publish intervals (default: 60 seconds)
-- ✅ JSON output format with newline delimiter
+The simulator publishes generic sensor data to configurable MQTT topics.
 
-**Configuration:**
-All settings via environment variables in `.env`:
-- `SIM_NUM_SENSORS=3` - Number of simulated sensors
-- `SIM_PUBLISH_INTERVAL_MS=60000` - Publish frequency
-- `SIM_ENABLE_FAILURES=true` - Enable random failures
-- `SIM_FAILURE_CHANCE=0.05` - Failure probability (5%)
-- `SIM_LOG_LEVEL=info` - Logging level
+### Debugging and Logs
 
-See [`sensor-simulator/README.md`](sensor-simulator/README.md) for complete documentation and [`sensor-simulator/QUICKSTART.md`](sensor-simulator/QUICKSTART.md) for getting started.
+**View service logs:**
+```bash
+# All services
+docker-compose logs -f
 
-### Custom Sensor Integration
+# Specific service
+docker-compose logs -f api
+docker-compose logs -f mosquitto
+docker-compose logs -f agent
 
-3. **Add to Docker Compose**:
-```yaml
-your-sensor:
-  build: ./sensors/your-sensor
-  volumes:
-    - /dev:/dev
-  privileged: true
-  networks:
-    - Iotistic-net
+# Application logs (when running locally)
+tail -f api/logs/app.log
+tail -f agent/logs/orchestrator.log
 ```
 
-### Custom Node-RED Nodes
+**Database debugging:**
+```bash
+# Connect to PostgreSQL
+docker exec -it iotistic-postgres psql -U postgres -d iotistic
 
-The system includes custom machine learning nodes:
-- **Dataset Management**: Load, create, split datasets
-- **Model Training**: Various ML algorithms
-- **Prediction**: Real-time inference
-- **Evaluation**: Model performance metrics
+# View device state
+SELECT * FROM devices LIMIT 10;
 
-
-### Log Files
-
-- **System logs**: `/var/log/syslog`
-- **Docker logs**: `docker-compose logs`
-- **Application logs**: `logs/` directory in each service
-- **Sensor logs**: Check BME688 container output
+# Check MQTT ACLs
+SELECT * FROM mqtt_acls;
+```
 
 ### Performance Optimization
 
-**For Raspberry Pi 3 and older**:
-- Reduce Grafana refresh rates
-- Limit InfluxDB retention policies
-- Optimize Node-RED flows
-- Use memory limits in docker-compose.yml
+**For Raspberry Pi:**
+- Use lightweight images (alpine variants)
+- Limit Docker memory: `mem_limit: 512M` in docker-compose.yml
+- Reduce PostgreSQL shared_buffers
+- Disable unused services
 
-**For Resource-Constrained Systems**:
+**For Production:**
+- Enable connection pooling (PostgreSQL, Redis)
+- Use Redis for caching frequently accessed data
+- Configure Prometheus retention based on plan
+- Implement data retention policies
+
+**Resource Limits Example:**
 ```yaml
 # Add to docker-compose.yml services
 deploy:
@@ -569,30 +630,49 @@ deploy:
       memory: 256M
 ```
 
-## 🔄 Maintenance
+## Maintenance
 
 ### Regular Updates
 
 ```bash
-# Update containers
-cd /home/$USER/iotistic
-./bin/upgrade_containers.sh
+# Update repository
+cd ~/iotistic
+git pull
 
-# System updates
-sudo apt update && sudo apt upgrade
+# Update containers
+docker-compose pull
+docker-compose up -d
+
+# Update dependencies (for local development)
+cd api && npm install
+cd ../dashboard && npm install
+cd ../agent && npm install
 ```
 
 ### Backup Data
 
+**PostgreSQL:**
 ```bash
-# Backup InfluxDB data
-docker exec influxdb influx backup /backup
+# Backup database
+docker exec iotistic-postgres pg_dump -U postgres iotistic > backup_$(date +%Y%m%d).sql
 
-# Backup Grafana dashboards
-docker exec grafana grafana-cli admin export-dashboard
+# Restore database
+cat backup_20250107.sql | docker exec -i iotistic-postgres psql -U postgres -d iotistic
+```
 
-# Backup Node-RED flows
-cp nodered/data/flows.json flows_backup_$(date +%Y%m%d).json
+**Neo4j:**
+```bash
+# Backup Neo4j database
+docker exec neo4j neo4j-admin dump --database=neo4j --to=/backups/neo4j_$(date +%Y%m%d).dump
+
+# Restore
+docker exec neo4j neo4j-admin load --from=/backups/neo4j_20250107.dump --database=neo4j --force
+```
+
+**Configuration:**
+```bash
+# Backup environment and configs
+tar -czf config_backup_$(date +%Y%m%d).tar.gz .env docker-compose.yml postgres/pg_hba.conf mosquitto/mosquitto.conf
 ```
 
 ### Monitoring Health
@@ -606,18 +686,26 @@ docker stats
 
 # Check disk space
 df -h
+
+# View API health
+curl http://localhost:4002/health
+
+# Check agent status
+curl http://localhost:48484/v2/device
 ```
 
-## 🤝 Contributing
+### Database Maintenance
 
-We welcome contributions! Please:
+```bash
+# Vacuum PostgreSQL
+docker exec -it iotistic-postgres psql -U postgres -d iotistic -c "VACUUM ANALYZE;"
 
-1. **Fork** the repository
-2. **Create** a feature branch
-3. **Make** your changes
-4. **Test** thoroughly
-5. **Submit** a pull request
+# Check database size
+docker exec -it iotistic-postgres psql -U postgres -d iotistic -c "SELECT pg_size_pretty(pg_database_size('iotistic'));"
 
+# Clean old metrics (if needed)
+docker exec -it iotistic-postgres psql -U postgres -d iotistic -c "DELETE FROM metrics WHERE timestamp < NOW() - INTERVAL '90 days';"
+```
 
 ### Service Communication
 Use container names for inter-service URLs:
@@ -723,8 +811,7 @@ This project is licensed under the MIT License. See [LICENSE](LICENSE) for detai
 ## Support
 
 - **Issues**: [GitHub Issues](https://github.com/Iotistica/iotistic/issues)
-- **Documentation**: [Wiki](https://github.com/Iotistica/iotistic/wiki)
-- **Discussions**: [GitHub Discussions](https://github.com/Iotistica/iotistic/discussions)
+
 
 ## Version
 
@@ -735,36 +822,4 @@ For stable releases, check: [Releases](https://github.com/Iotistica/iotistic/rel
 ---
 
 **Built with:** Node.js, TypeScript, React, PostgreSQL, Neo4j, Mosquitto MQTT, Docker, Kubernetes, Helm, Stripe
-            "imageName": "nginx:alpine",
-            "appId": 1001,
-            "appName": "my-nginx-test",
-            "config": {
-              "image": "nginx:alpine",
-              "ports": ["8085:80"]
-            }
-          }
-        ]
-      },
-      "1002": {
-        "appId": 1002,
-        "appName": "database",
-        "services": [
-          {
-            "serviceId": 1,
-            "serviceName": "postgres",
-            "imageName": "postgres:15-alpine",
-            "appId": 1002,
-            "appName": "database",
-            "config": {
-              "image": "postgres:15-alpine",
-              "ports": ["5432:5432"],
-              "environment": {
-                "POSTGRES_PASSWORD": "mysecretpassword",
-                "POSTGRES_DB": "mydb"
-              }
-            }
-          }
-        ]
-      }
-    }
-  }'
+         
