@@ -29,7 +29,7 @@ class RedisClient {
    */
   public async connect(): Promise<void> {
     if (this.client && this.isConnected) {
-       logger.info('✅ Redis already connected');
+       logger.info('Redis already connected');
       return;
     }
 
@@ -50,27 +50,36 @@ class RedisClient {
         }
 
         const delay = Math.min(times * 1000, 5000); // Max 5s delay
-         logger.info(`🔄 Redis reconnecting in ${delay}ms (attempt ${times}/${this.maxReconnectAttempts})`);
+         logger.info(`⏳ Redis reconnecting in ${delay}ms (attempt ${times}/${this.maxReconnectAttempts})`);
         return delay;
       },
       maxRetriesPerRequest: 3,
       enableReadyCheck: true,
       lazyConnect: false,
+      connectTimeout: 10000, // 10 second timeout
+      keepAlive: 30000, // Keep connection alive
     });
 
     // Event handlers
     this.client.on('connect', () => {
-       logger.info('📡 Redis connection established');
+       logger.info(' Redis TCP connection established');
     });
 
     this.client.on('ready', () => {
       this.isConnected = true;
       this.reconnectAttempts = 0;
-       logger.info(' Redis client ready');
+       logger.info(' Redis client ready and authenticated');
     });
 
     this.client.on('error', (err: Error) => {
-       logger.error(' Redis error:', err.message);
+       logger.error(' Redis error:', {
+        message: err.message,
+        code: (err as any).code,
+        errno: (err as any).errno,
+        syscall: (err as any).syscall,
+      });
+      
+      // Don't throw - let retry logic handle it
     });
 
     this.client.on('close', () => {

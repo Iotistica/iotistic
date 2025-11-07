@@ -22,6 +22,7 @@ import deviceJobsRoutes from './routes/device-jobs';
 import scheduledJobsRoutes from './routes/scheduled-jobs';
 import rotationRoutes from './routes/rotation';
 import digitalTwinRoutes from './routes/digital-twin';
+import digitalTwinGraphRoutes from './routes/digital-twin-graph';
 import mqttMonitorRoutes from './routes/mqtt-monitor';
 import eventsRoutes from './routes/events';
 import mqttBrokerRoutes from './routes/mqtt-broker';
@@ -158,6 +159,7 @@ app.use(API_BASE, deviceJobsRoutes);
 app.use(API_BASE, scheduledJobsRoutes);
 app.use(API_BASE, rotationRoutes);
 app.use(API_BASE, digitalTwinRoutes);
+app.use(`${API_BASE}/digital-twin/graph`, digitalTwinGraphRoutes);
 app.use(`${API_BASE}/mqtt-monitor`, mqttMonitorRoutes);
 app.use(API_BASE, eventsRoutes);
 app.use(`${API_BASE}/mqtt`, mqttBrokerRoutes);
@@ -207,10 +209,19 @@ async function startServer() {
   // Initialize PostgreSQL database
   try {
     const db = await import('./db/connection');
+    
+    // Log connection details for debugging
+    logger.info('Attempting PostgreSQL connection:', {
+      host: process.env.DB_HOST || 'localhost',
+      port: process.env.DB_PORT || '5432',
+      database: process.env.DB_NAME || 'iotistic',
+      user: process.env.DB_USER || 'postgres',
+    });
+    
     const connected = await db.testConnection();
     
     if (!connected) {
-      logger.error('Failed to connect to PostgreSQL database');
+      logger.error('Failed to connect to PostgreSQL database - check connection settings above');
       process.exit(1);
     }
     
@@ -222,7 +233,14 @@ async function startServer() {
     const { initializeMqttAdmin } = await import('./services/mqtt-bootstrap');
     await initializeMqttAdmin();
   } catch (error) {
-    logger.error('Database initialization error', { error });
+    logger.error('Database initialization error:', error);
+    if (error instanceof Error) {
+      logger.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        code: (error as any).code,
+      });
+    }
     process.exit(1);
   }
 
@@ -244,6 +262,17 @@ async function startServer() {
   } catch (error) {
     logger.warn('License validator initialization failed', { error });
     // Don't exit - will run in unlicensed mode with limited features
+  }
+
+  // Initialize Neo4j database for Digital Twin graph
+  try {
+    logger.info('Connecting to Neo4j database...');
+    const { neo4jService } = await import('./services/neo4j.service');
+    await neo4jService.connect();
+    logger.info('Neo4j database connected successfully');
+  } catch (error) {
+    logger.warn('Neo4j connection failed', { error });
+    // Don't exit - Digital Twin graph features will be unavailable
   }
 
   // Start heartbeat monitor for device connectivity
@@ -300,9 +329,12 @@ async function startServer() {
   try {
     const { redisClient } = await import('./redis/client');
     await redisClient.connect();
-    logger.info('Redis client connected');
+    logger.info('✓ Redis client connected successfully');
   } catch (error) {
-    logger.warn('Failed to initialize Redis', { error });
+    logger.warn('⚠️  Redis connection failed - continuing without real-time features', {
+      error: error instanceof Error ? error.message : String(error),
+      note: 'This is non-critical - metrics will use PostgreSQL only'
+    });
     // Don't exit - graceful degradation (continues with PostgreSQL only)
   }
 
@@ -322,7 +354,10 @@ async function startServer() {
       await initializeMqtt();
       // MQTT manager will log its own initialization status
     } catch (error) {
-      logger.warn('Failed to initialize MQTT', { error });
+      logger.warn('⚠️  MQTT service initialization failed - will retry in background', {
+        error: error instanceof Error ? error.message : String(error),
+        note: 'This is non-critical - API will continue without MQTT'
+      });
       retryMqttInitialization();
     }
   })();

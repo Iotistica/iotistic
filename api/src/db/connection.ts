@@ -78,11 +78,26 @@ export async function transaction<T>(
  */
 export async function testConnection(): Promise<boolean> {
   try {
+    logger.info('Testing database connection with config:', {
+      host: dbConfig.host,
+      port: dbConfig.port,
+      database: dbConfig.database,
+      user: dbConfig.user,
+    });
+    
     const result = await query('SELECT NOW() as now');
     logger.log(' Database connected successfully at', result.rows[0].now);
     return true;
   } catch (error) {
     logger.error(' Database connection failed:', error);
+    if (error instanceof Error) {
+      logger.error('Connection error details:', {
+        message: error.message,
+        code: (error as any).code,
+        host: dbConfig.host,
+        port: dbConfig.port,
+      });
+    }
     return false;
   }
 }
