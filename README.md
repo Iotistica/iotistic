@@ -2,6 +2,8 @@
 
 A comprehensive multi-tenant SaaS IoT platform combining edge device management with cloud-based Kubernetes deployment, featuring real-time monitoring, Digital Twin visualization, and flexible device orchestration.
 
+![System Metrics Dashboard](docs/images/system_metrics.JPG)
+
 ## Features
 
 ### Multi-Tenant SaaS Architecture

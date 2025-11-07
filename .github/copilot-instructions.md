@@ -6,16 +6,20 @@
 
 This codebase supports **TWO DISTINCT ARCHITECTURES** - understand which you're working with:
 
-### 1. **Edge Device Stack** (Original - Raspberry Pi)
-- Single-tenant: One Pi, one customer
+### 1. **Edge Device Stack** (Raspberry Pi / x86_64)
+- Single-tenant: One device, one customer
 - Docker Compose orchestration (`docker-compose.yml`, `docker-compose.dev.yml`)
-- Services: `agent/`, `mosquitto/`, `nodered/`, `influx/`, `nginx/`, `grafana/`
-- Target: On-premise Raspberry Pi hardware
+- Services: `agent/`, `api/`, `dashboard/`, `mosquitto/`, `postgres/`, `neo4j/`, `vpn-client/`
+- VPN tunnel to cloud (10.8.0.0/24 subnet)
+- Target: On-premise hardware (Raspberry Pi arm64/armv7l, x86_64)
 
 ### 2. **Multi-Tenant SaaS** (Current Focus - Kubernetes)
 - Cloud-hosted: Multiple customers, isolated namespaces
+- Three namespace types:
+  1. **Global billing**: Billing API + Managed PostgreSQL (AWS RDS/Cloud SQL/Azure)
+  2. **Global vpn-server**: OpenVPN server + Certificate Manager API
+  3. **Per-customer**: API, Dashboard, PostgreSQL, Mosquitto, Redis, Billing Exporter, Prometheus
 - Kubernetes/Helm deployment (`charts/customer-instance/`)
-- Services: `billing/` (global), `api/`, `dashboard/`, `postgres/`, `mosquitto/`, `billing-exporter/`
 - Target: Cloud K8s clusters (AWS EKS, GKE, AKS, etc.)
 
 **When editing**: Always clarify which deployment model your changes affect. Many services (API, Mosquitto) exist in both contexts but with different configurations.
@@ -38,7 +42,34 @@ This codebase supports **TWO DISTINCT ARCHITECTURES** - understand which you're 
 
 **Namespace Convention**: `customer-{8-char-id}` (e.g., `customer-dc5fec42`)
 - Sanitized from `cust_dc5fec42901a...` to fit K8s 63-char limit
-- Each namespace gets: PostgreSQL, Mosquitto, API, Dashboard, Billing Exporter
+- Each namespace gets: API, Dashboard, PostgreSQL (dedicated), Mosquitto, Redis, Billing Exporter
+- Prometheus: Shared (Starter/Pro) or Dedicated (Enterprise)
+
+**Kubernetes Architecture**:
+```
+Global billing namespace:
+  - Billing API (port 3100)
+  - Managed PostgreSQL (AWS RDS/Cloud SQL/Azure Database)
+  
+Global vpn-server namespace:
+  - OpenVPN Server (port 1194, UDP)
+  - Certificate Manager API (port 8080)
+  - PostgreSQL (device registry)
+
+Per-customer namespace (customer-{id}):
+  - API (port 3002) - Device management, MQTT ACLs, Neo4j
+  - Dashboard (port 3000) - React UI, Digital Twin
+  - PostgreSQL (dedicated) - Device shadow, MQTT ACLs, metrics
+  - Mosquitto (port 1883) - MQTT broker with PostgreSQL auth
+  - Redis (port 6379) - Real-time metrics, Bull queues, caching
+  - Billing Exporter - Usage metrics to Prometheus
+  - Prometheus - Shared (monitoring namespace) or Dedicated (Enterprise)
+  
+Edge devices:
+  - VPN Client - OpenVPN tunnel (10.8.0.x IP)
+  - Agent - Container orchestrator
+  - Local API - Device management
+```
 
 **License Validation Pattern**:
 ```typescript
@@ -82,9 +113,21 @@ const decoded = verify(token, publicKey, { algorithms: ['RS256'] });
 ### 3. Database Patterns
 
 **PostgreSQL** (Multi-tenant SaaS):
-- `billing/` - Customer/subscription/usage tables (global instance)
-- `api/` - Device shadow state, MQTT ACLs (per-customer instance)
+- `billing/` - Customer/subscription/usage tables (managed instance: AWS RDS/Cloud SQL/Azure)
+- `api/` - Device shadow state, MQTT ACLs (dedicated per-customer instance in K8s)
+- `vpn-server/` - Device registry, certificate tracking (global instance)
 - Shared auth: Mosquitto uses PostgreSQL for ACL via `mosquitto-go-auth`
+
+**Neo4j** (Digital Twin):
+- Graph database for spatial relationships
+- IFC file parsing for building information models
+- Device-space mapping
+- 3D visualization support
+
+**Redis** (Per-customer):
+- Real-time metrics (Redis Streams)
+- Bull queues for async jobs
+- Caching layer
 
 **Migration Commands**:
 ```bash
@@ -308,6 +351,8 @@ alerts/environmental    # Threshold alerts
 - `charts/customer-instance/templates/` - K8s manifests
 - `api/src/middleware/license-validator.ts` - Feature gating
 - `billing-exporter/src/collectors/` - Usage metrics
+- `vpn-server/src/` - Certificate manager, device registry, OpenVPN config
+- `vpn-server/scripts/` - PKI initialization, cert generation/revocation
 
 ### Edge Device Stack
 - `agent/src/compose/container-manager.ts` - Docker orchestration with state management
@@ -338,7 +383,11 @@ alerts/environmental    # Threshold alerts
 
 ### Shared Services
 - `api/src/routes/` - REST endpoints (both contexts)
+- `api/src/services/neo4j.service.ts` - Digital Twin graph database
+- `api/src/services/ifc-parser.service.ts` - Building information model parsing
 - `dashboard/src/` - React admin panel (Vite + TypeScript)
+- `dashboard/src/pages/DigitalTwinPage.tsx` - Digital Twin UI
+- `dashboard/src/components/DigitalTwinGraph.tsx` - 3D visualization
 - `mosquitto/mosquitto.conf` - MQTT broker config
 
 ---
