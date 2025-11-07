@@ -14,9 +14,24 @@ A comprehensive multi-tenant SaaS IoT platform combining edge device management 
 - **Usage Metering** - Prometheus metrics collection for billing
 - **Automated Deployment** - Self-signup triggers K8s namespace creation
 
+
 ![Device HTTP and MQTT Trafiic Monitor ](docs/images/traffic_monitor.JPG)
 
 ![API Usage](docs/images/api_usage.JPG)
+
+
+### Security
+- **JWT Authentication** - RS256-signed JSON Web Tokens for API authentication and license validation
+- **Role-Based Access Control (RBAC)** - User roles with granular permissions (Admin, User, Viewer)
+- **MQTT ACL Management** - PostgreSQL-backed topic access control with read/write permissions
+- **Multi-Tenant Isolation** - Kubernetes namespace segregation and network policies
+- **Certificate-Based VPN** - PKI infrastructure with device certificates and revocation support
+- **API Key Rotation** - Automated key rotation with configurable expiration policies
+- **License Feature Gating** - Plan-based feature access controlled via JWT claims
+- **Password Hashing** - Bcrypt-based secure password storage
+- **Session Management** - Redis-backed session store with configurable TTL
+
+![Security](docs/images/security.JPG)
 
 ### Edge Device Management  
 - **Container Orchestration** - Agent supports Docker Compose and K3s
