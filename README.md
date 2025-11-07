@@ -25,6 +25,7 @@ A comprehensive multi-tenant SaaS IoT platform combining edge device management 
 - **Device API** - REST API on port 48484 for local management
 - **Multi-Platform** - Raspberry Pi (arm64, armv7l), x86_64 support
 - **Cloud Sync** - Pull-based configuration updates
+- **VPN Tunnel** - VPN tunnel for secure access
 
 ![System Metrics Dashboard](docs/images/system_metrics.JPG)
 
@@ -37,11 +38,11 @@ A comprehensive multi-tenant SaaS IoT platform combining edge device management 
 ![Digital Twin Graph Model](docs/images/digital_twin_graph.JPG)
 
 ### Core IoT Stack
-- **MQTT Broker** - Mosquitto with PostgreSQL ACL authentication
-- **Data Storage** - PostgreSQL for sensor data and device state
+- **MQTT Broker** - MQTT Broker Topics and Statistics
+- **Data Storage** - PostgreSQL for sensor time series metrics and device state
 - **Real-Time Metrics** - Redis Streams for live data
 - **Web Dashboard** - React + TypeScript interface
-- **Monitoring** - Shared or dedicated Prometheus based on plan
+- **Monitoring** - Shared or dedicated Prometheus based on plan, Grafana dashboards
 
 ![MQTT Explorer ](docs/images/mqtt.JPG)
 
