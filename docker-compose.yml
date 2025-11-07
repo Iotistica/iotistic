@@ -21,9 +21,7 @@ services:
                 dockerfile: Dockerfile
             privileged: true
             pid: "host"
-            tty: true
             restart: always
-            network_mode: host
             volumes:
                 - /var/run/docker.sock:/var/run/docker.sock
                 - agent-1-data:/app/data
@@ -34,13 +32,15 @@ services:
                 - FORCE_COLOR=1
                 - MQTT_PERSIST_TO_DB=true
                 - MQTT_DB_SYNC_INTERVAL=70000
-                - REPORT_INTERVAL_MS=2000
-                - METRICS_INTERVAL_MS=2000
+                - REPORT_INTERVAL_MS=7000
+                - METRICS_INTERVAL_MS=7000
                 - LOG_COMPRESSION=true
                 - PROVISIONING_API_KEY=708b51cbc9b5b515151fbb943ba9788ab6885d037455424b290f97d2077ae8c0
             depends_on:
                 api:
                     condition: service_healthy
+            networks:
+                - iotistic-net
                 
     agent-2:
             container_name: agent-2
@@ -49,9 +49,7 @@ services:
                 dockerfile: Dockerfile
             privileged: true
             pid: "host"
-            tty: true
             restart: always
-            network_mode: host
             volumes:
                 - /var/run/docker.sock:/var/run/docker.sock
                 - agent-2-data:/app/data
@@ -62,13 +60,15 @@ services:
                 - FORCE_COLOR=1
                 - MQTT_PERSIST_TO_DB=true
                 - MQTT_DB_SYNC_INTERVAL=70000
-                - REPORT_INTERVAL_MS=2000
-                - METRICS_INTERVAL_MS=2000
+                - REPORT_INTERVAL_MS=7000
+                - METRICS_INTERVAL_MS=7000
                 - LOG_COMPRESSION=true
                 - PROVISIONING_API_KEY=7a4bfa93fc7094a8359812fc3046f5f03729ce34a76913fb6767a04dbf3a407e
             depends_on:
                 api:
                     condition: service_healthy
+            networks:
+                - iotistic-net
 
     agent-3:
             container_name: agent-3
@@ -77,9 +77,7 @@ services:
                 dockerfile: Dockerfile
             privileged: true
             pid: "host"
-            tty: true
             restart: always
-            network_mode: host
             volumes:
                 - /var/run/docker.sock:/var/run/docker.sock
                 - agent-3-data:/app/data
@@ -89,13 +87,15 @@ services:
                 - NODE_ENV=development
                 - MQTT_PERSIST_TO_DB=true
                 - MQTT_DB_SYNC_INTERVAL=70000
-                - REPORT_INTERVAL_MS=2000
-                - METRICS_INTERVAL_MS=2000
+                - REPORT_INTERVAL_MS=7000
+                - METRICS_INTERVAL_MS=7000
                 - LOG_COMPRESSION=true
                 - PROVISIONING_API_KEY=d29ed8ef80e7753308237bdcb292d4f988eb77732bf907241308355bcd0558dd
             depends_on:
                 api:
                     condition: service_healthy
+            networks:
+                - iotistic-net
     agent-4:
             container_name: agent-4
             build:
@@ -103,9 +103,7 @@ services:
                 dockerfile: Dockerfile
             privileged: true
             pid: "host"
-            tty: true
             restart: always
-            network_mode: host
             volumes:
                 - /var/run/docker.sock:/var/run/docker.sock
                 - agent-4-data:/app/data
@@ -115,13 +113,15 @@ services:
                 - NODE_ENV=development
                 - MQTT_PERSIST_TO_DB=true
                 - MQTT_DB_SYNC_INTERVAL=70000
-                - REPORT_INTERVAL_MS=2000
-                - METRICS_INTERVAL_MS=2000
+                - REPORT_INTERVAL_MS=7000
+                - METRICS_INTERVAL_MS=7000
                 - LOG_COMPRESSION=true
                 - PROVISIONING_API_KEY=d76c2c9ae2410ba579da5d91d1715775c00ab9de7bc78e0fedcabbf925df37a8
             depends_on:
                 api:
                     condition: service_healthy
+            networks:
+                - iotistic-net
                 
     agent-5:
             container_name: agent-5
@@ -130,9 +130,7 @@ services:
                 dockerfile: Dockerfile
             privileged: true
             pid: "host"
-            tty: true
             restart: always
-            network_mode: host
             volumes:
                 - /var/run/docker.sock:/var/run/docker.sock
                 - agent-5-data:/app/data
@@ -142,8 +140,8 @@ services:
                 - NODE_ENV=development
                 - MQTT_PERSIST_TO_DB=true
                 - MQTT_DB_SYNC_INTERVAL=70000
-                - REPORT_INTERVAL_MS=2000
-                - METRICS_INTERVAL_MS=2000
+                - REPORT_INTERVAL_MS=7000
+                - METRICS_INTERVAL_MS=7000
                 - LOG_COMPRESSION=true
                 - PROVISIONING_API_KEY=f40ead93e892c18753a323772008f4121af34d1b9462a5c5c0bd3a7ed2fa2a9b
             depends_on:

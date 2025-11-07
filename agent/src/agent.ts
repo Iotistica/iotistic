@@ -63,7 +63,20 @@ export default class DeviceAgent {
 		process.env.RECONCILIATION_INTERVAL_MS || '30000',
 		10
 	);
-	private readonly CLOUD_API_ENDPOINT = process.env.CLOUD_API_ENDPOINT || 'http://localhost:4002';
+	// Cloud API endpoint with fallback logic for network_mode: host
+	// When using host networking, container names don't resolve - use localhost instead
+	private readonly CLOUD_API_ENDPOINT = process.env.CLOUD_API_ENDPOINT || this.getDefaultCloudEndpoint();
+	
+	private getDefaultCloudEndpoint(): string {
+		// If running in container with host networking, use localhost
+		// If running in bridge network, use container name 'api'
+		// Check if we're in Docker with host networking
+		if (process.env.CLOUD_API_ENDPOINT) {
+			return process.env.CLOUD_API_ENDPOINT;
+		}
+		// Default to localhost for host networking (most common edge device setup)
+		return 'http://localhost:3002';
+	}
 
 	constructor() {
 		// Initialize with default from env var

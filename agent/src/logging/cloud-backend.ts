@@ -190,21 +190,60 @@ export class CloudLogBackend implements LogBackend {
 			return;
 		}
 		
-		// Get logs to send
-		const logsToSend = [...this.buffer];
+		// Split buffer into smaller batches if too large
+		const batchSize = this.config.batchSize;
+		const batches: LogMessage[][] = [];
+		
+		for (let i = 0; i < this.buffer.length; i += batchSize) {
+			batches.push(this.buffer.slice(i, i + batchSize));
+		}
+		
+		console.log(`📦 Flushing ${this.buffer.length} logs in ${batches.length} batch(es) of ${batchSize}`);
+		
+		// Clear buffer immediately to prevent duplicate sends
 		this.buffer = [];
 		
-		try {
-			await this.sendLogs(logsToSend);
-			this.retryCount = 0; // Reset on success
-		} catch (error) {
-			console.error('❌ Failed to send logs to cloud:', error);
+		// Send batches sequentially
+		const failedLogs: LogMessage[] = [];
+		
+		for (const batch of batches) {
+			try {
+				await this.sendLogs(batch);
+				this.retryCount = 0; // Reset on success
+			} catch (error) {
+				console.error(`❌ Failed to send batch of ${batch.length} logs:`, error);
+				
+				// Check if it's a DNS error (unrecoverable until config fixed)
+				const isDnsError = error instanceof Error && 
+					('cause' in error && error.cause && 
+					typeof error.cause === 'object' && 
+					'code' in error.cause && 
+					error.cause.code === 'ENOTFOUND');
+				
+				if (isDnsError) {
+					console.error('⚠️  DNS resolution failed - check CLOUD_API_ENDPOINT environment variable');
+					console.error('   Hint: If using network_mode: host, use http://localhost:PORT instead of container names');
+					// Drop logs on DNS errors to prevent infinite accumulation
+					console.warn(`🗑️  Dropping ${batch.length} logs due to DNS configuration error`);
+					continue;
+				}
+				
+				// For other errors, keep logs for retry
+				failedLogs.push(...batch);
+				this.retryCount++;
+			}
+		}
+		
+		// Re-add failed logs to buffer (at the beginning) but limit total buffer size
+		if (failedLogs.length > 0) {
+			const maxBufferLogs = 500; // Maximum logs to keep in buffer
+			const logsToKeep = failedLogs.slice(-maxBufferLogs); // Keep most recent
 			
-			// Put logs back in buffer (at the beginning)
-			this.buffer = [...logsToSend, ...this.buffer];
+			if (failedLogs.length > maxBufferLogs) {
+				console.warn(`⚠️  Buffer overflow: dropping ${failedLogs.length - maxBufferLogs} oldest logs`);
+			}
 			
-			// Increment retry count
-			this.retryCount++;
+			this.buffer = [...logsToKeep, ...this.buffer];
 			
 			// Schedule reconnect with exponential backoff
 			this.scheduleReconnect();
@@ -231,25 +270,35 @@ export class CloudLogBackend implements LogBackend {
 			headers['Content-Encoding'] = 'gzip';
 		}
 		
-		// Create abort controller for this request
+		// Create abort controller with timeout
 		this.abortController = new AbortController();
+		const timeoutId = setTimeout(() => {
+			this.abortController?.abort();
+		}, 30000); // 30 second timeout
 		
-		// Send to cloud
-		const response = await fetch(endpoint, {
-			method: 'POST',
-			headers,
-			body,
-			signal: this.abortController.signal,
-		});
-		
-		if (!response.ok) {
-			const responseText = await response.text();
-			console.error(`❌ HTTP ${response.status}: ${response.statusText}`);
-			console.error(`   Response: ${responseText.substring(0, 200)}`);
-			throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+		try {
+			// Send to cloud
+			const response = await fetch(endpoint, {
+				method: 'POST',
+				headers,
+				body,
+				signal: this.abortController.signal,
+			});
+			
+			clearTimeout(timeoutId);
+			
+			if (!response.ok) {
+				const responseText = await response.text();
+				console.error(`❌ HTTP ${response.status}: ${response.statusText}`);
+				console.error(`   Response: ${responseText.substring(0, 200)}`);
+				throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+			}
+			
+			console.log(`✅ Successfully sent ${logs.length} logs to cloud (${response.status})`);
+		} catch (error) {
+			clearTimeout(timeoutId);
+			throw error;
 		}
-		
-		console.log(`✅ Successfully sent ${logs.length} logs to cloud (${response.status})`);
 	}
 	
 	private async compress(data: string): Promise<Buffer> {

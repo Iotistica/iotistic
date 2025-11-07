@@ -11,10 +11,6 @@
 
 import process from 'process';
 import DeviceAgent from './agent';
-import { getGlobalLogger } from './logging/index.js';
-import { LogComponents } from './logging/components.js';
-
-const logger = getGlobalLogger();
 
 // Start the device agent
 const supervisor = new DeviceAgent();
@@ -35,10 +31,10 @@ async function gracefulShutdown(signal: string) {
 	try {
 		// Stop the agent (closes Device API, MQTT, etc.)
 		await supervisor.stop();
-		console.log('✅ Device agent stopped successfully');
+		console.log('Device agent stopped successfully');
 		process.exit(0);
 	} catch (error) {
-		console.error('❌ Error during shutdown:', error);
+		console.error('Error during shutdown:', error);
 		process.exit(1);
 	}
 }
