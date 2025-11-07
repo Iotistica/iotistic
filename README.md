@@ -54,7 +54,7 @@ A comprehensive multi-tenant SaaS IoT platform combining edge device management 
 Single-tenant deployment on customer hardware:
 
 **Services:**
-- Agent - Container orchestrator (Docker/K3s)
+- Agent - Edge Container orchestrator (Docker/K3s)
 - API - Device management REST API  
 - Dashboard - React web interface
 - Mosquitto - MQTT broker
@@ -75,7 +75,7 @@ Cloud-hosted with isolated customer namespaces:
 
 ## Quick Start
 
-### Option 1: Automated Installation (Raspberry Pi)
+### Option 1: Automated Installation (Edge)
 ```bash
 curl -sSL https://raw.githubusercontent.com/Iotistica/iotistic/master/bin/install.sh | bash
 ```
@@ -88,8 +88,8 @@ The installer will:
 - Start all services
 - ✅ Configure the system
 - ✅ Deploy all services
-- ✅ Set up kiosk mode (optional)
-- ✅ Configure networking (optional)
+- ✅ Set up vpn tunnel 
+- ✅ Configure networking
 
 ### Option 2: Manual Installation
 
@@ -114,15 +114,12 @@ chmod +x bin/install.sh
 git clone https://github.com/Iotistica/iotistic.git
 cd iotistic
 
-# Start development stack
+# Start development stack (build)
+docker-compose -f docker-compose.yml up -d
+
+# Start development stack (pull)
 docker-compose -f docker-compose.dev.yml up -d
 
-# Services available at:
-# - API: http://localhost:4002
-# - Dashboard: http://localhost:3000
-# - MQTT: localhost:5883
-# - PostgreSQL: localhost:5432
-# - Neo4j: http://localhost:7474
 ```
 
 ### Option 3: Kubernetes Deployment
@@ -280,187 +277,267 @@ The system automatically:
 4. **Visualizes** real-time and historical data in Grafana
 5. **Triggers** alerts based on configured thresholds for air quality and environmental conditions
 
-## � Remote Device Access
+## Remote Device Access
 
-The system supports SSH reverse tunneling for remote device access without VPN complexity.
+The system uses an OpenVPN-based architecture for secure cloud-to-device connectivity, similar to Balena's VPN infrastructure.
 
-### Why SSH Reverse Tunnel?
+### Why VPN?
 
-- ✅ **Simple Setup**: No VPN server required
-- ✅ **Built-in Security**: Uses SSH key authentication
-- ✅ **Firewall Friendly**: Works through standard SSH port 22
-- ✅ **Auto-Reconnect**: Automatically re-establishes lost connections
-- ✅ **Multiple Devices**: Support for fleet management
+- ✅ **Secure Tunneling**: Certificate-based authentication for each device
+- ✅ **NAT Traversal**: Works through firewalls and NAT without port forwarding
+- ✅ **Customer Isolation**: Network segmentation per customer namespace
+- ✅ **Certificate Management**: PKI infrastructure with revocation support
+- ✅ **Fleet Management**: Scalable for thousands of devices
+- ✅ **Auto-Reconnect**: Automatic reconnection on network interruptions
 
 ### Architecture
 
 ```
-Device (Behind NAT/Firewall)           Cloud Server (Public IP)
-┌─────────────────────┐               ┌─────────────────────┐
-│   Device Agent      │               │   Cloud API         │
-│   localhost:48484   │─────SSH───▶   │   localhost:48484   │
-│                     │   Tunnel      │   (forwarded)       │
-└─────────────────────┘               └─────────────────────┘
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   Cloud API     │    │   VPN Gateway    │    │   Device Fleet  │
+│                 │    │                  │    │                 │
+│ ┌─────────────┐ │    │ ┌──────────────┐ │    │ ┌─────────────┐ │
+│ │ Billing     │ │    │ │  OpenVPN     │ │    │ │   Device A  │ │
+│ │ Service     │ │    │ │  Server      │ │    │ │             │ │
+│ └─────────────┘ │    │ │              │ │    │ │ ┌─────────┐ │ │
+│                 │    │ │ Port 1194    │ │    │ │ │ OpenVPN │ │ │
+│ ┌─────────────┐ │    │ │              │ │◄───┼─┤ │ Client  │ │ │
+│ │ Customer    │◄┼────┼─┤ Device       │ │    │ │ └─────────┘ │ │
+│ │ Dashboard   │ │    │ │ Registry     │ │    │ │             │ │
+│ └─────────────┘ │    │ │              │ │    │ │ Agent API   │ │
+│                 │    │ └──────────────┘ │    │ │ :48484      │ │
+└─────────────────┘    └──────────────────┘    │ └─────────────┘ │
+                       VPN: 10.8.0.0/24        └─────────────────┘
 ```
 
-The device establishes an SSH reverse tunnel to your cloud server, making its Device API accessible remotely.
+Each device gets:
+- Unique VPN IP address (e.g., `10.8.0.10`)
+- Client certificate and private key
+- Secure tunnel to cloud API
 
-### Quick Setup
+### VPN Server Setup (Cloud/K8s)
 
-Remote access can be configured **during initial installation** or **added later**.
+**Deploy VPN Server:**
+```bash
+cd vpn-server
 
-#### Option 1: During Installation (Recommended)
+# Initialize PKI (Certificate Authority)
+./scripts/init-pki.sh
+
+# Start VPN server
+docker-compose up -d
+
+# Or deploy to Kubernetes
+kubectl apply -f k8s/
+```
+
+**VPN Server Configuration:**
+```bash
+# Environment variables (vpn-server/.env)
+VPN_ENABLED=true
+VPN_SERVER_HOST=vpn.iotistic.cloud
+VPN_SERVER_PORT=1194
+VPN_SUBNET=10.8.0.0
+VPN_NETMASK=255.255.255.0
+```
+
+### Device VPN Client Setup
+
+**Option 1: During Installation (Recommended)**
 
 When running `bin/install.sh`, you'll be prompted:
 ```
 ╔═══════════════════════════════════════════════════════════╗
-║     Remote Device Access Setup (Optional)                 ║
+║     VPN Configuration Setup                                ║
 ╚═══════════════════════════════════════════════════════════╝
 
-? Would you like to enable remote access? (y/N)
+? Enable VPN connection to cloud? (y/N)
 ```
 
 If you choose "Yes":
-1. Enter your cloud server hostname (e.g., `cloud.example.com`)
-2. Enter SSH username (default: `tunnel`)
-3. The script will generate SSH keys and copy them to cloud server
-4. Remote access will be enabled automatically after installation completes
+1. Enter VPN server hostname (e.g., `vpn.iotistic.cloud`)
+2. Enter VPN server port (default: `1194`)
+3. Provide device certificate URL or paste certificate content
+4. VPN client will be configured and started automatically
 
-#### Option 2: After Installation
+**Option 2: Manual Configuration**
 
-If you skipped remote access during installation, run the setup script:
-
+1. **Generate device certificate on VPN server**:
 ```bash
-bash bin/setup-remote-access.sh cloud.example.com tunnel
+cd vpn-server
+./scripts/generate-client.sh device-001 customer-abc123
 ```
 
-This script will:
-- Generate SSH keys on the device
-- Copy public key to cloud server
-- Configure cloud server SSH settings
-- Update .env with remote access configuration
-- Test the tunnel connection
+This creates:
+- `device-001.crt` - Client certificate
+- `device-001.key` - Private key
+- `device-001.ovpn` - Complete OpenVPN config
 
-Then restart the device agent:
+2. **Transfer certificate to device**:
+```bash
+# Download from certificate manager API
+curl https://vpn.iotistic.cloud/api/certificates/device-001.ovpn > /home/pi/iotistic/vpn/device.ovpn
+
+# Or use the web interface
+# Dashboard → Devices → device-001 → Download VPN Config
+```
+
+3. **Configure device**:
+```bash
+# Add to .env
+VPN_ENABLED=true
+VPN_SERVER_HOST=vpn.iotistic.cloud
+VPN_SERVER_PORT=1194
+VPN_CA_URL=https://vpn.iotistic.cloud/api/ca.crt
+VPN_CONFIG_PATH=/app/vpn/device.ovpn
+```
+
+4. **Restart services**:
 ```bash
 docker-compose restart agent
 ```
 
-#### Verify Connection
-
-From your cloud server:
-```bash
-curl http://localhost:48484/v2/device
-curl http://localhost:48484/v2/applications/state
-```
-
-### Manual Configuration
-
-If you prefer manual setup:
-
-1. **Generate SSH key on device**:
-```bash
-mkdir -p data/ssh
-ssh-keygen -t ed25519 -f data/ssh/id_rsa -N ""
-```
-
-2. **Copy public key to cloud server**:
-```bash
-ssh-copy-id -i data/ssh/id_rsa.pub tunnel@cloud.example.com
-```
-
-3. **Configure cloud server** (`/etc/ssh/sshd_config`):
-```
-GatewayPorts yes
-ClientAliveInterval 60
-ClientAliveCountMax 3
-```
-
-4. **Add to `.env`**:
-```bash
-ENABLE_REMOTE_ACCESS=true
-CLOUD_HOST=cloud.example.com
-CLOUD_SSH_PORT=22
-SSH_TUNNEL_USER=tunnel
-SSH_KEY_PATH=/app/data/ssh/id_rsa
-```
-
-5. **Restart services**:
-```bash
-sudo systemctl restart sshd  # On cloud server
-docker-compose restart agent  # On device
-```
-
 ### Environment Variables
 
+**VPN Server** (`vpn-server/.env`):
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ENABLE_REMOTE_ACCESS` | `false` | Enable SSH reverse tunnel |
-| `CLOUD_HOST` | - | Cloud server hostname/IP (required) |
-| `CLOUD_SSH_PORT` | `22` | SSH port on cloud server |
-| `SSH_TUNNEL_USER` | `tunnel` | SSH user on cloud server |
-| `SSH_KEY_PATH` | `/app/data/ssh/id_rsa` | Path to SSH private key |
-| `SSH_AUTO_RECONNECT` | `true` | Auto-reconnect on disconnect |
-| `SSH_RECONNECT_DELAY` | `5000` | Delay before reconnect (ms) |
+| `VPN_SERVER_HOST` | - | Public hostname/IP of VPN server |
+| `VPN_SERVER_PORT` | `1194` | OpenVPN server port (UDP) |
+| `VPN_SUBNET` | `10.8.0.0` | VPN subnet |
+| `VPN_NETMASK` | `255.255.255.0` | VPN netmask |
+| `DB_HOST` | `postgres` | Database for device registry |
+| `CA_CERT_PATH` | `/etc/openvpn/pki/ca.crt` | CA certificate |
 
-### Multi-Device Management (docker compose testing only)
+**Device Agent** (`.env`):
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VPN_ENABLED` | `false` | Enable VPN client |
+| `VPN_SERVER_HOST` | - | VPN server hostname (required) |
+| `VPN_SERVER_PORT` | `1194` | VPN server port |
+| `VPN_CA_URL` | - | URL to download CA certificate |
+| `VPN_CONFIG_PATH` | `/app/vpn/device.ovpn` | Path to OpenVPN config |
+| `VPN_AUTO_RECONNECT` | `true` | Auto-reconnect on disconnect |
 
-For managing multiple devices, assign each device a unique port:
+### Verify Connection
 
-**Device 1**:
+**From Cloud API:**
 ```bash
-DEVICE_API_PORT=48484
+# Check device registry
+curl https://vpn.iotistic.cloud/api/devices
+
+# Access device via VPN IP
+curl http://10.8.0.10:48484/v2/device
+
+# View device status
+curl https://api.iotistic.cloud/api/devices/device-001
 ```
 
-**Device 2**:
+**From Device:**
 ```bash
-DEVICE_API_PORT=48485
+# Check VPN status
+docker-compose logs vpn-client
+
+# Test connectivity to cloud
+ping 10.8.0.1  # VPN server
+curl http://10.8.0.1:3002/health  # Cloud API via VPN
 ```
 
-**Device 3**:
+### Certificate Management
+
+**Generate new certificate:**
 ```bash
-DEVICE_API_PORT=48486
+cd vpn-server
+./scripts/generate-client.sh <device-id> <customer-id>
 ```
 
-Then access each device from cloud:
+**Revoke compromised certificate:**
 ```bash
-curl http://localhost:48484/v2/device  # Device 1
-curl http://localhost:48485/v2/device  # Device 2
-curl http://localhost:48486/v2/device  # Device 3
+./scripts/revoke-client.sh <device-id>
+
+# Restart VPN server to apply CRL
+docker-compose restart vpn-server
 ```
+
+**List active connections:**
+```bash
+docker exec vpn-server cat /var/log/openvpn/status.log
+```
+
+### Multi-Device Fleet Management
+
+Each customer namespace can have multiple devices:
+
+```bash
+# Generate certificates for fleet
+./scripts/generate-client.sh device-001 customer-abc123
+./scripts/generate-client.sh device-002 customer-abc123
+./scripts/generate-client.sh device-003 customer-abc123
+```
+
+VPN IP allocation:
+- `10.8.0.1` - VPN server
+- `10.8.0.10-20` - Customer ABC123 devices
+- `10.8.0.21-30` - Customer XYZ456 devices
+- etc.
 
 ### Monitoring
 
-Check tunnel status in logs:
+**Check VPN connection status:**
 ```bash
-docker-compose logs -f agent | grep -i tunnel
+# On device
+docker-compose logs -f vpn-client
+
+# Expected output
+Initialization Sequence Completed
+Connection established successfully
 ```
 
-Expected output:
+**View connected devices (VPN server):**
+```bash
+# Check status log
+docker exec vpn-server cat /var/log/openvpn/status.log
+
+# API endpoint
+curl https://vpn.iotistic.cloud/api/devices/connected
 ```
-🔌 Initializing SSH reverse tunnel...
-   Cloud: cloud.example.com:22
-   Tunnel: cloud:48484 -> device:48484
-✅ SSH reverse tunnel established successfully
+
+**Connection metrics:**
+```bash
+# Prometheus metrics endpoint
+curl http://vpn.iotistic.cloud:9090/metrics
+
+# Key metrics:
+# - vpn_connected_devices
+# - vpn_bytes_in/vpn_bytes_out
+# - vpn_connection_errors
 ```
 
 ### Troubleshooting
 
-**Tunnel not connecting:**
-- Verify cloud server is reachable: `ping cloud.example.com`
-- Check SSH key permissions: `ls -la data/ssh/id_rsa` (should be 600)
-- Test SSH connection: `ssh -i data/ssh/id_rsa tunnel@cloud.example.com`
+**VPN connection fails:**
+- Verify VPN server is reachable: `ping vpn.iotistic.cloud`
+- Check certificate validity: `openssl x509 -in device.crt -noout -dates`
+- Test UDP port: `nc -u vpn.iotistic.cloud 1194`
+- Check firewall rules on device and server
 
-**Tunnel disconnects frequently:**
+**Certificate errors:**
+- Ensure CA certificate matches server CA
+- Verify certificate not expired or revoked
+- Check certificate permissions: `chmod 600 device.key`
+
+**Connection drops frequently:**
 - Check network stability
-- Adjust `SSH_RECONNECT_DELAY` if needed
-- Verify cloud server `ClientAliveInterval` settings
+- Verify `VPN_AUTO_RECONNECT=true` in `.env`
+- Increase keepalive intervals in OpenVPN config
 
-**Port already in use:**
-- Choose a different `DEVICE_API_PORT`
-- Check for existing tunnels: `ps aux | grep ssh`
+**Can't access device via VPN:**
+- Verify device VPN IP: `ip addr show tun0`
+- Check routing table: `route -n`
+- Test from VPN server: `ping 10.8.0.10`
+- Ensure device firewall allows VPN subnet
 
-For more details, see [`docs/REMOTE-ACCESS.md`](docs/REMOTE-ACCESS.md).
+For more details, see [`vpn-server/README.md`](vpn-server/README.md) and [`vpn-server/VPN-LOCAL-TEST-GUIDE.md`](vpn-server/VPN-LOCAL-TEST-GUIDE.md).
 
 ## �🛠️ Development
 
@@ -516,6 +593,12 @@ iotistic/
 ├── argocd/                # GitOps continuous deployment
 │   ├── customers/         # Per-customer app configs
 │   └── shared/            # Shared infrastructure
+├── vpn-server/            # OpenVPN server for device connectivity
+│   ├── src/               # Certificate manager, device registry
+│   ├── config/            # OpenVPN server configuration
+│   ├── scripts/           # PKI initialization, cert generation
+│   ├── k8s/               # Kubernetes deployment manifests
+│   └── web/               # Web interface for cert management
 ├── mosquitto/             # MQTT broker configuration
 │   ├── mosquitto.conf     # PostgreSQL ACL integration
 │   └── data/              # Persistence (gitignored)
