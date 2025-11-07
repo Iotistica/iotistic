@@ -13,6 +13,7 @@ A comprehensive multi-tenant SaaS IoT platform combining edge device management 
 - **Plan-Based Features** - Starter, Professional, Enterprise tiers
 - **Usage Metering** - Prometheus metrics collection for billing
 - **Automated Deployment** - Self-signup triggers K8s namespace creation
+- **Web Dashboard** - React + TypeScript interface
 
 
 ![Device HTTP and MQTT Trafiic Monitor ](docs/images/traffic_monitor.JPG)
@@ -52,11 +53,9 @@ A comprehensive multi-tenant SaaS IoT platform combining edge device management 
 
 ![Digital Twin Graph Model](docs/images/digital_twin_graph.JPG)
 
-### Core IoT Stack
+### Monitoring
 - **MQTT Broker** - MQTT Broker Topics and Statistics
-- **Data Storage** - PostgreSQL for sensor time series metrics and device state
 - **Real-Time Metrics** - Redis Streams for live data
-- **Web Dashboard** - React + TypeScript interface
 - **Monitoring** - Shared or dedicated Prometheus based on plan, Grafana dashboards
 
 ![MQTT Explorer ](docs/images/mqtt.JPG)

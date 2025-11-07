@@ -36,17 +36,19 @@ export function LogsPage({ deviceUuid }: LogsPageProps) {
   const [isPaused, setIsPaused] = useState(false);
   const [selectedService, setSelectedService] = useState<string>("all");
   const [serviceOptions, setServiceOptions] = useState<string[]>([]);
-  const [dateRange, setDateRange] = useState<string>("today");
+  const [dateRange, setDateRange] = useState<string>("last7days");
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
   const logContainerRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
-  // Initialize date range to "Today" on mount
+  // Initialize date range to "Last 7 Days" on mount
   useEffect(() => {
-    const today = new Date().toISOString().split('T')[0];
-    setDateFrom(today);
-    setDateTo(today);
+    const now = new Date();
+    const sevenDaysAgo = new Date(now);
+    sevenDaysAgo.setDate(now.getDate() - 7);
+    setDateFrom(sevenDaysAgo.toISOString().split('T')[0]);
+    setDateTo(now.toISOString().split('T')[0]);
   }, []);
 
   // Auto-scroll to bottom when new logs arrive
