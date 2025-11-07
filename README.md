@@ -125,8 +125,8 @@ This will:
 
 1. **Clone the repository**:
 ```bash
-git clone https://github.com/dsamborschi/Iotistic-sensor.git
-cd Iotistic-sensor
+git clone https://github.com/Iotistica/iotistic.git
+cd iotistic
 ```
 
 2. **Run the installer**:
@@ -183,8 +183,8 @@ For development and testing:
 
 ```bash
 # Clone repository
-git clone https://github.com/dsamborschi/Iotistic-sensor.git
-cd Iotistic-sensor
+git clone https://github.com/Iotistica/iotistic.git
+cd iotistic
 
 # Start development stack
 docker-compose -f docker-compose.dev.yml up -d
@@ -617,15 +617,15 @@ This project is licensed under the MIT License. See [LICENSE](LICENSE) for detai
 
 ## 🆘 Support
 
-- **Issues**: [GitHub Issues](https://github.com/dsamborschi/Iotistic-sensor/issues)
-- **Documentation**: [Wiki](https://github.com/dsamborschi/Iotistic-sensor/wiki)
-- **Discussions**: [GitHub Discussions](https://github.com/dsamborschi/Iotistic-sensor/discussions)
+- **Issues**: [GitHub Issues](https://github.com/Iotistica/iotistic/issues)
+- **Documentation**: [Wiki](https://github.com/Iotistica/iotistic/wiki)
+- **Discussions**: [GitHub Discussions](https://github.com/Iotistica/iotistic/discussions)
 
 ## 🏷️ Version
 
 Current version: **Latest** (rolling release from master branch)
 
-For stable releases, check: [Releases](https://github.com/dsamborschi/Iotistic-sensor/releases)
+For stable releases, check: [Releases](https://github.com/Iotistica/iotistic/releases)
 
 ---
 

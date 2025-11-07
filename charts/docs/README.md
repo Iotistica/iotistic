@@ -259,7 +259,7 @@ kubectl wait --for=condition=available deployment/prometheus-operator -n default
 
 # Create monitoring stack (Prometheus + Grafana)
 # Download the manifest
-curl -O https://raw.githubusercontent.com/dsamborschi/iotistic-sensor/master/charts/monitoring-stack.yaml
+curl -O https://raw.githubusercontent.com/Iotistica/iotistic/master/charts/monitoring-stack.yaml
 
 # Or create it manually (see monitoring-stack.yaml in charts/)
 kubectl apply -f monitoring-stack.yaml

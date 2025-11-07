@@ -68,23 +68,12 @@ const decoded = verify(token, publicKey, { algorithms: ['RS256'] });
 **The "Why"**: Single-tenant IoT stack on customer's own hardware for environmental monitoring and data collection.
 
 **Services** (Docker Compose):
-- `agent/` - Container orchestrator (inspired by Balena Supervisor)
+- `agent/` - localhost debug or Container orchestrator (inspired by Balena Supervisor)
 - `mosquitto/` - MQTT broker (1883, 9001)
-- `nodered/` - Flow engine (1880)
-- `influxdb/` - Time-series DB (8086)
-- `grafana/` - Visualization (3000)
-- `nginx/` - Reverse proxy (80)
-
-**Multi-Architecture Build** (Critical!):
-```bash
-TARGET_ARCH=armhf  → DEVICE_TYPE=pi3  → iotistic/agent:latest-pi3
-TARGET_ARCH=arm64  → DEVICE_TYPE=pi4  → iotistic/agent:latest-pi4
-TARGET_ARCH=amd64  → DEVICE_TYPE=x86  → iotistic/agent:latest-x86
-```
 
 **Pattern**: `docker-compose.yml.tmpl` + `envsubst` → `docker-compose.yml`
 - See `bin/install.sh::set_device_type()` for architecture detection
-- ALWAYS use `DEVICE_TYPE` env var, not `ARCHITECTURE` or `TARGET_ARCH`
+
 
 **Service Communication**:
 - Use container names: `mqtt://mosquitto:1883`, `http://influxdb:8086`
@@ -375,7 +364,7 @@ curl http://localhost:3100/api/admin/jobs
 ### Edge Device Stack
 ```bash
 # Install on Raspberry Pi
-curl -sSL https://raw.githubusercontent.com/dsamborschi/iotistic-sensor/master/bin/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/Iotistica/iotistic/master/bin/install.sh | bash
 
 # Local development
 docker-compose -f docker-compose.dev.yml up -d
@@ -501,5 +490,11 @@ kubectl exec -it -n customer-dc5fec42 deployment/postgres -- \
 3. **Dual Deployment**: Cloud K8s for SaaS, Docker Compose for edge devices
 4. **Configuration over Code**: Environment variables for all deployment decisions
 5. **Developer Experience**: Simulated modes, comprehensive logging, clear error messages
+6. **Code Style**: 
+   - No emojis in code, logs, or documentation - use plain text only
+   - Use `logger` instead of `console.log` when logger is available
+7. **Docker Containers**: When working with local development, key services run in Docker containers:
+   - PostgreSQL: `iotistic-postgres` (port 5432)
+   - Mosquitto MQTT: `iotistic-mosquitto` (ports 5883, 59002)
 
 **When making changes**: Always test both deployment contexts (K8s + Docker Compose) and verify license feature gating works correctly.

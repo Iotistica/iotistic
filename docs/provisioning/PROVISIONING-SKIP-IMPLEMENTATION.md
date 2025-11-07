@@ -92,10 +92,10 @@ local APT_INSTALL_ARGS=(
 ### First Installation (Device Not Provisioned)
 ```bash
 # Device has no database or provisioned=0
-curl -sSL https://raw.githubusercontent.com/dsamborschi/Iotistic-sensor/master/bin/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/Iotistica/iotistic/master/bin/install.sh | bash
 
 # Prompts appear:
-# 🔐 Device Provisioning Setup
+# Device Provisioning Setup
 # Enter your provisioning API key...
 ```
 
@@ -154,7 +154,7 @@ CREATE TABLE device (
 ```bash
 # Fresh device
 docker run -it --rm -v /tmp/test:/home/pi/iotistic debian:bookworm bash
-curl -sSL https://raw.githubusercontent.com/dsamborschi/Iotistic-sensor/master/bin/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/Iotistica/iotistic/master/bin/install.sh | bash
 
 # Expected: Provisioning prompts appear
 ```

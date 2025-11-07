@@ -17,7 +17,7 @@
 1. [ ] Start with a fresh Raspberry Pi (no iotistic directory)
 2. [ ] Run installation script:
    ```bash
-   curl -sSL https://raw.githubusercontent.com/dsamborschi/Iotistic-sensor/master/bin/install.sh | bash
+   curl -sSL https://raw.githubusercontent.com/Iotistica/iotistic/master/bin/install.sh | bash
    ```
 3. [ ] Observe provisioning prompts appear
 4. [ ] Enter provisioning API key when prompted

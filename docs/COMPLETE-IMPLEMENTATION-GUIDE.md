@@ -363,8 +363,8 @@ customer.metadata.customer_id = "abc123"
 #### 1. Clone Repository
 
 ```bash
-git clone https://github.com/dsamborschi/Iotistic-sensor.git
-cd Iotistic-sensor/billing
+git clone https://github.com/Iotistica/iotistic.git
+cd iotistic/billing
 ```
 
 #### 2. Install Dependencies
@@ -1453,7 +1453,7 @@ docs/
 
 ## Support & Resources
 
-- **Repository**: https://github.com/dsamborschi/Iotistic-sensor
+- **Repository**: https://github.com/Iotistica/iotistic
 - **Documentation**: `/docs`
 - **API Reference**: This document
 - **Helm Chart**: `/charts/customer-instance/README.md`
