@@ -13,6 +13,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { query } from '../db/connection';
 import bcrypt from 'bcrypt';
+import logger from '../utils/logger';
 
 // Extend Express Request to include device info
 declare global {
@@ -166,20 +167,19 @@ export async function deviceAuthFromBody(
     if (!deviceUuid) {
       // Try to extract from state report format (keys are UUIDs)
       const keys = Object.keys(req.body);
-      console.log('🔍 Extracting UUID from state report body keys:', keys);
       
       if (keys.length === 1) {
         const key = keys[0];
         // Match UUID format: 8-4-4-4-12 hex characters
         if (key.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
           deviceUuid = key;
-          console.log('✅ Extracted UUID from state report key:', deviceUuid);
+          logger.info('Extracted UUID from state report key:', deviceUuid);
         }
       }
     }
 
     if (!deviceUuid) {
-      console.error('❌ Failed to extract UUID from body:', JSON.stringify(req.body, null, 2));
+      logger.error(' Failed to extract UUID from body:', JSON.stringify(req.body, null, 2));
       res.status(400).json({
         error: 'Bad Request',
         message: 'Device UUID required in request body (as uuid/deviceUuid field or as state report key)'
@@ -235,7 +235,7 @@ export async function deviceAuthFromBody(
     next();
 
   } catch (error: any) {
-    console.error('Device authentication error:', error);
+    logger.error('Device authentication error:', error);
     res.status(500).json({
       error: 'Internal Server Error',
       message: 'Authentication failed'

@@ -28,22 +28,20 @@ services:
                 - /var/run/docker.sock:/var/run/docker.sock
                 - agent-1-data:/app/data
             environment:
-                - PORT=4002
-                - DEVICE_API_PORT=48484
-                - CLOUD_API_ENDPOINT=http://host.docker.internal:4002
+                - DEVICE_API_PORT=48481
+                - CLOUD_API_ENDPOINT=http://api:3002
                 - NODE_ENV=development
                 - FORCE_COLOR=1
-                - MQTT_BROKER_URL=mqtt://mosquitto:1883
-                - MQTT_USERNAME=admin
-                - MQTT_PASSWORD=iotistic42!
                 - MQTT_PERSIST_TO_DB=true
                 - MQTT_DB_SYNC_INTERVAL=70000
                 - REPORT_INTERVAL_MS=2000
                 - METRICS_INTERVAL_MS=2000
                 - LOG_COMPRESSION=true
                 - PROVISIONING_API_KEY=708b51cbc9b5b515151fbb943ba9788ab6885d037455424b290f97d2077ae8c0
-                - LICENSE_PUBLIC_KEY=-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqS6oN6f88fM0YkWE1rcu\nsUDStDBOnVSFjl2jvSwsb+2jb6dFESj+HJBREmwdtFJp1J9hS8PiNXs3PcsyGJi8\nGTYUhpy5Xv7I96A5krmRUfFxJylaS3wmMl55M19f2z0mi8CayhzXgmK3CKA+rLa+\nLC+CxpVIFMc88vJxkeC14W8Hh25wxxbXCTTtS702cjtVzDZSWuM/hIqlBAPKDfKo\nTp8otRyNJyutl1wwnF5mI/3sVyNMyEPzVG3H6y/3Kt4BYXyzt9CgMoGHCxLaQNxn\nz+kivnIY8PK2Ywii3OFkO47/+ZlV6+e6bny9hlvCkhU9DNfzoBb4YBAu4F62llLK\nlQIDAQAB\n-----END PUBLIC KEY-----
-                - IOTISTIC_LICENSE_KEY=eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJjdXN0b21lcklkIjoiY3VzdF85NWM3ZmIzNDU0NmE0Zjc2YjhhNjJkNDBiNDE3NThhNCIsImN1c3RvbWVyTmFtZSI6IlRlc3QgQ29ycCIsInBsYW4iOiJzdGFydGVyIiwiZmVhdHVyZXMiOnsibWF4RGV2aWNlcyI6MTAsImRhdGFSZXRlbnRpb25EYXlzIjozMCwiY2FuRXhwb3J0RGF0YSI6dHJ1ZSwiaGFzQWR2YW5jZWRBbGVydHMiOmZhbHNlLCJoYXNBcGlBY2Nlc3MiOnRydWUsImhhc01xdHRBY2Nlc3MiOnRydWUsImhhc0N1c3RvbUJyYW5kaW5nIjpmYWxzZX0sImxpbWl0cyI6eyJtYXhVc2VycyI6NSwibWF4QWxlcnRSdWxlcyI6MjUsIm1heERhc2hib2FyZHMiOjEwfSwidHJpYWwiOnsiaXNUcmlhbE1vZGUiOnRydWUsImV4cGlyZXNBdCI6IjIwMjUtMTEtMDRUMjM6NTM6MDguNTM2WiJ9LCJzdWJzY3JpcHRpb24iOnsic3RhdHVzIjoidHJpYWxpbmciLCJjdXJyZW50UGVyaW9kRW5kc0F0IjoiMjAyNS0xMS0wNFQyMzo1MzowOC41MzZaIn0sImlzc3VlZEF0IjoxNzYxMDkyMjkxLCJleHBpcmVzQXQiOjE3OTI2MjgyOTEsImlhdCI6MTc2MTA5MjI5MSwiZXhwIjoxNzkyNjI4MjkxfQ.Sqeb4-9vny_un74-M37RnsDTMS1sELPeE2fU951idhY3eNQWXAg6l-T3kx8NtMzHz90Ar4r2VD0l8eqCfZbMeQxIYIyxzyGkP6Fb12dJN-M1Y9wUtyee5C4UE61XGZYogPgzclMr8d9pvy3iKRga4yxi4XnZrCzId7PovXBdMS7AKXL4Pgf_BVL54kpT78-KshM-6GFCuRT35gHnbo1qv_gH5vTM80E1OQt-0YEkPXDEuc7CN3p4-wRtR0GEe_dbWkIBPKqTGsmS5vm_HJWTy67oojfF-3O5Oo6dNWYit5gikK_Cy3eUjdaQmEU-CN7mXGpKmVadb8zj8cHTTDRlJA
+            depends_on:
+                api:
+                    condition: service_healthy
+                
     agent-2:
             container_name: agent-2
             build:
@@ -58,22 +56,19 @@ services:
                 - /var/run/docker.sock:/var/run/docker.sock
                 - agent-2-data:/app/data
             environment:
-                - PORT=4002
-                - DEVICE_API_PORT=48485
-                - CLOUD_API_ENDPOINT=http://host.docker.internal:4002
+                - DEVICE_API_PORT=48482
+                - CLOUD_API_ENDPOINT=http://api:3002
                 - NODE_ENV=development
                 - FORCE_COLOR=1
-                - MQTT_BROKER_URL=mqtt://mosquitto:1883
-                - MQTT_USERNAME=admin
-                - MQTT_PASSWORD=iotistic42!
                 - MQTT_PERSIST_TO_DB=true
                 - MQTT_DB_SYNC_INTERVAL=70000
                 - REPORT_INTERVAL_MS=2000
                 - METRICS_INTERVAL_MS=2000
                 - LOG_COMPRESSION=true
                 - PROVISIONING_API_KEY=7a4bfa93fc7094a8359812fc3046f5f03729ce34a76913fb6767a04dbf3a407e
-                - LICENSE_PUBLIC_KEY=-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqS6oN6f88fM0YkWE1rcu\nsUDStDBOnVSFjl2jvSwsb+2jb6dFESj+HJBREmwdtFJp1J9hS8PiNXs3PcsyGJi8\nGTYUhpy5Xv7I96A5krmRUfFxJylaS3wmMl55M19f2z0mi8CayhzXgmK3CKA+rLa+\nLC+CxpVIFMc88vJxkeC14W8Hh25wxxbXCTTtS702cjtVzDZSWuM/hIqlBAPKDfKo\nTp8otRyNJyutl1wwnF5mI/3sVyNMyEPzVG3H6y/3Kt4BYXyzt9CgMoGHCxLaQNxn\nz+kivnIY8PK2Ywii3OFkO47/+ZlV6+e6bny9hlvCkhU9DNfzoBb4YBAu4F62llLK\nlQIDAQAB\n-----END PUBLIC KEY-----
-                - IOTISTIC_LICENSE_KEY=eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJjdXN0b21lcklkIjoiY3VzdF85NWM3ZmIzNDU0NmE0Zjc2YjhhNjJkNDBiNDE3NThhNCIsImN1c3RvbWVyTmFtZSI6IlRlc3QgQ29ycCIsInBsYW4iOiJzdGFydGVyIiwiZmVhdHVyZXMiOnsibWF4RGV2aWNlcyI6MTAsImRhdGFSZXRlbnRpb25EYXlzIjozMCwiY2FuRXhwb3J0RGF0YSI6dHJ1ZSwiaGFzQWR2YW5jZWRBbGVydHMiOmZhbHNlLCJoYXNBcGlBY2Nlc3MiOnRydWUsImhhc01xdHRBY2Nlc3MiOnRydWUsImhhc0N1c3RvbUJyYW5kaW5nIjpmYWxzZX0sImxpbWl0cyI6eyJtYXhVc2VycyI6NSwibWF4QWxlcnRSdWxlcyI6MjUsIm1heERhc2hib2FyZHMiOjEwfSwidHJpYWwiOnsiaXNUcmlhbE1vZGUiOnRydWUsImV4cGlyZXNBdCI6IjIwMjUtMTEtMDRUMjM6NTM6MDguNTM2WiJ9LCJzdWJzY3JpcHRpb24iOnsic3RhdHVzIjoidHJpYWxpbmciLCJjdXJyZW50UGVyaW9kRW5kc0F0IjoiMjAyNS0xMS0wNFQyMzo1MzowOC41MzZaIn0sImlzc3VlZEF0IjoxNzYxMDkyMjkxLCJleHBpcmVzQXQiOjE3OTI2MjgyOTEsImlhdCI6MTc2MTA5MjI5MSwiZXhwIjoxNzkyNjI4MjkxfQ.Sqeb4-9vny_un74-M37RnsDTMS1sELPeE2fU951idhY3eNQWXAg6l-T3kx8NtMzHz90Ar4r2VD0l8eqCfZbMeQxIYIyxzyGkP6Fb12dJN-M1Y9wUtyee5C4UE61XGZYogPgzclMr8d9pvy3iKRga4yxi4XnZrCzId7PovXBdMS7AKXL4Pgf_BVL54kpT78-KshM-6GFCuRT35gHnbo1qv_gH5vTM80E1OQt-0YEkPXDEuc7CN3p4-wRtR0GEe_dbWkIBPKqTGsmS5vm_HJWTy67oojfF-3O5Oo6dNWYit5gikK_Cy3eUjdaQmEU-CN7mXGpKmVadb8zj8cHTTDRlJA
+            depends_on:
+                api:
+                    condition: service_healthy
 
     agent-3:
             container_name: agent-3
@@ -89,24 +84,71 @@ services:
                 - /var/run/docker.sock:/var/run/docker.sock
                 - agent-3-data:/app/data
             environment:
-                - PORT=4002
-                - DEVICE_API_PORT=48486
-                - CLOUD_API_ENDPOINT=http://host.docker.internal:4002
+                - DEVICE_API_PORT=48483
+                - CLOUD_API_ENDPOINT=http://api:3002
                 - NODE_ENV=development
-                - FORCE_COLOR=1
-                - MQTT_BROKER_URL=mqtt://mosquitto:1883
-                - MQTT_USERNAME=admin
-                - MQTT_PASSWORD=iotistic42!
                 - MQTT_PERSIST_TO_DB=true
                 - MQTT_DB_SYNC_INTERVAL=70000
                 - REPORT_INTERVAL_MS=2000
                 - METRICS_INTERVAL_MS=2000
                 - LOG_COMPRESSION=true
                 - PROVISIONING_API_KEY=d29ed8ef80e7753308237bdcb292d4f988eb77732bf907241308355bcd0558dd
-                - LICENSE_PUBLIC_KEY=-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqS6oN6f88fM0YkWE1rcu\nsUDStDBOnVSFjl2jvSwsb+2jb6dFESj+HJBREmwdtFJp1J9hS8PiNXs3PcsyGJi8\nGTYUhpy5Xv7I96A5krmRUfFxJylaS3wmMl55M19f2z0mi8CayhzXgmK3CKA+rLa+\nLC+CxpVIFMc88vJxkeC14W8Hh25wxxbXCTTtS702cjtVzDZSWuM/hIqlBAPKDfKo\nTp8otRyNJyutl1wwnF5mI/3sVyNMyEPzVG3H6y/3Kt4BYXyzt9CgMoGHCxLaQNxn\nz+kivnIY8PK2Ywii3OFkO47/+ZlV6+e6bny9hlvCkhU9DNfzoBb4YBAu4F62llLK\nlQIDAQAB\n-----END PUBLIC KEY-----
-                - IOTISTIC_LICENSE_KEY=eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJjdXN0b21lcklkIjoiY3VzdF85NWM3ZmIzNDU0NmE0Zjc2YjhhNjJkNDBiNDE3NThhNCIsImN1c3RvbWVyTmFtZSI6IlRlc3QgQ29ycCIsInBsYW4iOiJzdGFydGVyIiwiZmVhdHVyZXMiOnsibWF4RGV2aWNlcyI6MTAsImRhdGFSZXRlbnRpb25EYXlzIjozMCwiY2FuRXhwb3J0RGF0YSI6dHJ1ZSwiaGFzQWR2YW5jZWRBbGVydHMiOmZhbHNlLCJoYXNBcGlBY2Nlc3MiOnRydWUsImhhc01xdHRBY2Nlc3MiOnRydWUsImhhc0N1c3RvbUJyYW5kaW5nIjpmYWxzZX0sImxpbWl0cyI6eyJtYXhVc2VycyI6NSwibWF4QWxlcnRSdWxlcyI6MjUsIm1heERhc2hib2FyZHMiOjEwfSwidHJpYWwiOnsiaXNUcmlhbE1vZGUiOnRydWUsImV4cGlyZXNBdCI6IjIwMjUtMTEtMDRUMjM6NTM6MDguNTM2WiJ9LCJzdWJzY3JpcHRpb24iOnsic3RhdHVzIjoidHJpYWxpbmciLCJjdXJyZW50UGVyaW9kRW5kc0F0IjoiMjAyNS0xMS0wNFQyMzo1MzowOC41MzZaIn0sImlzc3VlZEF0IjoxNzYxMDkyMjkxLCJleHBpcmVzQXQiOjE3OTI2MjgyOTEsImlhdCI6MTc2MTA5MjI5MSwiZXhwIjoxNzkyNjI4MjkxfQ.Sqeb4-9vny_un74-M37RnsDTMS1sELPeE2fU951idhY3eNQWXAg6l-T3kx8NtMzHz90Ar4r2VD0l8eqCfZbMeQxIYIyxzyGkP6Fb12dJN-M1Y9wUtyee5C4UE61XGZYogPgzclMr8d9pvy3iKRga4yxi4XnZrCzId7PovXBdMS7AKXL4Pgf_BVL54kpT78-KshM-6GFCuRT35gHnbo1qv_gH5vTM80E1OQt-0YEkPXDEuc7CN3p4-wRtR0GEe_dbWkIBPKqTGsmS5vm_HJWTy67oojfF-3O5Oo6dNWYit5gikK_Cy3eUjdaQmEU-CN7mXGpKmVadb8zj8cHTTDRlJA
-
-
+            depends_on:
+                api:
+                    condition: service_healthy
+    agent-4:
+            container_name: agent-4
+            build:
+                context: ./agent
+                dockerfile: Dockerfile
+            privileged: true
+            pid: "host"
+            tty: true
+            restart: always
+            network_mode: host
+            volumes:
+                - /var/run/docker.sock:/var/run/docker.sock
+                - agent-4-data:/app/data
+            environment:
+                - DEVICE_API_PORT=48484
+                - CLOUD_API_ENDPOINT=http://api:3002
+                - NODE_ENV=development
+                - MQTT_PERSIST_TO_DB=true
+                - MQTT_DB_SYNC_INTERVAL=70000
+                - REPORT_INTERVAL_MS=2000
+                - METRICS_INTERVAL_MS=2000
+                - LOG_COMPRESSION=true
+                - PROVISIONING_API_KEY=d76c2c9ae2410ba579da5d91d1715775c00ab9de7bc78e0fedcabbf925df37a8
+            depends_on:
+                api:
+                    condition: service_healthy
+                
+    agent-5:
+            container_name: agent-5
+            build:
+                context: ./agent
+                dockerfile: Dockerfile
+            privileged: true
+            pid: "host"
+            tty: true
+            restart: always
+            network_mode: host
+            volumes:
+                - /var/run/docker.sock:/var/run/docker.sock
+                - agent-5-data:/app/data
+            environment:
+                - DEVICE_API_PORT=48485
+                - CLOUD_API_ENDPOINT=http://api:3002
+                - NODE_ENV=development
+                - MQTT_PERSIST_TO_DB=true
+                - MQTT_DB_SYNC_INTERVAL=70000
+                - REPORT_INTERVAL_MS=2000
+                - METRICS_INTERVAL_MS=2000
+                - LOG_COMPRESSION=true
+                - PROVISIONING_API_KEY=f40ead93e892c18753a323772008f4121af34d1b9462a5c5c0bd3a7ed2fa2a9b
+            depends_on:
+                api:
+                    condition: service_healthy
     postgres:
         image: postgres:16-alpine
         container_name: iotistic-postgres
@@ -155,54 +197,57 @@ services:
         networks:
            - iotistic-net
 
-    # api:
-    #     build:
-    #         context: ./api
-    #         dockerfile: Dockerfile
-    #     container_name: iotistic-api
-    #     restart: always
-    #     tty: true
-    #     stdin_open: true
-    #     logging:
-    #         driver: "json-file"
-    #         options:
-    #             max-size: "10m"
-    #             max-file: "3"
-    #     environment:
-    #         - PORT=${PORT:-3002}
-    #         - NODE_ENV=${NODE_ENV:-development}
-    #         - DB_HOST=${DB_HOST:-postgres}
-    #         - DB_PORT=${DB_PORT:-5432}
-    #         - DB_NAME=${DB_NAME:-iotistic}
-    #         - DB_USER=${DB_USER:-postgres}
-    #         - DB_PASSWORD=${DB_PASSWORD:-postgres}
-    #         - DB_POOL_SIZE=${DB_POOL_SIZE:-20}
-    #         - FORCE_COLOR=${FORCE_COLOR:-1}
-    #         - MQTT_BROKER_URL=${MQTT_BROKER_URL:-mqtt://mosquitto:1883}
-    #         - MQTT_USERNAME=${MQTT_USERNAME:-admin}
-    #         - MQTT_PASSWORD=${MQTT_PASSWORD:-iotistic42!}
-    #         - MQTT_PERSIST_TO_DB=${MQTT_PERSIST_TO_DB:-true}
-    #         - MQTT_DB_SYNC_INTERVAL=${MQTT_DB_SYNC_INTERVAL:-10000}
-    #         - LOG_COMPRESSION=${LOG_COMPRESSION:-true}
-    #         - LICENSE_PUBLIC_KEY=${LICENSE_PUBLIC_KEY}
-    #         - IOTISTIC_LICENSE_KEY=${IOTISTIC_LICENSE_KEY}
-    #         - REDIS_HOST=${REDIS_HOST:-redis}
-    #         - REDIS_PORT=${REDIS_PORT:-6379}
-    #     ports:
-    #         - "${API_PORT_EXT:-4002}:3002"
-    #     healthcheck:
-    #         test: ["CMD", "curl", "-f", "http://localhost:3002/health"]
-    #         interval: 10s
-    #         timeout: 5s
-    #         retries: 5
-    #         start_period: 30s
-    #     depends_on:
-    #         postgres:
-    #             condition: service_healthy
-    #         redis:
-    #             condition: service_healthy
-    #     networks:
-    #        - iotistic-net
+    api:
+        build:
+            context: ./api
+            dockerfile: Dockerfile
+        container_name: iotistic-api
+        restart: always
+        tty: true
+        stdin_open: true
+        logging:
+            driver: "json-file"
+            options:
+                max-size: "10m"
+                max-file: "3"
+        environment:
+            - PORT=${PORT:-3002}
+            - NODE_ENV=${NODE_ENV:-development}
+            - DB_HOST=${DB_HOST:-postgres}
+            - DB_PORT=${DB_PORT:-5432}
+            - DB_NAME=${DB_NAME:-iotistic}
+            - DB_USER=${DB_USER:-postgres}
+            - DB_PASSWORD=${DB_PASSWORD:-postgres}
+            - DB_POOL_SIZE=${DB_POOL_SIZE:-20}
+            - FORCE_COLOR=${FORCE_COLOR:-1}
+            - MQTT_BROKER_URL=${MQTT_BROKER_URL:-mqtt://mosquitto:1883}
+            - MQTT_USERNAME=${MQTT_USERNAME:-admin}
+            - MQTT_PASSWORD=${MQTT_PASSWORD:-iotistic42!}
+            - MQTT_PERSIST_TO_DB=${MQTT_PERSIST_TO_DB:-true}
+            - MQTT_DB_SYNC_INTERVAL=${MQTT_DB_SYNC_INTERVAL:-10000}
+            - LOG_COMPRESSION=${LOG_COMPRESSION:-true}
+            - LICENSE_PUBLIC_KEY=${LICENSE_PUBLIC_KEY}
+            - IOTISTIC_LICENSE_KEY=${IOTISTIC_LICENSE_KEY}
+            - REDIS_HOST=${REDIS_HOST:-redis}
+            - REDIS_PORT=${REDIS_PORT:-6379}
+            - NEO4J_URI=${NEO4J_URI:-bolt://neo4j:7687}
+            - NEO4J_USERNAME=${NEO4J_USERNAME:-neo4j}
+            - NEO4J_PASSWORD=${NEO4J_PASSWORD:-iotistic123}
+        ports:
+            - "${API_PORT_EXT:-4002}:3002"
+        healthcheck:
+            test: ["CMD", "curl", "-f", "http://localhost:3002/health"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            start_period: 30s
+        depends_on:
+            postgres:
+                condition: service_healthy
+            redis:
+                condition: service_healthy
+        networks:
+           - iotistic-net
     mosquitto:
         image: iegomez/mosquitto-go-auth
         restart: always
@@ -217,6 +262,7 @@ services:
                 condition: service_healthy
         networks:
            - iotistic-net
+    
 
     # VPN Services - Commented out until TypeScript code is complete
     # Missing: vpn-server/src/vpn-server.ts implementation
@@ -312,8 +358,44 @@ services:
                 max-size: "5m"
                 max-file: "2"
 
+    neo4j:
+        image: neo4j:5.15-community
+        container_name: neo4j
+        restart: always
+        environment:
+            - NEO4J_AUTH=neo4j/iotistic123
+            - NEO4J_PLUGINS=["apoc"]
+            - NEO4J_dbms_security_procedures_unrestricted=apoc.*
+            - NEO4J_dbms_memory_heap_initial__size=512m
+            - NEO4J_dbms_memory_heap_max__size=2G
+        ports:
+            - "7474:7474"  # HTTP
+            - "7687:7687"  # Bolt
+        volumes:
+            - neo4j-data:/data
+            - neo4j-logs:/logs
+            - neo4j-import:/var/lib/neo4j/import
+            - neo4j-plugins:/plugins
+        networks:
+            - iotistic-net
+        healthcheck:
+            test: ["CMD-SHELL", "cypher-shell -u neo4j -p iotistic123 'RETURN 1'"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            start_period: 30s
+        logging:
+            driver: "json-file"
+            options:
+                max-size: "5m"
+                max-file: "2"
+
 volumes:
   agent-1-data:
+    driver: local
+  agent-5-data:
+    driver: local
+  agent-4-data:
     driver: local
   agent-2-data:
     driver: local
@@ -326,6 +408,14 @@ volumes:
   vpn-config:
     driver: local
   vpn-logs:
+    driver: local
+  neo4j-data:
+    driver: local
+  neo4j-logs:
+    driver: local
+  neo4j-import:
+    driver: local
+  neo4j-plugins:
     driver: local
  
 networks:

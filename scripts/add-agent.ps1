@@ -135,25 +135,26 @@ $newAgentService = @"
                 - DEVICE_API_PORT=$deviceApiPort
                 - CLOUD_API_ENDPOINT=http://host.docker.internal:4002
                 - NODE_ENV=development
-                - FORCE_COLOR=1
-                - MQTT_BROKER_URL=mqtt://mosquitto:1883
-                - MQTT_USERNAME=admin
-                - MQTT_PASSWORD=iotistic42!
                 - MQTT_PERSIST_TO_DB=true
                 - MQTT_DB_SYNC_INTERVAL=70000
                 - REPORT_INTERVAL_MS=2000
                 - METRICS_INTERVAL_MS=2000
                 - LOG_COMPRESSION=true
                 - PROVISIONING_API_KEY=$provisioningKey
-                - LICENSE_PUBLIC_KEY=$licensePublicKey
-                - IOTISTIC_LICENSE_KEY=$licenseKey
+      
 "@
 
 # Find insertion point (after last agent service, before postgres)
-if ($content -match '(?s)(agent-\d+:.*?IOTISTIC_LICENSE_KEY=[^\r\n]+)(\r?\n\r?\n    postgres:)') {
-    $content = $content -replace '(?s)(agent-\d+:.*?IOTISTIC_LICENSE_KEY=[^\r\n]+)(\r?\n\r?\n    postgres:)', "`$1$newAgentService`$2"
+# Match the last agent's IOTISTIC_LICENSE_KEY line, then capture any whitespace until postgres: service
+if ($content -match '(?s)(agent-\d+:.*?PROVISIONING_API_KEY=[^\r\n]+)([\r\n\s]*)(    postgres:)') {
+    $beforeAgent = $content.Substring(0, $matches.Index + $matches[1].Length)
+    $whitespace = $matches[2]
+    $afterAgent = $content.Substring($matches.Index + $matches[1].Length + $matches[2].Length)
+    
+    $content = $beforeAgent + $newAgentService + $whitespace + $afterAgent
 } else {
     Write-Error "Could not find insertion point in docker-compose.yml"
+    Write-Host "Looking for pattern: agent-X with IOTISTIC_LICENSE_KEY followed by postgres service" -ForegroundColor Yellow
     exit 1
 }
 
