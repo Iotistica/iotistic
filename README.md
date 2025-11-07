@@ -2,11 +2,7 @@
 
 A comprehensive multi-tenant SaaS IoT platform combining edge device management with cloud-based Kubernetes deployment, featuring real-time monitoring, Digital Twin visualization, and flexible device apps orchestration and configuration.
 
-![System Metrics Dashboard](docs/images/system_metrics.JPG)
 
-![API Usage](docs/images/api_usage.JPG)
-
-![Digital Twin Graph Model](docs/images/digital_twin_graph.JPG)
 
 ## Features
 
@@ -18,6 +14,10 @@ A comprehensive multi-tenant SaaS IoT platform combining edge device management 
 - **Usage Metering** - Prometheus metrics collection for billing
 - **Automated Deployment** - Self-signup triggers K8s namespace creation
 
+![Device HTTP and MQTT Trafiic Monitor ](docs/images/traffic_monitor.JPG.JPG)
+
+![API Usage](docs/images/api_usage.JPG)
+
 ### Edge Device Management  
 - **Container Orchestration** - Agent supports Docker Compose and K3s
 - **Declarative State** - Target state JSON with automatic reconciliation
@@ -26,11 +26,15 @@ A comprehensive multi-tenant SaaS IoT platform combining edge device management 
 - **Multi-Platform** - Raspberry Pi (arm64, armv7l), x86_64 support
 - **Cloud Sync** - Pull-based configuration updates
 
+![System Metrics Dashboard](docs/images/system_metrics.JPG)
+
 ### Digital Twin
 - **Graph Database** - Neo4j integration for spatial relationships
 - **IFC File Support** - Import building information models
 - **3D Visualization** - Force-directed graph with device mapping
 - **Device-Space Mapping** - Link IoT devices to physical locations
+
+![Digital Twin Graph Model](docs/images/digital_twin_graph.JPG)
 
 ### Core IoT Stack
 - **MQTT Broker** - Mosquitto with PostgreSQL ACL authentication
@@ -38,6 +42,8 @@ A comprehensive multi-tenant SaaS IoT platform combining edge device management 
 - **Real-Time Metrics** - Redis Streams for live data
 - **Web Dashboard** - React + TypeScript interface
 - **Monitoring** - Shared or dedicated Prometheus based on plan
+
+![MQTT Explorer ](docs/images/mqtt.JPG)
 
 ## Table of Contents
 
