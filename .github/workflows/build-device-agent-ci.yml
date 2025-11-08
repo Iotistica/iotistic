@@ -6,7 +6,7 @@ on:
       - master
     paths:
       - 'agent/**' 
-      - '.github/workflows/build-device-agent.yml'
+      - '.github/workflows/build-device-agent-ci.yml'
 
 jobs:
   test:
