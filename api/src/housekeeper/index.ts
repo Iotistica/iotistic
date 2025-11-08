@@ -337,6 +337,8 @@ export function createHousekeeper(config: HousekeeperConfig = {}) {
       await import('./tasks/device-logs-partition-maintenance'),
       await import('./tasks/device-metrics-partition-maintenance'),
       await import('./tasks/events-partition-maintenance'),
+      await import('./tasks/traffic-stats-flush'),
+      await import('./tasks/traffic-stats-cleanup'),
       // Add more tasks here
     ];
 

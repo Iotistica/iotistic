@@ -34,7 +34,6 @@ import housekeeperRoutes, { setHousekeeperInstance } from './routes/housekeeper'
 import dashboardLayoutsRoutes from './routes/dashboard-layouts';
 import mosquittoAuthRoutes from './routes/mosquitto-auth';
 import { trafficLogger} from "./middleware/traffic-logger";
-import { startTrafficFlushService, stopTrafficFlushService } from './services/traffic-flush-service';
 // Import entity/graph routes
 import { createEntitiesRouter } from './routes/entities';
 import { createRelationshipsRouter } from './routes/relationships';
@@ -309,15 +308,6 @@ async function startServer() {
     // Don't exit - this is not critical for API operation
   }
 
-  // Start traffic flush service (persists device traffic metrics to database)
-  try {
-    startTrafficFlushService();
-    logger.info('Traffic flush service started');
-  } catch (error) {
-    logger.warn('Failed to start traffic flush service', { error });
-    // Don't exit - this is not critical for API operation
-  }
-
   // Initialize MQTT Jobs Subscriber (listens for job status updates from devices)
   try {
     const { getMqttJobsSubscriber } = await import('./services/mqtt-jobs-subscriber');
@@ -508,14 +498,6 @@ async function startServer() {
       // Ignore errors during shutdown
     }
     
-    // Stop traffic flush service (final flush to database)
-    try {
-      await stopTrafficFlushService();
-      logger.info('Traffic flush service stopped');
-    } catch (error) {
-      // Ignore errors during shutdown
-    }
-    
     server.close(() => {
       logger.info('Server closed');
       clearTimeout(forceCloseTimeout);
@@ -617,14 +599,6 @@ async function startServer() {
       const subscriber = getMqttJobsSubscriber();
       await subscriber.stop();
       logger.info('MQTT Jobs Subscriber stopped');
-    } catch (error) {
-      // Ignore errors during shutdown
-    }
-    
-    // Stop traffic flush service (final flush to database)
-    try {
-      await stopTrafficFlushService();
-      logger.info('Traffic flush service stopped');
     } catch (error) {
       // Ignore errors during shutdown
     }
