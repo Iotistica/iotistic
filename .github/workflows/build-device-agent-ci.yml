@@ -36,9 +36,65 @@ jobs:
         working-directory: ./agent
         run: npm run build
 
+  version:
+    name: 📦 Bump Version
+    needs: test
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    outputs:
+      package_version: ${{ steps.bump.outputs.package_version }}
+      sha_short: ${{ steps.bump.outputs.sha_short }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Bump version in package.json
+        id: bump
+        run: |
+          cd agent
+          # Get current version
+          CURRENT_VERSION=$(jq -r '.version' package.json)
+          echo "📌 Current version: $CURRENT_VERSION"
+          
+          # Bump patch version (e.g., 1.0.0 -> 1.0.1)
+          IFS='.' read -ra VERSION_PARTS <<< "$CURRENT_VERSION"
+          MAJOR="${VERSION_PARTS[0]}"
+          MINOR="${VERSION_PARTS[1]}"
+          PATCH="${VERSION_PARTS[2]}"
+          NEW_PATCH=$((PATCH + 1))
+          NEW_VERSION="${MAJOR}.${MINOR}.${NEW_PATCH}"
+          
+          echo "🚀 New version: $NEW_VERSION"
+          
+          # Update package.json
+          jq --arg v "$NEW_VERSION" '.version = $v' package.json > tmp.json && mv tmp.json package.json
+          
+          # Set outputs
+          echo "package_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Commit and push version bump
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add agent/package.json
+          git commit -m "chore: bump agent version to ${{ steps.bump.outputs.package_version }} [skip ci]"
+          git push origin HEAD
+
+      - name: Display version info
+        run: |
+          echo "## 📦 Version Bumped" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**New Version:** \`${{ steps.bump.outputs.package_version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Git SHA:** \`${{ steps.bump.outputs.sha_short }}\`" >> $GITHUB_STEP_SUMMARY
+
   buildx:
     name: Build & Push Device Agent
-    needs: test
+    needs: version
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -86,6 +142,19 @@ jobs:
           git add agent/package.json
           git commit -m "chore: bump agent version to ${{ steps.version.outputs.package_version }} [skip ci]"
           git push origin HEAD
+
+      - name: Display Version Update
+        run: |
+          echo "## Version Update" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**New Version:** \`${{ steps.version.outputs.package_version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Git SHA:** \`${{ steps.version.outputs.sha_short }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Platform:** \`${{ matrix.board }}\` (\`${{ matrix.platform }}\`)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Docker Tags Created:" >> $GITHUB_STEP_SUMMARY
+          echo "- \`iotistic/agent:latest-${{ matrix.board }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`iotistic/agent:${{ steps.version.outputs.sha_short }}-${{ matrix.board }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`iotistic/agent:${{ steps.version.outputs.package_version }}-${{ matrix.board }}\`" >> $GITHUB_STEP_SUMMARY
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
