@@ -50,7 +50,7 @@
         "!**/node_modules/**"
       ],
       "env": {
-            "PORT":"4002",
+            "AGENT_VERSION":"1.0.0",
             "CLOUD_API_ENDPOINT":"http://localhost:4002",
             "FORCE_COLOR":"1",
             "MQTT_PERSIST_TO_DB":"true",
@@ -58,6 +58,7 @@
             "REPORT_INTERVAL_MS":"5000",
             "METRICS_INTERVAL_MS":"5000",
             "LOG_COMPRESSION":"true",
+            "REQUIRE_PROVISIONING" : "false",
             "PROVISIONING_API_KEY": "e49b7e640d75d9a5efa49b9cc17ce5a4afe0ad65e5bd59ec8a68b801ab488c73",
            
       }

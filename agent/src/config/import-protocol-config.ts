@@ -3,7 +3,7 @@
  * Run this once to migrate from file-based config to database
  */
 
-import { DeviceSensorModel } from '../models/protocol-adapter-device.model';
+import { DeviceSensorModel } from '../models/sensors.model';
 import * as fs from 'fs';
 import * as path from 'path';
 

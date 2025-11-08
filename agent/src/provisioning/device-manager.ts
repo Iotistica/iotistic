@@ -7,45 +7,52 @@
  * 2. Use provisioningApiKey (fleet-level) to register device
  * 3. Exchange provisioningApiKey for deviceApiKey authentication
  * 4. Remove provisioningApiKey (one-time use)
+ * 
+ * Refactored for testability with dependency injection:
+ * - HttpClient abstraction for API calls (no global fetch stubbing needed)
+ * - DatabaseClient abstraction for database operations (no Knex mocking needed)
  */
 
-import * as db from '../db';
 import * as crypto from 'crypto';
 import type { 
 	DeviceInfo, 
 	ProvisioningConfig, 
 	ProvisionRequest, 
-	ProvisionResponse,
-	KeyExchangeRequest,
-	KeyExchangeResponse 
+	ProvisionResponse 
 } from './types';
-import mqtt from 'mqtt';
 import { buildApiEndpoint } from '../utils/api-utils';
 import type { AgentLogger } from '../logging/agent-logger';
+import { HttpClient, FetchHttpClient } from '../http/client';
+import { DatabaseClient, KnexDatabaseClient } from './database-client';
 
-// Dynamic import for uuid (ESM module)
-let uuidv4: () => string;
-(async () => {
-	const { v4 } = await import('uuid');
-	uuidv4 = v4;
-})();
+/**
+ * UUID Generator Interface for dependency injection
+ */
+export interface UuidGenerator {
+	generate(): string;
+}
 
-// Fallback UUID generation if uuid module not loaded yet
-function generateUUID(): string {
-	if (uuidv4) {
-		return uuidv4();
+/**
+ * Default UUID generator using crypto.randomUUID (Node 14.17+)
+ * Falls back to manual generation for older versions
+ */
+class DefaultUuidGenerator implements UuidGenerator {
+	generate(): string {
+		// Use crypto.randomUUID if available (Node 14.17+)
+		if (crypto.randomUUID) {
+			return crypto.randomUUID();
+		}
+		// Fallback UUID v4 generator
+		return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+			const r = Math.random() * 16 | 0;
+			const v = c === 'x' ? r : (r & 0x3 | 0x8);
+			return v.toString(16);
+		});
 	}
-	// Simple fallback UUID v4 generator
-	return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-		const r = Math.random() * 16 | 0;
-		const v = c === 'x' ? r : (r & 0x3 | 0x8);
-		return v.toString(16);
-	});
 }
 
 /**
  * Generate cryptographically secure API key
- * Similar to Balena's generateUniqueKey()
  */
 function generateAPIKey(): string {
 	return crypto.randomBytes(32).toString('hex');
@@ -54,9 +61,20 @@ function generateAPIKey(): string {
 export class DeviceManager {
 	private deviceInfo: DeviceInfo | null = null;
 	private logger?: AgentLogger;
+	private httpClient: HttpClient;
+	private dbClient: DatabaseClient;
+	private uuidGenerator: UuidGenerator;
 
-	constructor(logger?: AgentLogger) {
+	constructor(
+		logger?: AgentLogger,
+		httpClient?: HttpClient,
+		dbClient?: DatabaseClient,
+		uuidGenerator?: UuidGenerator
+	) {
 		this.logger = logger;
+		this.httpClient = httpClient || new FetchHttpClient();
+		this.dbClient = dbClient || new KnexDatabaseClient();
+		this.uuidGenerator = uuidGenerator || new DefaultUuidGenerator();
 	}
 
 	/**
@@ -68,7 +86,7 @@ export class DeviceManager {
 		if (!this.deviceInfo) {
 			// Create new device with generated UUID and deviceApiKey
 			this.deviceInfo = {
-				uuid: generateUUID(),
+				uuid: this.uuidGenerator.generate(),
 				deviceApiKey: generateAPIKey(), // Pre-generate device key
 				provisioned: false,
 			};
@@ -96,27 +114,27 @@ export class DeviceManager {
 	 * Load device info from database
 	 */
 	private async loadDeviceInfo(): Promise<void> {
-		const rows = await db.models('device').select('*').limit(1);
-		if (rows.length > 0) {
+		const record = await this.dbClient.loadDevice();
+		if (record) {
 			this.deviceInfo = {
-				uuid: rows[0].uuid,
-				deviceId: rows[0].deviceId,
-			deviceName: rows[0].deviceName,
-			deviceType: rows[0].deviceType,
-			deviceApiKey: rows[0].deviceApiKey,
-			provisioningApiKey: rows[0].provisioningApiKey,
-			apiKey: rows[0].apiKey, // Legacy field
-			apiEndpoint: rows[0].apiEndpoint,
-			registeredAt: rows[0].registeredAt,
-			provisioned: rows[0].provisioned === 1,
-			applicationId: rows[0].applicationId,
-			macAddress: rows[0].macAddress,
-			osVersion: rows[0].osVersion,
-			agentVersion: rows[0].agentVersion,
-			mqttUsername: rows[0].mqttUsername,
-			mqttPassword: rows[0].mqttPassword,
-			mqttBrokerUrl: rows[0].mqttBrokerUrl,
-		};
+				uuid: record.uuid,
+				deviceId: record.deviceId?.toString(),
+				deviceName: record.deviceName || undefined,
+				deviceType: record.deviceType || undefined,
+				deviceApiKey: record.deviceApiKey || undefined,
+				provisioningApiKey: record.provisioningApiKey || undefined,
+				apiKey: record.apiKey || undefined, // Legacy field
+				apiEndpoint: record.apiEndpoint || undefined,
+				registeredAt: record.registeredAt || undefined,
+				provisioned: record.provisioned === 1,
+				applicationId: record.applicationId || undefined,
+				macAddress: record.macAddress || undefined,
+				osVersion: record.osVersion || undefined,
+				agentVersion: record.agentVersion || undefined,
+				mqttUsername: record.mqttUsername || undefined,
+				mqttPassword: record.mqttPassword || undefined,
+				mqttBrokerUrl: record.mqttBrokerUrl || undefined,
+			};
 		}
 	}
 
@@ -128,35 +146,28 @@ export class DeviceManager {
 			throw new Error('No device info to save');
 		}
 
-		const existing = await db.models('device').select('*').limit(1);
-		
 		const data = {
-		uuid: this.deviceInfo.uuid,
-		deviceId: this.deviceInfo.deviceId || null,
-		deviceName: this.deviceInfo.deviceName || null,
-		deviceType: this.deviceInfo.deviceType || null,
-		deviceApiKey: this.deviceInfo.deviceApiKey || null,
-		provisioningApiKey: this.deviceInfo.provisioningApiKey || null,
-		apiKey: this.deviceInfo.apiKey || null, // Legacy
-		apiEndpoint: this.deviceInfo.apiEndpoint || null,
-		registeredAt: this.deviceInfo.registeredAt || null,
-		provisioned: this.deviceInfo.provisioned ? 1 : 0,
-		applicationId: this.deviceInfo.applicationId || null,
-		macAddress: this.deviceInfo.macAddress || null,
-		osVersion: this.deviceInfo.osVersion || null,
-		agentVersion: this.deviceInfo.agentVersion || null,
-		mqttUsername: this.deviceInfo.mqttUsername || null,
-		mqttPassword: this.deviceInfo.mqttPassword || null,
-		mqttBrokerUrl: this.deviceInfo.mqttBrokerUrl || null,
-		updatedAt: new Date().toISOString(),
-	};		if (existing.length > 0) {
-			await db.models('device').update(data);
-		} else {
-			await db.models('device').insert({
-				...data,
-				createdAt: new Date().toISOString(),
-			});
-		}
+			uuid: this.deviceInfo.uuid,
+			deviceId: this.deviceInfo.deviceId ? parseInt(this.deviceInfo.deviceId) : null,
+			deviceName: this.deviceInfo.deviceName || null,
+			deviceType: this.deviceInfo.deviceType || null,
+			deviceApiKey: this.deviceInfo.deviceApiKey || null,
+			provisioningApiKey: this.deviceInfo.provisioningApiKey || null,
+			apiKey: this.deviceInfo.apiKey || null, // Legacy
+			apiEndpoint: this.deviceInfo.apiEndpoint || null,
+			registeredAt: this.deviceInfo.registeredAt || null,
+			provisioned: this.deviceInfo.provisioned ? 1 : 0,
+			applicationId: this.deviceInfo.applicationId || null,
+			macAddress: this.deviceInfo.macAddress || null,
+			osVersion: this.deviceInfo.osVersion || null,
+			agentVersion: this.deviceInfo.agentVersion || null,
+			mqttUsername: this.deviceInfo.mqttUsername || null,
+			mqttPassword: this.deviceInfo.mqttPassword || null,
+			mqttBrokerUrl: this.deviceInfo.mqttBrokerUrl || null,
+			updatedAt: new Date().toISOString(),
+		};
+		
+		await this.dbClient.saveDevice(data);
 	}
 
 	/**
@@ -317,21 +328,19 @@ export class DeviceManager {
 		});
 
 		try {
-			const response = await fetch(url, {
-				method: 'POST',
+			const response = await this.httpClient.post<ProvisionResponse>(url, provisionRequest, {
 				headers: {
 					'Content-Type': 'application/json',
 					'Authorization': `Bearer ${provisioningApiKey}`,
 				},
-				body: JSON.stringify(provisionRequest),
 			});
 
 			if (!response.ok) {
-				const errorText = await response.text();
-				throw new Error(`API returned ${response.status}: ${errorText}`);
+				const errorText = await response.json().catch(() => ({ message: response.statusText }));
+				throw new Error(`API returned ${response.status}: ${JSON.stringify(errorText)}`);
 			}
 
-			const result = await response.json() as ProvisionResponse;
+			const result = await response.json();
 
 			return result;
 		} catch (error: any) {
@@ -361,21 +370,19 @@ export class DeviceManager {
 		});
 
 		try {
-			const response = await fetch(url, {
-				method: 'POST',
+			const response = await this.httpClient.post(url, {
+				uuid,
+				deviceApiKey,
+			}, {
 				headers: {
 					'Content-Type': 'application/json',
 					'Authorization': `Bearer ${deviceApiKey}`,
 				},
-				body: JSON.stringify({
-					uuid,
-					deviceApiKey,
-				}),
 			});
 
 			if (!response.ok) {
-				const errorText = await response.text();
-				throw new Error(`Key exchange failed ${response.status}: ${errorText}`);
+				const errorText = await response.json().catch(() => ({ message: response.statusText }));
+				throw new Error(`Key exchange failed ${response.status}: ${JSON.stringify(errorText)}`);
 			}
 
 			const result = await response.json();
@@ -404,8 +411,7 @@ export class DeviceManager {
 		const url = buildApiEndpoint(apiEndpoint, `/devices/${uuid}`);
 		
 		try {
-			const response = await fetch(url, {
-				method: 'GET',
+			const response = await this.httpClient.get(url, {
 				headers: {
 					'Authorization': `Bearer ${apiKey}`,
 				},
@@ -415,8 +421,8 @@ export class DeviceManager {
 				if (response.status === 404) {
 					return null; // Device not found
 				}
-				const errorText = await response.text();
-				throw new Error(`API returned ${response.status}: ${errorText}`);
+				const errorText = await response.json().catch(() => ({ message: response.statusText }));
+				throw new Error(`API returned ${response.status}: ${JSON.stringify(errorText)}`);
 			}
 
 			return await response.json();

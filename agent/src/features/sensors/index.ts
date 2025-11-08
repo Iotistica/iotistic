@@ -6,7 +6,7 @@
  * by the sensor-publish system.
  */
 
-import { BaseFeature, FeatureConfig } from '../../features/index.js';
+import { BaseFeature, FeatureConfig } from '../index.js';
 import { AgentLogger } from '../../logging/agent-logger.js';
 import { ModbusAdapter } from './modbus/modbus-adapter.js';
 import { ModbusAdapterConfig } from './modbus/types.js';

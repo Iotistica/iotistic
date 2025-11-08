@@ -26,6 +26,7 @@ import { ConnectionMonitor } from './connection-monitor';
 import { OfflineQueue } from './offline-queue';
 import type { AgentLogger } from './logging/agent-logger';
 import { buildDeviceEndpoint, buildApiEndpoint } from './utils/api-utils';
+import { HttpClient, FetchHttpClient } from './http/client';
 
 const gzipAsync = promisify(gzip);
 
@@ -89,6 +90,7 @@ export class ApiBinder extends EventEmitter {
 	private stateReconciler: StateReconciler;
 	private deviceManager: DeviceManager;
 	private config: Required<ApiBinderConfig>;
+	private httpClient: HttpClient;
 	
 	// State management
 	private targetState: DeviceState = { apps: {}, config: {} };
@@ -130,7 +132,8 @@ export class ApiBinder extends EventEmitter {
 		logger?: AgentLogger,
 		sensorPublish?: any,
 		protocolAdapters?: any,
-		mqttManager?: any
+		mqttManager?: any,
+		httpClient?: HttpClient  // NEW: Inject HTTP client for testability
 	) {
 		super();
 		this.stateReconciler = stateReconciler;
@@ -139,6 +142,7 @@ export class ApiBinder extends EventEmitter {
 		this.sensorPublish = sensorPublish;
 		this.protocolAdapters = protocolAdapters;
 		this.mqttManager = mqttManager;
+		this.httpClient = httpClient || new FetchHttpClient(); // Default to real fetch
 		
 		// Set defaults
 		this.config = {
@@ -350,30 +354,30 @@ export class ApiBinder extends EventEmitter {
 				currentETag: this.targetStateETag || 'none'
 			});
 			
-			const response = await fetch(endpoint, {
-				method: 'GET',
+			// Use injected HTTP client instead of global fetch
+			const response = await this.httpClient.get(endpoint, {
 				headers: {
 					'Content-Type': 'application/json',
 					'X-Device-API-Key': deviceInfo.apiKey || '',
 					...(this.targetStateETag && { 'if-none-match': this.targetStateETag }),
 				},
-			signal: AbortSignal.timeout(this.config.apiTimeout),
-		});
+				timeout: this.config.apiTimeout
+			});
 		
-		this.logger?.debugSync('Poll response received', {
-			component: 'Sync',
-			operation: 'poll',
-			status: response.status
-		});
+			this.logger?.debugSync('Poll response received', {
+				component: 'Sync',
+				operation: 'poll',
+				status: response.status
+			});
 		
-		// 304 Not Modified - target state unchanged
-		if (response.status === 304) {
-			return;
-		}
+			// 304 Not Modified - target state unchanged
+			if (response.status === 304) {
+				return;
+			}
 		
-		if (!response.ok) {
-			throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-		}
+			if (!response.ok) {
+				throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+			}
 		
 		// Get ETag for next request
 		const etag = response.headers.get('etag');
@@ -634,6 +638,17 @@ export class ApiBinder extends EventEmitter {
 		
 		// Build current state report
 		const currentState = await this.stateReconciler.getCurrentState();
+		
+		// Log what we're about to report (info level for visibility)
+		this.logger?.infoSync('Current state config fields', {
+			component: 'Sync',
+			operation: 'report-debug',
+			configKeys: Object.keys(currentState.config || {}),
+			sensorCount: ((currentState.config as any)?.sensors || []).length,
+			hasLogging: !!(currentState.config as any)?.logging,
+			hasFeatures: !!(currentState.config as any)?.features,
+			hasSettings: !!(currentState.config as any)?.settings,
+		});
 		
 		// Get metrics if interval elapsed
 		const includeMetrics = timeSinceLastMetrics >= this.config.metricsInterval;

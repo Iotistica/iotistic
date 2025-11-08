@@ -1,0 +1,327 @@
+/**
+ * DeviceManager Tests - Refactored Pattern
+ * =========================================
+ * 
+ * Demonstrates testability improvements using dependency injection:
+ * - MockHttpClient for API calls (no global fetch stubbing)
+ * - MockDatabaseClient for database operations (no Knex mocking)
+ * - Clean, isolated tests with predictable behavior
+ */
+
+import { DeviceManager } from '../../../src/provisioning/device-manager';
+import { MockHttpClient } from '../../helpers/mock-http-client';
+import { MockDatabaseClient, MockUuidGenerator } from '../../helpers/mock-database-client';
+import type { DeviceRecord } from '../../../src/provisioning/database-client';
+import type { ProvisionResponse } from '../../../src/provisioning/types';
+
+describe('DeviceManager - Refactored Testability', () => {
+	let deviceManager: DeviceManager;
+	let mockHttpClient: MockHttpClient;
+	let mockDbClient: MockDatabaseClient;
+	let mockUuidGenerator: MockUuidGenerator;
+
+	beforeEach(() => {
+		mockHttpClient = new MockHttpClient();
+		mockDbClient = new MockDatabaseClient();
+		mockUuidGenerator = new MockUuidGenerator();
+		mockUuidGenerator.setUuid('test-uuid-123');
+		deviceManager = new DeviceManager(undefined, mockHttpClient, mockDbClient, mockUuidGenerator);
+	});
+
+	afterEach(() => {
+		mockHttpClient.reset();
+		mockDbClient.reset();
+		mockUuidGenerator.reset();
+	});
+
+	// ============================================================================
+	// CATEGORY 1: Initialization & Database Operations
+	// ============================================================================
+
+	describe('Initialization', () => {
+		it('should create new device when database is empty', async () => {
+			mockDbClient.mockNewDevice();
+			mockDbClient.mockSuccessfulSave();
+
+			await deviceManager.initialize();
+
+			const deviceInfo = deviceManager.getDeviceInfo();
+			expect(deviceInfo.uuid).toBeTruthy();
+			expect(deviceInfo.deviceApiKey).toBeTruthy();
+			expect(deviceInfo.provisioned).toBe(false);
+			expect(mockDbClient.saveDeviceStub.callCount).toBe(1);
+		});
+
+		it('should load existing device from database', async () => {
+			const existingDevice: DeviceRecord = {
+				uuid: 'test-uuid-123',
+				deviceId: 42,
+				deviceName: 'Test Device',
+				deviceType: 'sensor',
+				deviceApiKey: 'existing-api-key',
+				provisioningApiKey: null,
+				apiKey: null,
+				apiEndpoint: 'http://api:3002',
+				registeredAt: Date.now(),
+				provisioned: 1,
+				applicationId: 100,
+				macAddress: '00:11:22:33:44:55',
+				osVersion: 'Linux 5.10',
+				agentVersion: '1.0.0',
+				mqttUsername: 'device_test',
+				mqttPassword: 'test-password',
+				mqttBrokerUrl: 'mqtt://mosquitto:1883',
+				createdAt: new Date().toISOString(),
+				updatedAt: new Date().toISOString(),
+			};
+
+			mockDbClient.mockExistingDevice(existingDevice);
+
+			await deviceManager.initialize();
+
+			const deviceInfo = deviceManager.getDeviceInfo();
+			expect(deviceInfo.uuid).toBe('test-uuid-123');
+			expect(deviceInfo.deviceId).toBe('42');
+			expect(deviceInfo.deviceName).toBe('Test Device');
+			expect(deviceInfo.provisioned).toBe(true);
+			expect(mockDbClient.loadDeviceStub.callCount).toBe(1);
+		});
+	});
+
+	// ============================================================================
+	// CATEGORY 2: Device Provisioning (Two-Phase Authentication)
+	// ============================================================================
+
+	describe('Provisioning', () => {
+		beforeEach(async () => {
+			mockDbClient.mockNewDevice();
+			mockDbClient.mockSuccessfulSave();
+			await deviceManager.initialize();
+		});
+
+		it('should complete two-phase provisioning successfully', async () => {
+			const provisionResponse: ProvisionResponse = {
+				id: 123,
+				uuid: 'test-uuid',
+				deviceName: 'Test Device',
+				deviceType: 'sensor',
+				createdAt: new Date().toISOString(),
+				mqtt: {
+					username: 'device_test',
+					password: 'mqtt-password',
+					broker: 'mqtt://mosquitto:1883',
+					topics: {
+						publish: 'iot/device/test-uuid/telemetry',
+						subscribe: 'iot/device/test-uuid/commands',
+					},
+				},
+			};
+
+			// Phase 1: Register device
+			mockHttpClient.mockPostSuccess(provisionResponse);
+
+			// Phase 2: Exchange keys
+			mockHttpClient.mockPostSuccess({ success: true });
+
+			const result = await deviceManager.provision({
+				provisioningApiKey: 'provisioning-key-123',
+				apiEndpoint: 'http://api:3002',
+				deviceName: 'Test Device',
+				deviceType: 'sensor',
+				applicationId: 100,
+			});
+
+			expect(result.deviceId).toBe('123');
+			expect(result.mqttUsername).toBe('device_test');
+			expect(result.provisioned).toBe(true);
+			expect(mockHttpClient.postStub.callCount).toBe(2); // register + exchange
+			expect(mockDbClient.saveDeviceStub.callCount).toBeGreaterThanOrEqual(2);
+		});
+
+		it('should throw error if provisioning API key missing', async () => {
+			await expect(deviceManager.provision({
+				apiEndpoint: 'http://api:3002',
+			} as any)).rejects.toThrow('provisioningApiKey is required');
+		});
+
+		it('should handle registration failure gracefully', async () => {
+			mockHttpClient.mockPostError(500, 'Internal Server Error');
+
+			await expect(deviceManager.provision({
+				provisioningApiKey: 'provisioning-key-123',
+				apiEndpoint: 'http://api:3002',
+			})).rejects.toThrow('Failed to register device');
+		});
+	});
+
+	// ============================================================================
+	// CATEGORY 3: API Communication
+	// ============================================================================
+
+	describe('API Communication', () => {
+		beforeEach(async () => {
+			mockDbClient.mockNewDevice();
+			mockDbClient.mockSuccessfulSave();
+			await deviceManager.initialize();
+		});
+
+		it('should send correct headers during registration', async () => {
+			const provisionResponse: ProvisionResponse = {
+				id: 123,
+				uuid: 'test-uuid',
+				deviceName: 'Test Device',
+				deviceType: 'sensor',
+				createdAt: new Date().toISOString(),
+				mqtt: {
+					username: 'device_test',
+					password: 'mqtt-password',
+					broker: 'mqtt://mosquitto:1883',
+					topics: {
+						publish: 'iot/device/test-uuid/telemetry',
+						subscribe: 'iot/device/test-uuid/commands',
+					},
+				},
+			};
+
+			mockHttpClient.mockPostSuccess(provisionResponse);
+			mockHttpClient.mockPostSuccess({ success: true }); // key exchange
+
+			await deviceManager.provision({
+				provisioningApiKey: 'provisioning-key-123',
+				apiEndpoint: 'http://api:3002',
+			});
+
+			// Check first call (registration)
+			const firstCallHeaders = mockHttpClient.postStub.firstCall.args[2]?.headers;
+			expect(firstCallHeaders?.['Authorization']).toBe('Bearer provisioning-key-123');
+			expect(firstCallHeaders?.['Content-Type']).toBe('application/json');
+		});
+
+		it('should use deviceApiKey for key exchange', async () => {
+			const provisionResponse: ProvisionResponse = {
+				id: 123,
+				uuid: 'test-uuid',
+				deviceName: 'Test Device',
+				deviceType: 'sensor',
+				createdAt: new Date().toISOString(),
+				mqtt: {
+					username: 'device_test',
+					password: 'mqtt-password',
+					broker: 'mqtt://mosquitto:1883',
+					topics: {
+						publish: 'iot/device/test-uuid/telemetry',
+						subscribe: 'iot/device/test-uuid/commands',
+					},
+				},
+			};
+
+			mockHttpClient.mockPostSuccess(provisionResponse);
+			mockHttpClient.mockPostSuccess({ success: true });
+
+			await deviceManager.provision({
+				provisioningApiKey: 'provisioning-key-123',
+				apiEndpoint: 'http://api:3002',
+			});
+
+			// Check second call (key exchange) - should use device API key
+			const secondCallHeaders = mockHttpClient.postStub.secondCall.args[2]?.headers;
+			expect(secondCallHeaders?.['Authorization']).toContain('Bearer');
+		});
+	});
+
+	// ============================================================================
+	// CATEGORY 4: Device State Management
+	// ============================================================================
+
+	describe('State Management', () => {
+		it('should update device name', async () => {
+			mockDbClient.mockNewDevice();
+			mockDbClient.mockSuccessfulSave();
+			await deviceManager.initialize();
+
+			await deviceManager.updateDeviceName('New Device Name');
+
+			const deviceInfo = deviceManager.getDeviceInfo();
+			expect(deviceInfo.deviceName).toBe('New Device Name');
+			expect(mockDbClient.saveDeviceStub.callCount).toBeGreaterThan(0);
+		});
+
+		it('should update API endpoint', async () => {
+			mockDbClient.mockNewDevice();
+			mockDbClient.mockSuccessfulSave();
+			await deviceManager.initialize();
+
+			await deviceManager.updateAPIEndpoint('http://new-api:3002');
+
+			const deviceInfo = deviceManager.getDeviceInfo();
+			expect(deviceInfo.apiEndpoint).toBe('http://new-api:3002');
+		});
+
+		it('should reset device (unprovision)', async () => {
+			const provisionedDevice: DeviceRecord = {
+				uuid: 'test-uuid',
+				deviceId: 123,
+				deviceApiKey: 'api-key-123',
+				provisioned: 1,
+				deviceName: 'Test Device',
+				deviceType: 'sensor',
+				provisioningApiKey: null,
+				apiKey: null,
+				apiEndpoint: 'http://api:3002',
+				registeredAt: Date.now(),
+				applicationId: 100,
+				macAddress: null,
+				osVersion: null,
+				agentVersion: null,
+				mqttUsername: null,
+				mqttPassword: null,
+				mqttBrokerUrl: null,
+				createdAt: new Date().toISOString(),
+				updatedAt: new Date().toISOString(),
+			};
+
+			mockDbClient.mockExistingDevice(provisionedDevice);
+			mockDbClient.mockSuccessfulSave();
+			await deviceManager.initialize();
+
+			await deviceManager.reset();
+
+			const deviceInfo = deviceManager.getDeviceInfo();
+			expect(deviceInfo.provisioned).toBe(false);
+			expect(deviceInfo.deviceId).toBeUndefined();
+			expect(deviceInfo.uuid).toBe('test-uuid'); // UUID preserved
+			expect(deviceInfo.deviceApiKey).toBe('api-key-123'); // API key preserved
+		});
+	});
+
+	// ============================================================================
+	// CATEGORY 5: Error Handling
+	// ============================================================================
+
+	describe('Error Handling', () => {
+		it('should throw error if getDeviceInfo called before initialize', () => {
+			const uninitializedManager = new DeviceManager(undefined, mockHttpClient, mockDbClient);
+			expect(() => uninitializedManager.getDeviceInfo()).toThrow('Device manager not initialized');
+		});
+
+		it('should handle database save failure', async () => {
+			mockDbClient.mockNewDevice();
+			mockDbClient.mockSaveError(new Error('Database connection failed'));
+
+			await expect(deviceManager.initialize()).rejects.toThrow('Database connection failed');
+		});
+
+		it('should handle network timeout during provisioning', async () => {
+			mockDbClient.mockNewDevice();
+			mockDbClient.mockSuccessfulSave();
+			await deviceManager.initialize();
+
+			mockHttpClient.mockTimeout();
+
+			await expect(deviceManager.provision({
+				provisioningApiKey: 'key-123',
+				apiEndpoint: 'http://api:3002',
+			})).rejects.toThrow();
+		});
+	});
+});

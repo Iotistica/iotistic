@@ -35,7 +35,7 @@ import { MqttManager } from "./mqtt/mqtt-manager.js";
 import {
   SensorsFeature as SensorsFeature,
   SensorConfig,
-} from "./features/protocol-adapters/index.js";
+} from "./features/sensors/index.js";
 
 export default class DeviceAgent {
   private orchestratorDriver!: IOrchestratorDriver;
@@ -241,6 +241,40 @@ export default class DeviceAgent {
         reconciliationInterval: this.reconciliationIntervalMs,
         cloudApiEndpoint: this.CLOUD_API_ENDPOINT || "Not configured",
         cloudFeaturesEnabled: this.deviceInfo.provisioned && !!this.apiBinder,
+      });
+
+      // Log comprehensive device summary, features, and settings
+      this.agentLogger.infoSync("Device Configuration Summary", {
+        component: "Agent",
+        device: {
+          uuid: this.deviceInfo.uuid,
+          deviceId: this.deviceInfo.deviceId || "Not assigned",
+          deviceName: this.deviceInfo.deviceName || `device-${this.deviceInfo.uuid.slice(0, 8)}`,
+          deviceType: this.deviceInfo.deviceType || "iot-device",
+          provisioned: this.deviceInfo.provisioned,
+          registeredAt: this.deviceInfo.registeredAt ? new Date(this.deviceInfo.registeredAt).toISOString() : "Not registered",
+          applicationId: this.deviceInfo.applicationId || "None",
+          agentVersion: this.deviceInfo.agentVersion || process.env.AGENT_VERSION || "unknown",
+          osVersion: this.deviceInfo.osVersion || "unknown",
+        },
+        connectivity: {
+          cloudApiEndpoint: this.CLOUD_API_ENDPOINT || "Not configured",
+          mqttBrokerUrl: this.deviceInfo.mqttBrokerUrl || "Not configured",
+          mqttUsername: this.deviceInfo.mqttUsername || "Not configured",
+        },
+        features: {
+          cloudSync: !!this.apiBinder,
+          jobEngine: !!this.jobs,
+          sensorPublish: !!this.sensorPublish,
+          sensors: !!this.sensors,
+          sshTunnel: !!this.sshTunnel,
+        },
+        settings: {
+          reconciliationIntervalMs: this.reconciliationIntervalMs,
+          deviceApiPort: this.DEVICE_API_PORT,
+          logCompression: process.env.LOG_COMPRESSION === 'true',
+          logFilePersistence: process.env.LOG_FILE_PERSISTANCE === 'true',
+        },
       });
     } catch (error) {
       this.agentLogger?.errorSync(
@@ -1429,7 +1463,7 @@ export default class DeviceAgent {
             category: "Agent",
           });
           const { DeviceSensorModel: DeviceSensorModel } = await import(
-            "./models/protocol-adapter-device.model.js"
+            "./models/sensors.model.js"
           );
           this.agentLogger?.info("DeviceSensorModel imported successfully", {
             category: "Agent",

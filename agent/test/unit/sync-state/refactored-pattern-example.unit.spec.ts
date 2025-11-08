@@ -1,0 +1,98 @@
+/**
+ * Example: Complete Refactored Test Pattern
+ * ==========================================
+ * 
+ * Shows how to write testable code using dependency injection
+ * and the MockHttpClient pattern.
+ */
+
+import { MockHttpClient } from '../../helpers/mock-http-client';
+import { ApiBinder } from '../../../src/sync-state';
+import { createMockDeviceInfo, createMockTargetStateResponse } from '../../helpers/fixtures';
+import { stub } from 'sinon';
+import { EventEmitter } from 'events';
+
+describe('Example: Refactored Testing Pattern', () => {
+	it('should demonstrate clean, testable code', async () => {
+		// 1. Create mock dependencies
+		const mockHttpClient = new MockHttpClient();
+		const mockDeviceInfo = createMockDeviceInfo();
+		const mockDeviceManager = {
+			getDeviceInfo: () => mockDeviceInfo
+		};
+		const mockStateReconciler = new EventEmitter() as any;
+		mockStateReconciler.setTarget = stub().resolves();
+		mockStateReconciler.getCurrentState = stub().resolves({ apps: {}, config: {} });
+		
+		// 2. Create system under test with injected mocks
+		const apiBinder: any = new ApiBinder(
+			mockStateReconciler as any,
+			mockDeviceManager as any,
+			{
+				cloudApiEndpoint: 'http://api:3002',
+				pollInterval: 60000,
+				reportInterval: 10000,
+				apiTimeout: 30000
+			},
+			undefined, // logger
+			undefined, // sensorPublish
+			undefined, // protocolAdapters
+			undefined, // mqttManager
+			mockHttpClient // Inject mock HTTP client!
+		);
+		
+		// 3. Configure mock behavior
+		const targetState = createMockTargetStateResponse(mockDeviceInfo.uuid);
+		mockHttpClient.mockGetSuccess(targetState, { etag: 'abc123' });
+		
+		// 4. Execute test
+		await apiBinder.pollTargetState();
+		
+		// 5. Verify behavior
+		expect(mockHttpClient.getStub.callCount).toBe(1);
+		expect(mockStateReconciler.setTarget.callCount).toBe(1);
+		
+		// 6. Verify HTTP request details
+		const [url, options] = mockHttpClient.getStub.firstCall.args;
+		expect(url).toContain('/api/v1/device');
+		expect(url).toContain(mockDeviceInfo.uuid);
+		expect(options.headers['X-Device-API-Key']).toBe(mockDeviceInfo.apiKey);
+		expect(options.timeout).toBe(30000);
+	});
+	
+	it('should demonstrate error handling', async () => {
+		// Setup
+		const mockHttpClient = new MockHttpClient();
+		const apiBinder: any = new ApiBinder(
+			{} as any,
+			{ getDeviceInfo: () => createMockDeviceInfo() } as any,
+			{ cloudApiEndpoint: 'http://api:3002', apiTimeout: 30000 } as any,
+			undefined, undefined, undefined, undefined,
+			mockHttpClient
+		);
+		
+		// Configure mock to return 500 error
+		mockHttpClient.mockGetError(500, 'Internal Server Error');
+		
+		// Execute & Verify
+		await expect(apiBinder.pollTargetState()).rejects.toThrow('HTTP 500');
+	});
+	
+	it('should demonstrate timeout handling', async () => {
+		// Setup
+		const mockHttpClient = new MockHttpClient();
+		const apiBinder: any = new ApiBinder(
+			{} as any,
+			{ getDeviceInfo: () => createMockDeviceInfo() } as any,
+			{ cloudApiEndpoint: 'http://api:3002', apiTimeout: 30000 } as any,
+			undefined, undefined, undefined, undefined,
+			mockHttpClient
+		);
+		
+		// Configure mock to simulate timeout
+		mockHttpClient.mockTimeout();
+		
+		// Execute & Verify
+		await expect(apiBinder.pollTargetState()).rejects.toThrow('Target state poll timeout');
+	});
+});

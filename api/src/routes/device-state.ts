@@ -105,6 +105,16 @@ router.get('/device/:uuid/state', deviceAuth, async (req, res) => {
       }
     };
 
+    // Debug: Log what we're sending to the agent
+    console.log('[API] Sending target state to agent:', {
+      uuid: uuid.substring(0, 8),
+      configKeys: Object.keys(response[uuid].config),
+      hasLogging: !!response[uuid].config.logging,
+      hasFeatures: !!response[uuid].config.features,
+      hasSettings: !!response[uuid].config.settings,
+      hasSensors: !!response[uuid].config.sensors
+    });
+
     // Calculate content size for traffic tracking (even for 304 responses)
     const contentSize = Buffer.byteLength(JSON.stringify(response), 'utf8');
 

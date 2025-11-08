@@ -10,7 +10,7 @@ module.exports = {
   testMatch: ['**/*.unit.spec.ts'],
   moduleFileExtensions: ['ts', 'js', 'json'],
   transformIgnorePatterns: [
-    'node_modules/(?!(uuid)/)'
+    'node_modules/(?!(uuid|chai|chai-as-promised|sinon-chai)/)'
   ],
   collectCoverageFrom: [
     'src/**/*.ts',

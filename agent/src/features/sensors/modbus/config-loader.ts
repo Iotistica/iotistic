@@ -60,7 +60,7 @@ export class ConfigLoader {
    */
   static async loadFromDatabase(): Promise<ModbusAdapterConfig> {
     try {
-      const { DeviceSensorModel: DeviceSensorModel } = await import('../../../models/protocol-adapter-device.model.js');
+      const { DeviceSensorModel: DeviceSensorModel } = await import('../../../models/sensors.model.js');
       
       // Get all Modbus devices from database
       const dbDevices = await DeviceSensorModel.getAll('modbus');

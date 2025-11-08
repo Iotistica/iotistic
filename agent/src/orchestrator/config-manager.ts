@@ -79,6 +79,15 @@ export class ConfigManager extends EventEmitter {
 	 * Get current configuration
 	 */
 	public getCurrentConfig(): DeviceConfig {
+		// Log what we're returning (for debugging)
+		console.log('[ConfigManager] getCurrentConfig called:', {
+			keys: Object.keys(this.currentConfig),
+			hasLogging: !!this.currentConfig.logging,
+			hasFeatures: !!this.currentConfig.features,
+			hasSettings: !!this.currentConfig.settings,
+			hasSensors: !!this.currentConfig.sensors,
+			sensorCount: this.currentConfig.sensors?.length || 0,
+		});
 		return _.cloneDeep(this.currentConfig);
 	}
 
@@ -101,14 +110,47 @@ export class ConfigManager extends EventEmitter {
 		};
 
 		try {
-			// Calculate steps
+			// First, copy all non-sensor fields from target to current config
+			// This ensures logging, features, settings, etc. are always up-to-date
+			const { sensors: _targetSensors, ...otherTargetFields } = this.targetConfig;
+			const { sensors: currentSensors, ...otherCurrentFields } = this.currentConfig;
+			
+			console.log('[ConfigManager] reconcile - Before Object.assign:', {
+				currentConfigKeys: Object.keys(this.currentConfig),
+				targetConfigKeys: Object.keys(this.targetConfig),
+				otherTargetFields: Object.keys(otherTargetFields),
+				hasCurrentLogging: !!this.currentConfig.logging,
+				hasTargetLogging: !!this.targetConfig.logging,
+			});
+			
+			// Merge non-sensor fields into current config
+			Object.assign(this.currentConfig, otherTargetFields);
+			
+			console.log('[ConfigManager] reconcile - After Object.assign:', {
+				currentConfigKeys: Object.keys(this.currentConfig),
+				hasLogging: !!this.currentConfig.logging,
+				hasFeatures: !!this.currentConfig.features,
+				hasSettings: !!this.currentConfig.settings,
+				loggingValue: this.currentConfig.logging,
+			});
+			
+			// Restore sensors array (will be reconciled separately)
+			if (currentSensors) {
+				this.currentConfig.sensors = currentSensors;
+			}
+			
+			// Calculate steps for sensor reconciliation
 			const steps = this.calculateSteps();
 
 			if (steps.length === 0) {
-				this.logger?.debugSync('No config changes needed', {
+				this.logger?.infoSync('No sensor config changes needed', {
 					component: 'ConfigManager',
 					operation: 'reconcile',
 				});
+				
+				// Even if no sensor changes, save current config to persist other field updates
+				await this.saveCurrentConfigToDB();
+				
 				return result;
 			}
 
@@ -153,17 +195,20 @@ export class ConfigManager extends EventEmitter {
 				}
 			}
 
-			this.logger?.infoSync('Config reconciliation complete', {
-				component: 'ConfigManager',
-				operation: 'reconcile',
-				devicesRegistered: result.devicesRegistered,
-				devicesUpdated: result.devicesUpdated,
-				devicesUnregistered: result.devicesUnregistered,
-				errors: result.errors.length,
-			});
+		this.logger?.infoSync('Config reconciliation complete', {
+			component: 'ConfigManager',
+			operation: 'reconcile',
+			devicesRegistered: result.devicesRegistered,
+			devicesUpdated: result.devicesUpdated,
+			devicesUnregistered: result.devicesUnregistered,
+			errors: result.errors.length,
+		});
 
-			this.emit('config-applied');
-		} catch (error) {
+		// Save updated config to local database
+		await this.saveCurrentConfigToDB();
+
+		this.emit('config-applied');
+	} catch (error) {
 			this.logger?.errorSync(
 				'Critical error during config reconciliation',
 				error instanceof Error ? error : new Error(String(error)),
@@ -296,7 +341,7 @@ export class ConfigManager extends EventEmitter {
 
 		// Save device to SQLite sensors table
 		try {
-			const { DeviceSensorModel: DeviceSensorModel } = await import('../models/protocol-adapter-device.model.js');
+			const { DeviceSensorModel: DeviceSensorModel } = await import('../models/sensors.model.js');
 			
 			// Handle both connectionString and connection formats
 			let connection: Record<string, any> = {};
@@ -389,7 +434,7 @@ export class ConfigManager extends EventEmitter {
 
 		// Update device in SQLite sensors table (or create if doesn't exist)
 		try {
-			const { DeviceSensorModel: DeviceSensorModel } = await import('../models/protocol-adapter-device.model.js');
+			const { DeviceSensorModel: DeviceSensorModel } = await import('../models/sensors.model.js');
 			
 			// Handle both connectionString and connection formats
 			let connection: Record<string, any> = {};
@@ -508,7 +553,7 @@ export class ConfigManager extends EventEmitter {
 		// Remove device from SQLite sensors table
 		if (device) {
 			try {
-				const { DeviceSensorModel: DeviceSensorModel } = await import('../models/protocol-adapter-device.model.js');
+				const { DeviceSensorModel: DeviceSensorModel } = await import('../models/sensors.model.js');
 				await DeviceSensorModel.delete(device.name);
 				
 				this.logger?.infoSync('Device removed from sensors table', {
@@ -588,13 +633,32 @@ export class ConfigManager extends EventEmitter {
 	 */
 	private async saveCurrentConfigToDB(): Promise<void> {
 		try {
+			// Debug: Log what we're about to save
+			console.log('[ConfigManager] saveCurrentConfigToDB - About to save:', {
+				keys: Object.keys(this.currentConfig),
+				hasLogging: !!this.currentConfig.logging,
+				hasFeatures: !!this.currentConfig.features,
+				hasSettings: !!this.currentConfig.settings,
+				hasSensors: !!this.currentConfig.sensors,
+				sensorCount: this.currentConfig.sensors?.length || 0,
+				loggingValue: this.currentConfig.logging,
+				featuresValue: this.currentConfig.features,
+				settingsValue: this.currentConfig.settings
+			});
+			
 			const configJson = JSON.stringify(this.currentConfig);
 
-		this.logger?.debugSync('Saving current config to database', {
-			component: 'ConfigManager',
-			operation: 'saveCurrentConfig',
-			deviceCount: this.currentConfig.sensors?.length || 0,
-		});			// Delete old config snapshots and insert new
+			this.logger?.infoSync('Saving current config to database', {
+				component: 'ConfigManager',
+				operation: 'saveCurrentConfig',
+				deviceCount: this.currentConfig.sensors?.length || 0,
+				configKeys: Object.keys(this.currentConfig),
+				hasLogging: !!this.currentConfig.logging,
+				hasFeatures: !!this.currentConfig.features,
+				hasSettings: !!this.currentConfig.settings,
+			});
+			
+			// Delete old config snapshots and insert new
 			await db('stateSnapshot')
 				.where({ type: 'config' })
 				.delete();
@@ -604,7 +668,7 @@ export class ConfigManager extends EventEmitter {
 				state: configJson,
 			});
 
-			this.logger?.debugSync('Current config saved to database', {
+			this.logger?.infoSync('Current config saved to database', {
 				component: 'ConfigManager',
 				operation: 'saveCurrentConfig',
 			});
