@@ -314,14 +314,14 @@ export const AddJobModal: React.FC<AddJobModalProps> = ({
         <div className="space-y-4 py-4">
           {/* Job Template Selector */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-muted-foreground mb-1">
               Job Template *
             </label>
             {loadingTemplates ? (
-              <div className="text-sm text-gray-500">Loading templates...</div>
+              <div className="text-sm text-muted-foreground">Loading templates...</div>
             ) : (
               <select
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-input bg-background rounded-md px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 value={templateId}
                 onChange={(e) => setTemplateId(e.target.value)}
                 disabled={saving}
@@ -339,18 +339,18 @@ export const AddJobModal: React.FC<AddJobModalProps> = ({
 
           {/* Template Variables */}
           {requiredVariables.length > 0 && (
-            <div className="border border-blue-200 bg-blue-50 rounded-md p-4">
+            <div className="border border-border bg-accent rounded-md p-4">
            
           
               <div className="space-y-3">
                 {requiredVariables.map((varName) => (
                   <div key={varName}>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {varName.replace(/_/g, ' ')} <span className="text-red-500">*</span>
+                    <label className="block text-sm font-medium text-foreground mb-1">
+                      {varName.replace(/_/g, ' ')} <span className="text-destructive">*</span>
                     </label>
                     <input
                       type="text"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-input bg-background text-foreground rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
                       value={templateVariables[varName] || ''}
                       onChange={(e) => setTemplateVariables({
                         ...templateVariables,
@@ -367,7 +367,7 @@ export const AddJobModal: React.FC<AddJobModalProps> = ({
 
           {/* Execution Time */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-muted-foreground mb-2">
               Execution Time *
             </label>
             <div className="flex gap-4">
@@ -379,9 +379,9 @@ export const AddJobModal: React.FC<AddJobModalProps> = ({
                   checked={executeTime === 'now'}
                   onChange={() => setExecuteTime('now')}
                   disabled={saving}
-                  className="text-blue-600 focus:ring-blue-500"
+                  className="text-primary focus:ring-ring"
                 />
-                <span className="text-sm text-gray-700">Execute Now</span>
+                <span className="text-sm text-foreground">Execute Now</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -391,15 +391,15 @@ export const AddJobModal: React.FC<AddJobModalProps> = ({
                   checked={executeTime === 'schedule'}
                   onChange={() => setExecuteTime('schedule')}
                   disabled={saving}
-                  className="text-blue-600 focus:ring-blue-500"
+                  className="text-primary focus:ring-ring"
                 />
-                <span className="text-sm text-gray-700">Schedule</span>
+                <span className="text-sm text-foreground">Schedule</span>
               </label>
             </div>
             {executeTime === 'schedule' && (
               <input
                 type="datetime-local"
-                className="mt-3 w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="mt-3 w-full border border-input bg-background text-foreground rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 value={scheduledFor}
                 onChange={(e) => setScheduledFor(e.target.value)}
                 disabled={saving}
@@ -410,9 +410,9 @@ export const AddJobModal: React.FC<AddJobModalProps> = ({
 
           {/* Job Steps Editor */}
           {showStepsEditor && (
-            <div className="border-t pt-4">
+            <div className="border-t border-border pt-4">
               <div className="flex items-center justify-between mb-3">
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-foreground">
                   Job Steps ({customSteps.length})
                 </label>
                
@@ -424,25 +424,25 @@ export const AddJobModal: React.FC<AddJobModalProps> = ({
                   {customSteps.map((step, index) => (
                     <div
                       key={index}
-                      className="flex items-start gap-2 p-3 bg-gray-50 border border-gray-200 rounded-lg"
+                      className="flex items-start gap-2 p-3 bg-accent border border-border rounded-lg"
                     >
-                      <div className="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-semibold">
+                      <div className="flex-shrink-0 w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-xs font-semibold">
                         {index + 1}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                          <h5 className="text-sm font-semibold text-gray-900">{step.name}</h5>
-                          <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-300">
+                          <h5 className="text-sm font-semibold text-foreground">{step.name}</h5>
+                          <Badge variant="outline" className="text-xs">
                             {step.type}
                           </Badge>
                         </div>
                         {step.type === 'runCommand' && step.input.command && (
-                          <p className="text-xs text-gray-600 font-mono bg-gray-900 text-green-400 px-2 py-1 rounded">
+                          <p className="text-xs font-mono bg-muted text-muted-foreground px-2 py-1 rounded">
                             {step.input.command}
                           </p>
                         )}
                         {step.type === 'runHandler' && step.input.handler && (
-                          <p className="text-xs text-gray-600">
+                          <p className="text-xs text-muted-foreground">
                             Handler: <span className="font-mono">{step.input.handler}</span>
                           </p>
                         )}
@@ -465,7 +465,7 @@ export const AddJobModal: React.FC<AddJobModalProps> = ({
                           variant="outline"
                           onClick={() => handleDeleteStep(index)}
                           disabled={saving || editingStepIndex !== null}
-                          className="text-xs h-6 px-2 text-red-600 hover:text-red-700"
+                          className="text-xs h-6 px-2 text-destructive hover:text-destructive/90"
                         >
                           Delete
                         </Button>
@@ -477,19 +477,19 @@ export const AddJobModal: React.FC<AddJobModalProps> = ({
 
               {/* Step Editor Form */}
               {editingStepIndex !== null && (
-                <div className="border border-blue-300 rounded-lg p-4 bg-blue-50 space-y-3">
-                  <h4 className="text-sm font-semibold text-gray-900">
+                <div className="border border-border rounded-lg p-4 bg-accent space-y-3">
+                  <h4 className="text-sm font-semibold text-foreground">
                     {editingStepIndex === -1 ? 'Add New Step' : `Edit Step ${editingStepIndex + 1}`}
                   </h4>
 
                   {/* Step Name */}
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                    <label className="block text-xs font-medium text-muted-foreground mb-1">
                       Step Name *
                     </label>
                     <input
                       type="text"
-                      className="w-full border border-gray-300 rounded-md px-2 py-1 text-sm"
+                      className="w-full border border-input bg-background text-foreground rounded-md px-2 py-1 text-sm"
                       value={stepForm.name}
                       onChange={(e) => setStepForm({ ...stepForm, name: e.target.value })}
                       placeholder="e.g., Restart Service"
@@ -498,11 +498,11 @@ export const AddJobModal: React.FC<AddJobModalProps> = ({
 
                   {/* Step Type */}
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                    <label className="block text-xs font-medium text-muted-foreground mb-1">
                       Step Type *
                     </label>
                     <select
-                      className="w-full border border-gray-300 rounded-md px-2 py-1 text-sm"
+                      className="w-full border border-input bg-background text-foreground rounded-md px-2 py-1 text-sm"
                       value={stepForm.type}
                       onChange={(e) => {
                         const newType = e.target.value as 'runCommand' | 'runHandler';
@@ -521,12 +521,12 @@ export const AddJobModal: React.FC<AddJobModalProps> = ({
                   {/* Command Input (for runCommand) */}
                   {stepForm.type === 'runCommand' && (
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                      <label className="block text-xs font-medium text-muted-foreground mb-1">
                         Command *
                       </label>
                       <input
                         type="text"
-                        className="w-full border border-gray-300 rounded-md px-2 py-1 text-sm font-mono"
+                        className="w-full border border-input bg-background text-foreground rounded-md px-2 py-1 text-sm font-mono"
                         value={stepForm.input.command || ''}
                         onChange={(e) => setStepForm({
                           ...stepForm,
@@ -534,7 +534,7 @@ export const AddJobModal: React.FC<AddJobModalProps> = ({
                         })}
                         placeholder="e.g., systemctl,restart,nginx"
                       />
-                      <p className="text-xs text-gray-500 mt-1">
+                      <p className="text-xs text-muted-foreground mt-1">
                         Use comma-separated format: command,arg1,arg2
                       </p>
                     </div>
@@ -544,12 +544,12 @@ export const AddJobModal: React.FC<AddJobModalProps> = ({
                   {stepForm.type === 'runHandler' && (
                     <>
                       <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                        <label className="block text-xs font-medium text-muted-foreground mb-1">
                           Handler Name *
                         </label>
                         <input
                           type="text"
-                          className="w-full border border-gray-300 rounded-md px-2 py-1 text-sm font-mono"
+                          className="w-full border border-input bg-background text-foreground rounded-md px-2 py-1 text-sm font-mono"
                           value={stepForm.input.handler || ''}
                           onChange={(e) => setStepForm({
                             ...stepForm,
@@ -559,11 +559,11 @@ export const AddJobModal: React.FC<AddJobModalProps> = ({
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                        <label className="block text-xs font-medium text-muted-foreground mb-1">
                           Arguments (one per line)
                         </label>
                         <textarea
-                          className="w-full border border-gray-300 rounded-md px-2 py-1 text-sm font-mono"
+                          className="w-full border border-input bg-background text-foreground rounded-md px-2 py-1 text-sm font-mono"
                           rows={3}
                           value={(stepForm.input.args || []).join('\n')}
                           onChange={(e) => setStepForm({
@@ -581,29 +581,29 @@ export const AddJobModal: React.FC<AddJobModalProps> = ({
 
                   {/* Advanced Options */}
                   <details className="text-xs">
-                    <summary className="cursor-pointer text-gray-700 font-medium">
+                    <summary className="cursor-pointer text-foreground font-medium">
                       Advanced Options
                     </summary>
                     <div className="mt-2 space-y-2 pl-2">
                       <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                        <label className="block text-xs font-medium text-muted-foreground mb-1">
                           Run As User
                         </label>
                         <input
                           type="text"
-                          className="w-full border border-gray-300 rounded-md px-2 py-1 text-sm"
+                          className="w-full border border-input bg-background text-foreground rounded-md px-2 py-1 text-sm"
                           value={stepForm.runAsUser || ''}
                           onChange={(e) => setStepForm({ ...stepForm, runAsUser: e.target.value })}
                           placeholder="e.g., root"
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                        <label className="block text-xs font-medium text-muted-foreground mb-1">
                           Timeout (seconds)
                         </label>
                         <input
                           type="number"
-                          className="w-full border border-gray-300 rounded-md px-2 py-1 text-sm"
+                          className="w-full border border-input bg-background text-foreground rounded-md px-2 py-1 text-sm"
                           value={stepForm.timeoutSeconds || ''}
                           onChange={(e) => setStepForm({
                             ...stepForm,
@@ -621,7 +621,7 @@ export const AddJobModal: React.FC<AddJobModalProps> = ({
                             ignoreStepFailure: e.target.checked
                           })}
                         />
-                        <span className="text-xs text-gray-700">Ignore step failure (continue on error)</span>
+                        <span className="text-xs text-foreground">Ignore step failure (continue on error)</span>
                       </label>
                     </div>
                   </details>
@@ -654,7 +654,7 @@ export const AddJobModal: React.FC<AddJobModalProps> = ({
                           handleUpdateStep(editingStepIndex);
                         }
                       }}
-                      className="text-xs bg-blue-600 hover:bg-blue-700 text-white"
+                      className="text-xs"
                     >
                       {editingStepIndex === -1 ? 'Add Step' : 'Update Step'}
                     </Button>
@@ -666,8 +666,8 @@ export const AddJobModal: React.FC<AddJobModalProps> = ({
 
           {/* Error Message */}
           {error && (
-            <div className="rounded-md bg-red-50 border border-red-200 p-3">
-              <p className="text-sm text-red-600">{error}</p>
+            <div className="rounded-md bg-destructive/10 border border-destructive/20 p-3">
+              <p className="text-sm text-destructive">{error}</p>
             </div>
           )}
         </div>

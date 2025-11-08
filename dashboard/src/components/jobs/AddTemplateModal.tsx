@@ -227,20 +227,20 @@ export const AddTemplateModal: React.FC<AddTemplateModalProps> = ({ open, onClos
 
         <div className="space-y-4 py-4">
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded p-3">
-              <p className="text-sm text-red-700">{error}</p>
+            <div className="bg-destructive/10 border border-destructive/20 rounded p-3">
+              <p className="text-sm text-destructive">{error}</p>
             </div>
           )}
 
           {/* Template Basic Info */}
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Template Name <span className="text-red-500">*</span>
+              <label className="block text-sm font-medium text-muted-foreground mb-1">
+                Template Name <span className="text-destructive">*</span>
               </label>
               <input
                 type="text"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-input bg-background text-foreground rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
                 value={templateName}
                 onChange={(e) => setTemplateName(e.target.value)}
                 placeholder="e.g., System Health Check"
@@ -249,11 +249,11 @@ export const AddTemplateModal: React.FC<AddTemplateModalProps> = ({ open, onClos
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Category <span className="text-red-500">*</span>
+                <label className="block text-sm font-medium text-muted-foreground mb-1">
+                  Category <span className="text-destructive">*</span>
                 </label>
                 <select
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-input bg-background text-foreground rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
                 >
@@ -266,10 +266,10 @@ export const AddTemplateModal: React.FC<AddTemplateModalProps> = ({ open, onClos
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Version</label>
+                <label className="block text-sm font-medium text-muted-foreground mb-1">Version</label>
                 <input
                   type="text"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-input bg-background text-foreground rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
                   value={version}
                   onChange={(e) => setVersion(e.target.value)}
                   placeholder="1.0"
@@ -278,9 +278,9 @@ export const AddTemplateModal: React.FC<AddTemplateModalProps> = ({ open, onClos
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+              <label className="block text-sm font-medium text-muted-foreground mb-1">Description</label>
               <textarea
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[80px]"
+                className="w-full px-3 py-2 border border-input bg-background text-foreground rounded-md focus:outline-none focus:ring-2 focus:ring-ring min-h-[80px]"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Describe what this template does..."
@@ -293,20 +293,20 @@ export const AddTemplateModal: React.FC<AddTemplateModalProps> = ({ open, onClos
                 id="includeStdOut"
                 checked={includeStdOut}
                 onChange={(e) => setIncludeStdOut(e.target.checked)}
-                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                className="w-4 h-4 text-primary border-input rounded focus:ring-ring"
               />
-              <label htmlFor="includeStdOut" className="text-sm text-gray-700">
+              <label htmlFor="includeStdOut" className="text-sm text-foreground">
                 Include stdout/stderr in job output
               </label>
             </div>
           </div>
 
           {/* Template Variables */}
-          <div className="border-t pt-4">
+          <div className="border-t border-border pt-4">
             <div className="flex items-center justify-between mb-3">
               <div>
-                <h3 className="text-sm font-semibold text-gray-900">Template Variables</h3>
-                <p className="text-xs text-gray-500 mt-0.5">
+                <h3 className="text-sm font-semibold text-foreground">Template Variables</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
                   Define parameters users must provide (e.g., SERVICE_NAME, PORT)
                 </p>
               </div>
@@ -334,32 +334,32 @@ export const AddTemplateModal: React.FC<AddTemplateModalProps> = ({ open, onClos
             {variables.length > 0 ? (
               <div className="space-y-3">
                 {variables.map((variable, index) => (
-                  <div key={index} className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                  <div key={index} className="bg-accent border border-border rounded-lg p-3">
                     <div className="flex items-start gap-3">
                       <div className="flex-1 space-y-2">
                         <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">
-                            Variable Name (use UPPER_CASE) <span className="text-red-500">*</span>
+                          <label className="block text-xs font-medium text-muted-foreground mb-1">
+                            Variable Name (use UPPER_CASE) <span className="text-destructive">*</span>
                           </label>
                           <input
                             type="text"
-                            className="w-full px-2 py-1.5 text-sm font-mono border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            className="w-full px-2 py-1.5 text-sm font-mono border border-input bg-background text-foreground rounded focus:outline-none focus:ring-1 focus:ring-ring"
                             value={variable.name}
                             onChange={(e) => handleVariableChange(index, 'name', e.target.value.toUpperCase())}
                             placeholder="e.g., SERVICE_NAME"
                           />
-                          <p className="text-xs text-gray-500 mt-1">
-                            Use in commands as: <code className="bg-gray-200 px-1 rounded">{'{{' + (variable.name || 'VARIABLE_NAME') + '}}'}</code>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Use in commands as: <code className="bg-muted px-1 rounded">{'{{' + (variable.name || 'VARIABLE_NAME') + '}}'}</code>
                           </p>
                         </div>
 
                         <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">
+                          <label className="block text-xs font-medium text-muted-foreground mb-1">
                             Description
                           </label>
                           <input
                             type="text"
-                            className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            className="w-full px-2 py-1.5 text-sm border border-input bg-background text-foreground rounded focus:outline-none focus:ring-1 focus:ring-ring"
                             value={variable.description}
                             onChange={(e) => handleVariableChange(index, 'description', e.target.value)}
                             placeholder="e.g., Name of the service to restart"
@@ -367,12 +367,12 @@ export const AddTemplateModal: React.FC<AddTemplateModalProps> = ({ open, onClos
                         </div>
 
                         <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">
+                          <label className="block text-xs font-medium text-muted-foreground mb-1">
                             Default Value (optional)
                           </label>
                           <input
                             type="text"
-                            className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            className="w-full px-2 py-1.5 text-sm border border-input bg-background text-foreground rounded focus:outline-none focus:ring-1 focus:ring-ring"
                             value={variable.defaultValue || ''}
                             onChange={(e) => handleVariableChange(index, 'defaultValue', e.target.value)}
                             placeholder="e.g., nginx"
@@ -384,7 +384,7 @@ export const AddTemplateModal: React.FC<AddTemplateModalProps> = ({ open, onClos
                         variant="outline"
                         size="sm"
                         onClick={() => handleRemoveVariable(index)}
-                        className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                        className="h-8 w-8 p-0 text-destructive hover:text-destructive/90"
                         type="button"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -394,16 +394,16 @@ export const AddTemplateModal: React.FC<AddTemplateModalProps> = ({ open, onClos
                 ))}
               </div>
             ) : (
-              <div className="bg-gray-50 border border-gray-200 rounded p-4 text-center text-sm text-gray-500">
+              <div className="bg-accent border border-border rounded p-4 text-center text-sm text-muted-foreground">
                 No variables defined. Use {'{{VARIABLE_NAME}}'} in commands and click "Auto-Detect" or "Add Variable".
               </div>
             )}
           </div>
 
           {/* Job Steps */}
-          <div className="border-t pt-4">
+          <div className="border-t border-border pt-4">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-gray-900">Job Steps</h3>
+              <h3 className="text-sm font-semibold text-foreground">Job Steps</h3>
               <Button variant="outline" size="sm" onClick={handleAddStep}>
                 <Plus className="w-4 h-4 mr-1" />
                 Add Step
@@ -412,10 +412,10 @@ export const AddTemplateModal: React.FC<AddTemplateModalProps> = ({ open, onClos
 
             <div className="space-y-4">
               {steps.map((step, index) => (
-                <div key={index} className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <div key={index} className="bg-accent border border-border rounded-lg p-4">
                   <div className="flex items-start gap-3">
                     {/* Step Number */}
-                    <div className="flex-shrink-0 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">
+                    <div className="flex-shrink-0 w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-sm font-semibold">
                       {index + 1}
                     </div>
 
@@ -423,12 +423,12 @@ export const AddTemplateModal: React.FC<AddTemplateModalProps> = ({ open, onClos
                     <div className="flex-1 space-y-3">
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">
-                            Step Name <span className="text-red-500">*</span>
+                          <label className="block text-xs font-medium text-muted-foreground mb-1">
+                            Step Name <span className="text-destructive">*</span>
                           </label>
                           <input
                             type="text"
-                            className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            className="w-full px-2 py-1.5 text-sm border border-input bg-background text-foreground rounded focus:outline-none focus:ring-1 focus:ring-ring"
                             value={step.name}
                             onChange={(e) => handleStepChange(index, 'name', e.target.value)}
                             placeholder="e.g., Check Disk Space"
@@ -436,11 +436,11 @@ export const AddTemplateModal: React.FC<AddTemplateModalProps> = ({ open, onClos
                         </div>
 
                         <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">
+                          <label className="block text-xs font-medium text-muted-foreground mb-1">
                             Step Type
                           </label>
                           <select
-                            className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            className="w-full px-2 py-1.5 text-sm border border-input bg-background text-foreground rounded focus:outline-none focus:ring-1 focus:ring-ring"
                             value={step.type}
                             onChange={(e) => handleStepChange(index, 'type', e.target.value)}
                           >
@@ -452,11 +452,11 @@ export const AddTemplateModal: React.FC<AddTemplateModalProps> = ({ open, onClos
                       </div>
 
                       <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">
-                          Command <span className="text-red-500">*</span>
+                        <label className="block text-xs font-medium text-muted-foreground mb-1">
+                          Command <span className="text-destructive">*</span>
                         </label>
                         <textarea
-                          className="w-full px-2 py-1.5 text-sm font-mono border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 min-h-[60px]"
+                          className="w-full px-2 py-1.5 text-sm font-mono border border-input bg-background text-foreground rounded focus:outline-none focus:ring-1 focus:ring-ring min-h-[60px]"
                           value={step.input.command}
                           onChange={(e) => handleStepChange(index, 'command', e.target.value)}
                           placeholder="e.g., df -h"
@@ -465,12 +465,12 @@ export const AddTemplateModal: React.FC<AddTemplateModalProps> = ({ open, onClos
 
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">
+                          <label className="block text-xs font-medium text-muted-foreground mb-1">
                             Run As User (optional)
                           </label>
                           <input
                             type="text"
-                            className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            className="w-full px-2 py-1.5 text-sm border border-input bg-background text-foreground rounded focus:outline-none focus:ring-1 focus:ring-ring"
                             value={step.runAsUser || ''}
                             onChange={(e) => handleStepChange(index, 'runAsUser', e.target.value)}
                             placeholder="root"
@@ -478,12 +478,12 @@ export const AddTemplateModal: React.FC<AddTemplateModalProps> = ({ open, onClos
                         </div>
 
                         <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">
+                          <label className="block text-xs font-medium text-muted-foreground mb-1">
                             Timeout (seconds)
                           </label>
                           <input
                             type="number"
-                            className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            className="w-full px-2 py-1.5 text-sm border border-input bg-background text-foreground rounded focus:outline-none focus:ring-1 focus:ring-ring"
                             value={step.timeoutSeconds || ''}
                             onChange={(e) => handleStepChange(index, 'timeoutSeconds', e.target.value)}
                             placeholder="300"
@@ -498,7 +498,7 @@ export const AddTemplateModal: React.FC<AddTemplateModalProps> = ({ open, onClos
                         variant="outline"
                         size="sm"
                         onClick={() => handleRemoveStep(index)}
-                        className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                        className="h-8 w-8 p-0 text-destructive hover:text-destructive/90"
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>

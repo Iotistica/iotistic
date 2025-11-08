@@ -106,7 +106,7 @@ export const SaveTemplateModal: React.FC<SaveTemplateModalProps> = ({
 
         <div className="space-y-4 py-4">
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-700">
+            <div className="bg-destructive/10 border border-destructive/20 rounded p-3 text-sm text-destructive">
               {error}
             </div>
           )}
@@ -114,7 +114,7 @@ export const SaveTemplateModal: React.FC<SaveTemplateModalProps> = ({
           {/* Template Name */}
           <div className="space-y-2">
             <Label htmlFor="template-name">
-              Template Name <span className="text-red-500">*</span>
+              Template Name <span className="text-destructive">*</span>
             </Label>
             <Input
               id="template-name"
@@ -159,11 +159,11 @@ export const SaveTemplateModal: React.FC<SaveTemplateModalProps> = ({
           {jobDocument && (
             <div className="space-y-2">
               <Label>Template Configuration</Label>
-              <div className="bg-gray-50 border rounded p-3 text-xs">
-                <div className="text-gray-600 mb-1">
+              <div className="bg-accent border border-border rounded p-3 text-xs">
+                <div className="text-muted-foreground mb-1">
                   Version: {jobDocument.version || '1.0'}
                 </div>
-                <div className="text-gray-600">
+                <div className="text-muted-foreground">
                   Steps: {jobDocument.steps?.length || 0}
                 </div>
               </div>

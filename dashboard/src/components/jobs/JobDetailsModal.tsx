@@ -164,11 +164,11 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ open, onClose,
 
           {/* Target Devices */}
           {job.target_devices && job.target_devices.length > 0 && (
-            <div className="border-t pt-4">
-              <h4 className="text-sm font-semibold text-gray-900 mb-2">Target Devices</h4>
-              <div className="bg-gray-50 rounded p-2">
+            <div className="border-t border-border pt-4">
+              <h4 className="text-sm font-semibold text-foreground mb-2">Target Devices</h4>
+              <div className="bg-accent rounded p-2">
                 {job.target_devices.map((deviceId, index) => (
-                  <p key={index} className="text-xs font-mono text-gray-700">{deviceId}</p>
+                  <p key={index} className="text-xs font-mono text-foreground">{deviceId}</p>
                 ))}
               </div>
             </div>
@@ -176,10 +176,10 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ open, onClose,
 
           {/* Reason (if failed) */}
           {job.reason && (
-            <div className="border-t pt-4">
-              <h4 className="text-sm font-semibold text-gray-900 mb-2">Reason</h4>
-              <div className="bg-red-50 border border-red-200 rounded p-3">
-                <p className="text-sm text-red-700">{job.reason}</p>
+            <div className="border-t border-border pt-4">
+              <h4 className="text-sm font-semibold text-foreground mb-2">Reason</h4>
+              <div className="bg-destructive/10 border border-destructive/20 rounded p-3">
+                <p className="text-sm text-destructive">{job.reason}</p>
               </div>
             </div>
           )}
@@ -201,18 +201,18 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ open, onClose,
                       {job.job_document.steps && job.job_document.steps.length > 0 ? (
                         <div className="space-y-3">
                           {job.job_document.steps.map((step: any, index: number) => (
-                            <div key={index} className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                            <div key={index} className="bg-accent border border-border rounded-lg p-4">
                               <div className="flex items-start gap-3">
                                 {/* Step Number */}
-                                <div className="flex-shrink-0 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">
+                                <div className="flex-shrink-0 w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-sm font-semibold">
                                   {index + 1}
                                 </div>
                                 
                                 {/* Step Details */}
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2 mb-2">
-                                    <h5 className="text-sm font-semibold text-gray-900">{step.name}</h5>
-                                    <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-300">
+                                    <h5 className="text-sm font-semibold text-foreground">{step.name}</h5>
+                                    <Badge variant="outline" className="text-xs">
                                       {step.type}
                                     </Badge>
                                   </div>
@@ -221,8 +221,8 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ open, onClose,
                                   {step.input && (
                                     <div className="mt-2">
                                       {step.input.command && (
-                                        <div className="bg-gray-900 rounded px-3 py-2">
-                                          <p className="text-xs text-green-400 font-mono">
+                                        <div className="bg-muted rounded px-3 py-2">
+                                          <p className="text-xs text-muted-foreground font-mono">
                                             {typeof step.input.command === 'string' 
                                               ? step.input.command 
                                               : Array.isArray(step.input.command) 
@@ -239,8 +239,8 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ open, onClose,
                                             .filter(([key]) => key !== 'command')
                                             .map(([key, value]) => (
                                               <div key={key} className="flex gap-2 text-xs">
-                                                <span className="text-gray-600 font-medium capitalize">{key}:</span>
-                                                <span className="text-gray-900">{String(value)}</span>
+                                                <span className="text-muted-foreground font-medium capitalize">{key}:</span>
+                                                <span className="text-foreground">{String(value)}</span>
                                               </div>
                                             ))}
                                         </div>
@@ -250,15 +250,15 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ open, onClose,
                                   
                                   {/* Run as user */}
                                   {step.runAsUser && (
-                                    <div className="mt-2 flex items-center gap-1 text-xs text-gray-600">
+                                    <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
                                       <span className="font-medium">Run as:</span>
-                                      <span className="font-mono bg-gray-200 px-1.5 py-0.5 rounded">{step.runAsUser}</span>
+                                      <span className="font-mono bg-muted px-1.5 py-0.5 rounded">{step.runAsUser}</span>
                                     </div>
                                   )}
                                   
                                   {/* Timeout */}
                                   {step.timeoutSeconds && (
-                                    <div className="mt-1 text-xs text-gray-600">
+                                    <div className="mt-1 text-xs text-muted-foreground">
                                       Timeout: {step.timeoutSeconds}s
                                     </div>
                                   )}
@@ -268,16 +268,16 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ open, onClose,
                           ))}
                         </div>
                       ) : (
-                        <div className="bg-gray-50 rounded p-4">
-                          <p className="text-sm text-gray-600">No steps defined</p>
+                        <div className="bg-accent rounded p-4">
+                          <p className="text-sm text-muted-foreground">No steps defined</p>
                         </div>
                       )}
                       
           
                     </>
                   ) : (
-                    <div className="bg-gray-50 rounded p-4">
-                      <p className="text-sm text-gray-600">No job document available</p>
+                    <div className="bg-accent rounded p-4">
+                      <p className="text-sm text-muted-foreground">No job document available</p>
                     </div>
                   )}
                 </TabsContent>
@@ -290,8 +290,8 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ open, onClose,
                       {job.stdout && (
                         <div className="mb-4">
                           <div className="flex items-center justify-between mb-2">
-                            <label className="text-sm font-medium text-green-700 flex items-center gap-2">
-                              <span className="bg-green-100 px-2 py-0.5 rounded text-xs font-mono">stdout</span>
+                            <label className="text-sm font-medium text-foreground flex items-center gap-2">
+                              <span className="bg-accent px-2 py-0.5 rounded text-xs font-mono">stdout</span>
                               Standard Output
                             </label>
                             <Button
@@ -313,8 +313,8 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ open, onClose,
                               )}
                             </Button>
                           </div>
-                          <div className="bg-gray-900 rounded-lg p-4 overflow-x-auto max-h-[300px] overflow-y-auto">
-                            <pre className="text-xs font-mono text-green-400 whitespace-pre-wrap">
+                          <div className="bg-muted rounded-lg p-4 overflow-x-auto max-h-[300px] overflow-y-auto border border-border">
+                            <pre className="text-xs font-mono text-foreground whitespace-pre-wrap">
                               {job.stdout}
                             </pre>
                           </div>
@@ -325,8 +325,8 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ open, onClose,
                       {job.stderr && (
                         <div>
                           <div className="flex items-center justify-between mb-2">
-                            <label className="text-sm font-medium text-red-700 flex items-center gap-2">
-                              <span className="bg-red-100 px-2 py-0.5 rounded text-xs font-mono">stderr</span>
+                            <label className="text-sm font-medium text-destructive flex items-center gap-2">
+                              <span className="bg-destructive/10 px-2 py-0.5 rounded text-xs font-mono">stderr</span>
                               Error Output
                             </label>
                             <Button
@@ -348,8 +348,8 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ open, onClose,
                               )}
                             </Button>
                           </div>
-                          <div className="bg-gray-900 rounded-lg p-4 overflow-x-auto max-h-[300px] overflow-y-auto">
-                            <pre className="text-xs font-mono text-red-400 whitespace-pre-wrap">
+                          <div className="bg-muted rounded-lg p-4 overflow-x-auto max-h-[300px] overflow-y-auto border border-border">
+                            <pre className="text-xs font-mono text-destructive whitespace-pre-wrap">
                               {job.stderr}
                             </pre>
                           </div>
@@ -357,8 +357,8 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ open, onClose,
                       )}
                     </>
                   ) : (
-                    <div className="bg-gray-50 rounded p-4">
-                      <p className="text-sm text-gray-600">No execution output available</p>
+                    <div className="bg-accent rounded p-4">
+                      <p className="text-sm text-muted-foreground">No execution output available</p>
                     </div>
                   )}
                 </TabsContent>
