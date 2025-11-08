@@ -43,7 +43,7 @@ jobs:
           baseVersion: ${{ env.BASE_VERSION }}
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
 
-      - name:      - name: Build
+      - name: Build
         run: npm run build
 
   # Build the docker container in all branches (without pushing)
