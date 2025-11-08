@@ -40,6 +40,8 @@ jobs:
     name: Build & Push Device Agent
     needs: test
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
     strategy:
       matrix:
         include:
@@ -53,6 +55,41 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Bump version in package.json
+        id: version
+        run: |
+          cd agent
+          # Get current version
+          CURRENT_VERSION=$(jq -r '.version' package.json)
+          echo "Current version: $CURRENT_VERSION"
+          
+          # Bump patch version (e.g., 1.0.0 -> 1.0.1)
+          IFS='.' read -ra VERSION_PARTS <<< "$CURRENT_VERSION"
+          MAJOR="${VERSION_PARTS[0]}"
+          MINOR="${VERSION_PARTS[1]}"
+          PATCH="${VERSION_PARTS[2]}"
+          NEW_PATCH=$((PATCH + 1))
+          NEW_VERSION="${MAJOR}.${MINOR}.${NEW_PATCH}"
+          
+          echo "New version: $NEW_VERSION"
+          
+          # Update package.json
+          jq --arg v "$NEW_VERSION" '.version = $v' package.json > tmp.json && mv tmp.json package.json
+          
+          # Set outputs
+          echo "package_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Commit updated package.json
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add agent/package.json
+          git commit -m "chore: bump agent version to ${{ steps.version.outputs.package_version }} [skip ci]"
+          git push origin HEAD
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -89,3 +126,5 @@ jobs:
           cache-to: type=local,dest=/tmp/.buildx-cache/${{ matrix.board }},mode=max
           tags: |
             iotistic/agent:latest-${{ matrix.board }}
+            iotistic/agent:${{ steps.version.outputs.sha_short }}-${{ matrix.board }}
+            ${{ steps.version.outputs.package_version && format('iotistic/agent:{0}-{1}', steps.version.outputs.package_version, matrix.board) || '' }}
