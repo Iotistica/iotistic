@@ -158,7 +158,7 @@ jobs:
             iotistic/agent:${{ needs.version.outputs.package_version }}
 
   report:
-    name: 📊 Generate Reports
+    name: Generate Reports
     needs: [version, buildx]
     runs-on: ubuntu-24.04
     if: always()
@@ -211,16 +211,16 @@ jobs:
 
       - name: Generate Summary Report
         run: |
-          echo "# 🚀 Build & Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "# Build & Release Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          echo "## 📦 Version Information" >> $GITHUB_STEP_SUMMARY
+          echo "## Version Information" >> $GITHUB_STEP_SUMMARY
           echo "**Version:** \`${{ needs.version.outputs.package_version }}\`" >> $GITHUB_STEP_SUMMARY
           echo "**Git SHA:** \`${{ needs.version.outputs.sha_short }}\`" >> $GITHUB_STEP_SUMMARY
           echo "**Platform:** \`linux/amd64\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          echo "## 🐳 Docker Image" >> $GITHUB_STEP_SUMMARY
+          echo "## Docker Image" >> $GITHUB_STEP_SUMMARY
           echo "**Size:** ${{ steps.image_size.outputs.size_mb }} MB" >> $GITHUB_STEP_SUMMARY
           echo "**Layers:** ${{ steps.image_size.outputs.layers }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -230,7 +230,7 @@ jobs:
           echo "- \`iotistic/agent:${{ needs.version.outputs.package_version }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          echo "## 📝 Changelog" >> $GITHUB_STEP_SUMMARY
+          echo "## Changelog" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           cat changelog_summary.txt >> $GITHUB_STEP_SUMMARY
           
@@ -242,5 +242,5 @@ jobs:
           fi
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          echo "## ✅ Workflow Status" >> $GITHUB_STEP_SUMMARY
+          echo "## Workflow Status" >> $GITHUB_STEP_SUMMARY
           echo "All jobs completed successfully! 🎉" >> $GITHUB_STEP_SUMMARY
