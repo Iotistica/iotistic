@@ -49,12 +49,17 @@ export class MqttJobsSubscriber {
     executionNumber?: number;
     clientToken?: string;
   }): Promise<void> {
+    // Debug: Log raw update object
+    console.log(`[MqttJobsSubscriber] Raw update object:`, JSON.stringify(update, null, 2));
+    
     const { deviceUuid, jobId, status, statusDetails } = update;
 
     console.log(`[MqttJobsSubscriber] Processing update for job ${jobId}:`, {
       deviceUuid,
       status,
       hasDetails: !!statusDetails,
+      jobIdType: typeof jobId,
+      jobIdValue: jobId,
     });
 
     try {

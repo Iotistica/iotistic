@@ -149,6 +149,9 @@ export class MqttJobsNotifier {
       status: message.status,
       hasStdout: !!message.statusDetails?.stdout,
       hasStderr: !!message.statusDetails?.stderr,
+      topicParts: parts,
+      parsedDeviceUuid: deviceUuid,
+      parsedJobId: jobId,
     });
 
     // Trigger registered handlers
@@ -162,7 +165,14 @@ export class MqttJobsNotifier {
     // Also trigger wildcard handler
     const wildcardHandler = this.updateHandlers.get('*');
     if (wildcardHandler) {
-      wildcardHandler({ deviceUuid, jobId, ...message });
+      const updatePayload = { deviceUuid, jobId, ...message };
+       logger.info(` Calling wildcard handler with:`, {
+        deviceUuid,
+        jobId,
+        jobIdType: typeof jobId,
+        updateKeys: Object.keys(updatePayload),
+      });
+      wildcardHandler(updatePayload);
     }
 
     // Respond with update/accepted

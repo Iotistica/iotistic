@@ -15,7 +15,7 @@ const logger = winston.createLogger({
     winston.format.splat(),
     winston.format.json()
   ),
-  defaultMeta: { service: 'Iotistic-api' },
+  defaultMeta: { service: 'iotistic-api' },
   transports: [
     // Write all logs to combined.log
     new winston.transports.File({ 
@@ -40,18 +40,58 @@ if (process.env.NODE_ENV !== 'production') {
     format: winston.format.combine(
       winston.format.colorize(),
       winston.format.timestamp({ format: 'HH:mm:ss' }),
-      winston.format.printf(({ timestamp, level, message, ...meta }) => {
-        const metaStr = Object.keys(meta).length > 0 
-          ? '\n' + JSON.stringify(meta, null, 2) 
+      winston.format.printf(({ timestamp, level, message, service, operation, step, ...meta }) => {
+        // Filter out 'service' and internal fields from meta
+        const relevantMeta = Object.keys(meta).filter(key => 
+          key !== 'timestamp' && key !== 'level' && key !== 'message'
+        );
+        
+        // Build operation context (for human readability)
+        let prefix = '';
+        if (operation) {
+          prefix = `[${operation}]`;
+          if (step) {
+            prefix += ` ${step} →`;
+          }
+          prefix += ' ';
+        }
+        
+        const metaStr = relevantMeta.length > 0 
+          ? ' ' + JSON.stringify(meta) 
           : '';
-        return `${timestamp} [${level}]: ${message}${metaStr}`;
+        
+        return `${timestamp} [${level}]: ${prefix}${message}${metaStr}`;
       })
     )
   }));
 }
+
+// Helper functions for structured logging with visual grouping
+export const logOperation = {
+  // Start an operation
+  start: (operation: string, message: string, meta?: Record<string, any>) => {
+    logger.info(message, { ...meta, operation, step: 'START' });
+  },
+  
+  // Log a step within an operation
+  step: (operation: string, message: string, meta?: Record<string, any>) => {
+    logger.info(message, { ...meta, operation });
+  },
+  
+  // Complete an operation
+  complete: (operation: string, message: string, meta?: Record<string, any>) => {
+    logger.info(message, { ...meta, operation, step: 'DONE' });
+  },
+  
+  // Error in an operation
+  error: (operation: string, message: string, error: Error, meta?: Record<string, any>) => {
+    logger.error(message, { ...meta, operation, step: 'ERROR', error: error.message, stack: error.stack });
+  }
+};
 
 // Export logger as default
 export default logger;
 
 // Also export named
 export { logger };
+

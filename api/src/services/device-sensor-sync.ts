@@ -13,6 +13,7 @@
 
 import { query } from '../db/connection';
 import { EventPublisher } from './event-sourcing';
+import logger from '../utils/logger';
 
 const eventPublisher = new EventPublisher();
 
@@ -43,7 +44,7 @@ export class DeviceSensorSyncService {
     userId?: string
   ): Promise<void> {
     const isReconciliation = userId === 'agent-reconciliation';
-    console.log(`🔄 Syncing ${configDevices.length} sensors from config to table for device ${deviceUuid.substring(0, 8)}... (${isReconciliation ? 'RECONCILIATION' : 'DEPLOYMENT'})`);
+    logger.info(`Syncing ${configDevices.length} sensors from config to table for device ${deviceUuid.substring(0, 8)}... (${isReconciliation ? 'RECONCILIATION' : 'DEPLOYMENT'})`);
 
     try {
       // Get existing sensors from table
@@ -91,7 +92,7 @@ export class DeviceSensorSyncService {
               sensor.name
             ]
           );
-          console.log(`  ✅ Updated: ${sensor.name} (${sensor.protocol}) - ${deploymentStatus}`);
+          logger.info(`Updated: ${sensor.name} (${sensor.protocol}) - ${deploymentStatus}`);
         } else {
           // Insert new sensor into table
           // If reconciliation from agent, mark as deployed (agent confirms it's running)
@@ -120,7 +121,7 @@ export class DeviceSensorSyncService {
               sensor.id || null // Populate config_id from config JSON
             ]
           );
-          console.log(`  ➕ Inserted: ${sensor.name} (${sensor.protocol}) - ${deploymentStatus}`);
+          logger.info(`Inserted: ${sensor.name} (${sensor.protocol}) - ${deploymentStatus}`);
         }
       }
 
@@ -131,13 +132,13 @@ export class DeviceSensorSyncService {
             'DELETE FROM device_sensors WHERE device_uuid = $1 AND name = $2',
             [deviceUuid, existingName]
           );
-          console.log(`  ➖ Deleted: ${existingName} (removed from config)`);
+          logger.info(`   Deleted: ${existingName} (removed from config)`);
         }
       }
 
-      console.log(`✅ Sync complete: config → table (version ${configVersion}) - ${isReconciliation ? 'DEPLOYED' : 'PENDING'}`);
+      logger.info(`Sync complete: config → table (version ${configVersion}) - ${isReconciliation ? 'DEPLOYED' : 'PENDING'}`);
     } catch (error) {
-      console.error('❌ Error syncing config to table:', error);
+      logger.error(' Error syncing config to table:', error);
       throw error;
     }
   }
@@ -152,7 +153,7 @@ export class DeviceSensorSyncService {
    * 3. Agent will report current state, triggering reconciliation to 'deployed'
    */
   async deployConfig(deviceUuid: string, userId?: string): Promise<any> {
-    console.log(`🚀 Deploying config changes for device ${deviceUuid.substring(0, 8)}...`);
+    logger.info(`Deploying config changes for device ${deviceUuid.substring(0, 8)}...`);
 
     try {
       // 1. Get current target state
@@ -197,7 +198,7 @@ export class DeviceSensorSyncService {
         }
       );
 
-      console.log(`✅ Deployed config (version: ${newVersion}) - sensors marked as 'pending'`);
+      logger.info(`Deployed config (version: ${newVersion}) - sensors marked as 'pending'`);
 
       return {
         version: newVersion,
@@ -205,7 +206,7 @@ export class DeviceSensorSyncService {
         message: 'Config deployed. Sensors marked as pending. Waiting for agent confirmation.'
       };
     } catch (error) {
-      console.error('❌ Error deploying config:', error);
+      logger.error('Error deploying config:', error);
       throw error;
     }
   }
@@ -215,7 +216,7 @@ export class DeviceSensorSyncService {
    * Called when sensor is added/updated via API
    */
   async syncTableToConfig(deviceUuid: string, userId?: string): Promise<any> {
-    console.log(`🔄 Syncing sensors from table to config for device ${deviceUuid.substring(0, 8)}...`);
+    logger.info(`Syncing sensors from table to config for device ${deviceUuid.substring(0, 8)}...`);
 
     try {
       // Get all sensors from table
@@ -279,11 +280,11 @@ export class DeviceSensorSyncService {
         [newVersion, deviceUuid]
       );
 
-      console.log(`✅ Sync complete: table → config (version ${newVersion})`);
+      logger.info(`Sync complete: table → config (version ${newVersion})`);
 
       return { version: newVersion, config };
     } catch (error) {
-      console.error('❌ Error syncing table to config:', error);
+      logger.error('Error syncing table to config:', error);
       throw error;
     }
   }
@@ -294,7 +295,7 @@ export class DeviceSensorSyncService {
    * This closes the Event Sourcing loop: config → agent → current state → table
    */
   async syncCurrentStateToTable(deviceUuid: string, currentState: any): Promise<void> {
-    console.log(`🔄 Reconciling current state from agent for device ${deviceUuid.substring(0, 8)}...`);
+    logger.info(`Reconciling current state from agent for device ${deviceUuid.substring(0, 8)}...`);
 
     try {
       // Extract running sensors from agent's current state
@@ -305,14 +306,14 @@ export class DeviceSensorSyncService {
       const runningSensors: SensorDeviceConfig[] = config?.sensors || [];
       const currentVersion = currentState.version || 0;
 
-      console.log(`  📊 Agent reports ${runningSensors.length} running sensors (version ${currentVersion})`);
+      logger.info(`Agent reports ${runningSensors.length} running sensors (version ${currentVersion})`);
 
       // Sync table to match agent's reality (not desired state!)
       await this.syncConfigToTable(deviceUuid, runningSensors, currentVersion, 'agent-reconciliation');
 
-      console.log(`✅ Reconciliation complete: agent reality → table (version ${currentVersion})`);
+      logger.info(`Reconciliation complete: agent reality → table (version ${currentVersion})`);
     } catch (error) {
-      console.error('❌ Error reconciling current state to table:', error);
+      logger.error('Error reconciling current state to table:', error);
       throw error;
     }
   }
@@ -368,7 +369,7 @@ export class DeviceSensorSyncService {
         updatedBy: row.updated_by
       }));
     } catch (error) {
-      console.error('Error getting sensors from table:', error);
+      logger.error('Error getting sensors from table:', error);
       throw error;
     }
   }
@@ -387,7 +388,7 @@ export class DeviceSensorSyncService {
     sensor: SensorDeviceConfig,
     userId?: string
   ): Promise<any> {
-    console.log(`📥 Adding sensor "${sensor.name}" (${sensor.protocol}) for device ${deviceUuid.substring(0, 8)}... (draft mode - config only)`);
+    logger.info(`Adding sensor "${sensor.name}" (${sensor.protocol}) for device ${deviceUuid.substring(0, 8)}... (draft mode - config only)`);
 
     try {
       // ALWAYS save to config first (draft in config, not in table yet)
@@ -442,8 +443,8 @@ export class DeviceSensorSyncService {
         }
       );
 
-      console.log(`✅ Added sensor "${sensor.name}" to config as DRAFT (not deployed yet)`);
-      console.log(`   💡 User must click "Deploy" to trigger deployment and add to sensors table`);
+      logger.info(`Added sensor "${sensor.name}" to config as DRAFT (not deployed yet)`);
+      logger.info(`User must click "Deploy" to trigger deployment and add to sensors table`);
 
       return {
         sensor,
@@ -451,7 +452,7 @@ export class DeviceSensorSyncService {
         message: 'Sensor saved to config. Click "Deploy" to trigger deployment.'
       };
     } catch (error) {
-      console.error('❌ Error adding sensor:', error);
+      logger.error('Error adding sensor:', error);
       throw error;
     }
   }
@@ -465,7 +466,7 @@ export class DeviceSensorSyncService {
     updates: Partial<SensorDeviceConfig>,
     userId?: string
   ): Promise<any> {
-    console.log(`📝 Updating sensor "${sensorName}" for device ${deviceUuid.substring(0, 8)}...`);
+    logger.info(`Updating sensor "${sensorName}" for device ${deviceUuid.substring(0, 8)}...`);
 
     try {
       // 1. Get current target state
@@ -525,14 +526,14 @@ export class DeviceSensorSyncService {
         }
       );
 
-      console.log(`✅ Updated sensor "${sensorName}" in config (version: ${newVersion})`);
+      logger.info(`Updated sensor "${sensorName}" in config (version: ${newVersion})`);
 
       return {
         sensor: existingDevices[sensorIndex],
         version: newVersion
       };
     } catch (error) {
-      console.error('❌ Error updating sensor:', error);
+      logger.error('Error updating sensor:', error);
       throw error;
     }
   }
@@ -545,7 +546,7 @@ export class DeviceSensorSyncService {
     sensorName: string,
     userId?: string
   ): Promise<any> {
-    console.log(`🗑️  Deleting sensor "${sensorName}" for device ${deviceUuid.substring(0, 8)}...`);
+    logger.info(`Deleting sensor "${sensorName}" for device ${deviceUuid.substring(0, 8)}...`);
 
     try {
       // 1. Get current target state
@@ -596,13 +597,13 @@ export class DeviceSensorSyncService {
         }
       );
 
-      console.log(`✅ Deleted sensor "${sensorName}" from config (version: ${newVersion})`);
+      logger.info(`Deleted sensor "${sensorName}" from config (version: ${newVersion})`);
 
       return {
         version: newVersion
       };
     } catch (error) {
-      console.error('❌ Error deleting sensor:', error);
+      logger.error('Error deleting sensor:', error);
       throw error;
     }
   }

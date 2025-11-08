@@ -106,7 +106,7 @@ export class WebSocketManager {
       });
       
       logger.info('  Redis pub/sub integration initialized');
-      logger.info(' 📡 Subscribed to patterns:', metricsPattern, logsPattern);
+      logger.info('   Subscribed to patterns:', metricsPattern, logsPattern);
     } catch (error) {
       logger.error('   Failed to initialize Redis pub/sub:', error);
       logger.info('  Falling back to database polling');
@@ -198,7 +198,7 @@ export class WebSocketManager {
       return;
     }
     
-    logger.info(` 📜 Received ${logs.length} logs from Redis for ${deviceUuid.substring(0, 8)}...`);
+    logger.info(`  Received ${logs.length} logs from Redis for ${deviceUuid.substring(0, 8)}...`);
     
     // Broadcast immediately to all clients subscribed to logs channel
     this.broadcast(deviceUuid, {
@@ -236,7 +236,7 @@ export class WebSocketManager {
       })),
     };
     
-    logger.info(` 📦 Flushing ${buffer.length} metrics for device ${deviceUuid.substring(0, 8)}...`);
+    logger.info(`  Flushing ${buffer.length} metrics for device ${deviceUuid.substring(0, 8)}...`);
     
     // Broadcast batched data
     this.broadcast(deviceUuid, {

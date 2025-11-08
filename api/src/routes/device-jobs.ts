@@ -13,10 +13,17 @@ import { validateProvisioningKey } from '../utils/provisioning-keys';
 import { getMqttJobsNotifier } from '../services/mqtt-jobs-notifier';
 import { hasPermission, hasAnyPermission } from '../middleware/permissions';
 import { PERMISSIONS } from '../types/permissions';
+import { jwtAuth } from '../middleware/jwt-auth';
 
 const router = express.Router();
 const pool = poolWrapper.pool;
 const mqttNotifier = getMqttJobsNotifier();
+
+// Apply JWT authentication to all dashboard/cloud routes
+// Device routes use deviceAuth middleware individually
+router.use('/jobs/templates', jwtAuth);
+router.use('/jobs/executions', jwtAuth);
+router.use('/jobs/handlers', jwtAuth);
 
 // =============================================================================
 // Job Templates Management

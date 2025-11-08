@@ -12,7 +12,7 @@
 
 import mqtt from 'mqtt';
 import { EventEmitter } from 'events';
-import logger from '../utils/logger';
+import logger, { logOperation } from '../utils/logger';
 
 export interface MqttConfig {
   brokerUrl: string;
@@ -292,21 +292,21 @@ export class MqttManager extends EventEmitter {
    * Handle incoming MQTT messages
    */
   private handleMessage(topic: string, payload: Buffer): void {
+    const message = payload.toString();
+    
     try {
-      const message = payload.toString();
-      
-      // Debug: Log ALL incoming messages
-      console.log('🔔 MQTT Message received:', {
-        topic,
-        payloadSize: payload.length,
-        preview: message.substring(0, 200)
-      });
-      
-      
       // Parse standard topic format: iot/device/{uuid}/{type}/...
       const parts = topic.split('/');
       const deviceUuid = parts[2];
       const messageType = parts[3];
+      
+      // START operation
+      logOperation.start('mqtt-message', `Received ${messageType}`, {
+        topic,
+        deviceUuid: deviceUuid?.substring(0, 8) + '...',
+        messageType,
+        payloadSize: payload.length
+      });
 
       // Parse JSON payload
       let data: any;
@@ -315,37 +315,55 @@ export class MqttManager extends EventEmitter {
       } catch {
         // Non-JSON payload (e.g., raw log messages)
         data = message;
+        logOperation.step('mqtt-message', 'Non-JSON payload detected', { 
+          messageType,
+          preview: message.substring(0, 100)
+        });
       }
 
       // Route message based on type
       switch (messageType) {
         case 'sensor':
+          logOperation.step('mqtt-message', 'Routing to sensor handler', { deviceUuid: deviceUuid?.substring(0, 8) + '...' });
           this.handleSensorData(deviceUuid, parts[3], data);
           break;
         case 'state':
-          // Handle device state updates
-          console.log(`📡 Processing state update for device ${deviceUuid.substring(0, 8)}...`);
+          logOperation.step('mqtt-message', 'Processing state update', { 
+            deviceUuid: deviceUuid.substring(0, 8) + '...',
+            hasVersion: 'version' in data
+          });
           this.emit('state', data);
           break;
         case 'shadow':
+          logOperation.step('mqtt-message', 'Routing to shadow handler', { deviceUuid: deviceUuid?.substring(0, 8) + '...' });
           this.handleShadowUpdate(deviceUuid, parts[3], data);
           break;
         case 'logs':
+          logOperation.step('mqtt-message', 'Routing to log handler', { deviceUuid: deviceUuid?.substring(0, 8) + '...' });
           this.handleLogMessage(deviceUuid, parts[3], data);
           break;
         case 'metrics':
+          logOperation.step('mqtt-message', 'Routing to metrics handler', { deviceUuid: deviceUuid?.substring(0, 8) + '...' });
           this.handleMetrics(deviceUuid, data);
           break;
         case 'status':
+          logOperation.step('mqtt-message', 'Routing to status handler', { deviceUuid: deviceUuid?.substring(0, 8) + '...' });
           this.handleStatus(deviceUuid, data);
           break;
         default:
-          console.warn('⚠️  Unknown message type:', messageType);
+          logger.warn(`Unknown message type`, {
+            operation: 'mqtt-message',
+            messageType,
+            topic
+          });
           this.emit('unknown', { topic, deviceUuid, data });
       }
+      
+      // DONE operation
+      logOperation.complete('mqtt-message', `Message handled`, { messageType });
 
     } catch (error) {
-      console.error('❌ Error handling MQTT message:', error);
+      logOperation.error('mqtt-message', 'Failed to handle message', error as Error, { topic });
     }
   }
 

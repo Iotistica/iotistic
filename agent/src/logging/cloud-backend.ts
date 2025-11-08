@@ -3,7 +3,6 @@
  * ==================
  * 
  * Streams container logs to cloud API in real-time
- * Inspired by balena's BalenaLogBackend but simplified
  * 
  * Features:
  * - Streams logs via HTTP POST
@@ -17,6 +16,7 @@ import { Writable } from 'stream';
 import zlib from 'zlib';
 import type { LogBackend, LogMessage, LogFilter } from './types';
 import { buildApiEndpoint } from '../utils/api-utils';
+import type { AgentLogger } from '../logging/agent-logger';
 
 /**
  * Cloud Log Backend Configuration
@@ -47,13 +47,16 @@ export class CloudLogBackend implements LogBackend {
 	private isStreaming: boolean = false;
 	private retryCount: number = 0;
 	private abortController?: AbortController;
+	private logger?: AgentLogger;
 	private flushTimer?: NodeJS.Timeout;
 	private reconnectTimer?: NodeJS.Timeout;
 	private samplingRates: Required<NonNullable<CloudLogBackendConfig['samplingRates']>>;
 	private sampledLogCount: number = 0;
 	private totalLogCount: number = 0;
 	
-	constructor(config: CloudLogBackendConfig) {
+	constructor(config: CloudLogBackendConfig, logger?: AgentLogger) {
+
+		this.logger = logger;
 		this.config = {
 			cloudEndpoint: config.cloudEndpoint,
 			deviceUuid: config.deviceUuid,
@@ -61,6 +64,7 @@ export class CloudLogBackend implements LogBackend {
 			compression: config.compression ?? true,
 			batchSize: config.batchSize ?? 100,
 			maxRetries: config.maxRetries ?? 3,
+			
 			bufferSize: config.bufferSize ?? 256 * 1024, // 256KB
 			flushInterval: config.flushInterval ?? 100, // 100ms
 			reconnectInterval: config.reconnectInterval ?? 5000, // 5s
@@ -78,20 +82,25 @@ export class CloudLogBackend implements LogBackend {
 	}
 	
 	async initialize(): Promise<void> {
-		console.log('📡 Initializing Cloud Log Backend...');
-		console.log(`   Endpoint: ${this.config.cloudEndpoint}`);
-		console.log(`   Device: ${this.config.deviceUuid}`);
-		console.log(`   Compression: ${this.config.compression ? 'Enabled' : 'Disabled'}`);
-		console.log(`   Sampling Rates:`);
-		console.log(`     - ERROR: ${(this.samplingRates.error * 100).toFixed(0)}%`);
-		console.log(`     - WARN:  ${(this.samplingRates.warn * 100).toFixed(0)}%`);
-		console.log(`     - INFO:  ${(this.samplingRates.info * 100).toFixed(0)}%`);
-		console.log(`     - DEBUG: ${(this.samplingRates.debug * 100).toFixed(1)}%`);
+		this.logger?.infoSync('Initializing Cloud Log Backend...', { component: 'Logs' });
+		this.logger?.infoSync('Configuration loaded', { 
+			component: 'Logs',
+			endpoint: this.config.cloudEndpoint,
+			device: this.config.deviceUuid,
+			compression: this.config.compression,
+			samplingRates: {
+				error: `${(this.samplingRates.error * 100).toFixed(0)}%`,
+				warn: `${(this.samplingRates.warn * 100).toFixed(0)}%`,
+				info: `${(this.samplingRates.info * 100).toFixed(0)}%`,
+				debug: `${(this.samplingRates.debug * 100).toFixed(1)}%`
+			}
+		});
 		
 		// Start streaming
 		await this.connect();
 		
-		console.log('✅ Cloud Log Backend initialized');
+		this.logger?.infoSync('Cloud Log Backend initialized', { component: 'Logs' });
+	
 	}
 	
 	async log(logMessage: LogMessage): Promise<void> {
@@ -108,7 +117,13 @@ export class CloudLogBackend implements LogBackend {
 		// Add to buffer
 		this.buffer.push(logMessage);
 		
-		console.log(`📝 Buffered log (${this.buffer.length} in buffer, ${this.sampledLogCount}/${this.totalLogCount} sampled): ${logMessage.serviceName} - ${logMessage.message.substring(0, 50)}...`);
+		this.logger?.debugSync('Buffered log', { 
+			component: 'Logs',
+			bufferSize: this.buffer.length,
+			samplingRatio: `${this.sampledLogCount}/${this.totalLogCount}`,
+			service: logMessage.serviceName,
+			messagePreview: logMessage.message.substring(0, 50)
+		});
 		
 		// Schedule flush if not already scheduled
 		if (!this.flushTimer) {
@@ -120,7 +135,10 @@ export class CloudLogBackend implements LogBackend {
 		// Check buffer size (prevent memory overflow)
 		const bufferBytes = JSON.stringify(this.buffer).length;
 		if (bufferBytes > this.config.bufferSize) {
-			console.warn(`⚠️  Log buffer full (${Math.round(bufferBytes / 1024)}KB), forcing flush`);
+			this.logger?.warnSync('Log buffer full, forcing flush', { 
+				component: 'Logs',
+				bufferSizeKB: Math.round(bufferBytes / 1024)
+			});
 			await this.flush();
 		}
 	}
@@ -141,7 +159,7 @@ export class CloudLogBackend implements LogBackend {
 	}
 	
 	async stop(): Promise<void> {
-		console.log('🛑 Stopping Cloud Log Backend...');
+		this.logger?.infoSync('Stopping Cloud Log Backend...', { component: 'Logs' });
 		
 		// Flush remaining logs
 		await this.flush();
@@ -162,7 +180,11 @@ export class CloudLogBackend implements LogBackend {
 			clearTimeout(this.reconnectTimer);
 		}
 		
-		console.log('✅ Cloud Log Backend stopped');
+		if (this.reconnectTimer) {
+			clearTimeout(this.reconnectTimer);
+		}
+		
+		this.logger?.infoSync('Cloud Log Backend stopped', { component: 'Logs' });
 	}
 	
 	// ============================================================================
@@ -175,7 +197,7 @@ export class CloudLogBackend implements LogBackend {
 		}
 		
 		this.isStreaming = true;
-		console.log('📡 Connecting to cloud log stream...');
+		this.logger?.infoSync('Connecting to cloud log stream...', { component: 'Logs' });
 	}
 	
 	private async flush(): Promise<void> {
@@ -198,7 +220,12 @@ export class CloudLogBackend implements LogBackend {
 			batches.push(this.buffer.slice(i, i + batchSize));
 		}
 		
-		console.log(`📦 Flushing ${this.buffer.length} logs in ${batches.length} batch(es) of ${batchSize}`);
+		this.logger?.infoSync('Flushing logs to cloud', { 
+			component: 'Logs',
+			totalLogs: this.buffer.length,
+			batches: batches.length,
+			batchSize
+		});
 		
 		// Clear buffer immediately to prevent duplicate sends
 		this.buffer = [];
@@ -211,7 +238,10 @@ export class CloudLogBackend implements LogBackend {
 				await this.sendLogs(batch);
 				this.retryCount = 0; // Reset on success
 			} catch (error) {
-				console.error(`❌ Failed to send batch of ${batch.length} logs:`, error);
+				this.logger?.errorSync('Failed to send batch', error instanceof Error ? error : undefined, { 
+					component: 'Logs',
+					batchSize: batch.length
+				});
 				
 				// Check if it's a DNS error (unrecoverable until config fixed)
 				const isDnsError = error instanceof Error && 
@@ -221,10 +251,13 @@ export class CloudLogBackend implements LogBackend {
 					error.cause.code === 'ENOTFOUND');
 				
 				if (isDnsError) {
-					console.error('⚠️  DNS resolution failed - check CLOUD_API_ENDPOINT environment variable');
-					console.error('   Hint: If using network_mode: host, use http://localhost:PORT instead of container names');
+					this.logger?.errorSync('DNS resolution failed - check CLOUD_API_ENDPOINT environment variable', undefined, { component: 'Logs' });
+					console.error('Hint: If using network_mode: host, use http://localhost:PORT instead of container names');
 					// Drop logs on DNS errors to prevent infinite accumulation
-					console.warn(`🗑️  Dropping ${batch.length} logs due to DNS configuration error`);
+					this.logger?.warnSync('Dropping logs due to DNS configuration error', { 
+						component: 'Logs',
+						droppedLogs: batch.length
+					});
 					continue;
 				}
 				
@@ -240,7 +273,10 @@ export class CloudLogBackend implements LogBackend {
 			const logsToKeep = failedLogs.slice(-maxBufferLogs); // Keep most recent
 			
 			if (failedLogs.length > maxBufferLogs) {
-				console.warn(`⚠️  Buffer overflow: dropping ${failedLogs.length - maxBufferLogs} oldest logs`);
+				this.logger?.warnSync('Buffer overflow: dropping oldest logs', { 
+					component: 'Logs',
+					droppedLogs: failedLogs.length - maxBufferLogs
+				});
 			}
 			
 			this.buffer = [...logsToKeep, ...this.buffer];
@@ -252,8 +288,6 @@ export class CloudLogBackend implements LogBackend {
 	
 	private async sendLogs(logs: LogMessage[]): Promise<void> {
 		const endpoint = buildApiEndpoint(this.config.cloudEndpoint, `/device/${this.config.deviceUuid}/logs`);
-		
-		console.log(`🚀 Sending ${logs.length} logs to cloud: ${endpoint}`);
 		
 		// Convert to NDJSON (newline-delimited JSON)
 		const ndjson = logs.map(log => JSON.stringify(log)).join('\n') + '\n';
@@ -289,12 +323,18 @@ export class CloudLogBackend implements LogBackend {
 			
 			if (!response.ok) {
 				const responseText = await response.text();
-				console.error(`❌ HTTP ${response.status}: ${response.statusText}`);
-				console.error(`   Response: ${responseText.substring(0, 200)}`);
+				this.logger?.errorSync(`HTTP ${response.status}: ${response.statusText}`, undefined, { 
+					component: 'Logs',
+					responsePreview: responseText.substring(0, 200)
+				});
 				throw new Error(`HTTP ${response.status}: ${response.statusText}`);
 			}
 			
-			console.log(`✅ Successfully sent ${logs.length} logs to cloud (${response.status})`);
+			this.logger?.infoSync('Successfully sent logs to cloud', { 
+				component: 'Logs',
+				logCount: logs.length,
+				httpStatus: response.status
+			});
 		} catch (error) {
 			clearTimeout(timeoutId);
 			throw error;
@@ -324,7 +364,11 @@ export class CloudLogBackend implements LogBackend {
 			this.config.maxReconnectInterval
 		);
 		
-		console.log(`⏳ Retrying log upload in ${Math.round(delay / 1000)}s...`);
+		this.logger?.infoSync('Retrying log upload', { 
+			component: 'Logs',
+			retryInSeconds: Math.round(delay / 1000),
+			retryCount: this.retryCount
+		});
 		
 		this.reconnectTimer = setTimeout(() => {
 			this.reconnectTimer = undefined;

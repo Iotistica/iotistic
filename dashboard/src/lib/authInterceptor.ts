@@ -3,11 +3,14 @@
  * 
  * Automatically adds JWT token to all API requests
  * and handles token refresh on 401 responses
+ * 
+ * NOTE: This interceptor chains with apiInterceptor.ts
+ * Make sure to import authInterceptor AFTER apiInterceptor in App.tsx
  */
 
 import { buildApiUrl } from '../config/api';
 
-// Store the original fetch
+// Store the current fetch (might already be wrapped by apiInterceptor)
 const originalFetch = window.fetch;
 
 // Track if we're currently refreshing to avoid multiple refresh attempts

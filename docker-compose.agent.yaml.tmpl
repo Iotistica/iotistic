@@ -1,13 +1,10 @@
-agent-{AGENT_NUMBER}:
+$template = @'
+    agent-{AGENT_NUMBER}:
             container_name: agent-{AGENT_NUMBER}
             build:
                 context: ./agent
                 dockerfile: Dockerfile
-            privileged: true
-            pid: "host"
-            tty: true
             restart: always
-            network_mode: host
             volumes:
                 - /var/run/docker.sock:/var/run/docker.sock
                 - agent-{AGENT_NUMBER}-data:/app/data
@@ -21,8 +18,12 @@ agent-{AGENT_NUMBER}:
                 - REPORT_INTERVAL_MS=2000
                 - METRICS_INTERVAL_MS=2000
                 - LOG_COMPRESSION=true
+                - REQUIRE_PROVISIONING=false
                 - PROVISIONING_API_KEY={PROVISIONING_API_KEY}
             depends_on:
                 api:
                     condition: service_healthy
-                
+            networks:
+                - iotistic-net
+
+'@

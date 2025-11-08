@@ -188,11 +188,17 @@ export default class DeviceAgent {
 		this.startAutoReconciliation();		
 		
 		//Final words
+		const mode = this.deviceInfo.provisioned 
+			? 'Cloud-connected' 
+			: (this.CLOUD_API_ENDPOINT ? 'Standalone (not provisioned)' : 'Standalone (no cloud endpoint)');
+		
 		this.agentLogger.infoSync('Device Agent initialized successfully', {
 				component: 'Agent',
+				mode,
 				deviceApiPort: this.DEVICE_API_PORT,
 				reconciliationInterval: this.reconciliationIntervalMs,
-				cloudApiEndpoint: this.CLOUD_API_ENDPOINT || 'Not configured'
+				cloudApiEndpoint: this.CLOUD_API_ENDPOINT || 'Not configured',
+				cloudFeaturesEnabled: this.deviceInfo.provisioned && !!this.apiBinder
 			});
 	
 		} catch (error) {
@@ -281,22 +287,36 @@ export default class DeviceAgent {
 				deviceInfo = this.deviceManager.getDeviceInfo();
 				this.agentLogger.infoSync('Device auto-provisioned successfully', { component: 'Agent' });
 			} catch (error: any) {
-				this.agentLogger.errorSync('Auto-provisioning failed', error instanceof Error ? error : new Error(error.message), {
-					component: 'Agent',
-					note: 'Device will remain unprovisioned. Set PROVISIONING_API_KEY to retry.'
-				});
-			}
-		} else if (!deviceInfo.provisioned && this.CLOUD_API_ENDPOINT && !provisioningApiKey) {
-			this.agentLogger.warnSync('Device not provisioned', {
+			this.agentLogger.errorSync('Auto-provisioning failed', error instanceof Error ? error : new Error(error.message), {
 				component: 'Agent',
-				note: 'Set PROVISIONING_API_KEY environment variable to enable auto-provisioning'
+				note: 'Device will remain unprovisioned. Set PROVISIONING_API_KEY to retry.'
 			});
+			
+			// Optional: Fail-fast if REQUIRE_PROVISIONING is set
+			if (process.env.REQUIRE_PROVISIONING === 'true') {
+				this.agentLogger.errorSync('REQUIRE_PROVISIONING enabled - exiting due to provisioning failure', undefined, {
+					component: 'Agent'
+				});
+				process.exit(1);
+			}
 		}
+	} else if (!deviceInfo.provisioned && this.CLOUD_API_ENDPOINT && !provisioningApiKey) {
+		this.agentLogger.warnSync('Device not provisioned', {
+			component: 'Agent',
+			note: 'Set PROVISIONING_API_KEY environment variable to enable auto-provisioning'
+		});
 		
-		// Cache device info for reuse across all methods
-		this.deviceInfo = deviceInfo;
-		
-		// Now set the device ID on the logger
+		// Optional: Fail-fast if REQUIRE_PROVISIONING is set
+		if (process.env.REQUIRE_PROVISIONING === 'true') {
+			this.agentLogger.errorSync('REQUIRE_PROVISIONING enabled - exiting due to missing provisioning', undefined, {
+				component: 'Agent'
+			});
+			process.exit(1);
+		}
+	}
+	
+	// Cache device info for reuse across all methods
+	this.deviceInfo = deviceInfo;		// Now set the device ID on the logger
 		this.agentLogger.setDeviceId(this.deviceInfo.uuid);
 		
 		this.agentLogger.infoSync('Device manager initialized', {
@@ -357,38 +377,42 @@ export default class DeviceAgent {
 				mqttManager.setDebug(true);
 			}
 			
-			// Add MQTT backend to logging
-			const enableCloudLogging = process.env.ENABLE_CLOUD_LOGGING !== 'false';
-			
-			// Add Cloud backend if configured
-			if (this.CLOUD_API_ENDPOINT && enableCloudLogging) {
-				try {
-					const cloudLogBackend = new CloudLogBackend({
-						cloudEndpoint: this.CLOUD_API_ENDPOINT,
-						deviceUuid: this.deviceInfo.uuid,
-						deviceApiKey: this.deviceInfo.apiKey,
-						compression: process.env.LOG_COMPRESSION !== 'false',
-					});
-					await cloudLogBackend.initialize();
-					this.logBackends.push(cloudLogBackend);
-					
-					// Update agentLogger with new backend
-					(this.agentLogger as any).logBackends = this.logBackends;
-					
-					this.agentLogger.infoSync('Cloud log backend initialized', {
-						component: 'Agent',
-						cloudEndpoint: this.CLOUD_API_ENDPOINT
-					});
-				} catch (error) {
-					this.agentLogger.warnSync('Failed to initialize cloud log backend', {
-						component: 'Agent',
-						error: error instanceof Error ? error.message : String(error),
-						note: 'Continuing without cloud logging'
-					});
-				}
+		
+		// Add MQTT backend to logging
+		const enableCloudLogging = process.env.ENABLE_CLOUD_LOGGING !== 'false';
+		
+		// Add Cloud backend if configured AND device is provisioned
+		if (this.CLOUD_API_ENDPOINT && enableCloudLogging && this.deviceInfo.provisioned && this.deviceInfo.deviceApiKey) {
+			try {
+				const cloudLogBackend = new CloudLogBackend({
+					cloudEndpoint: this.CLOUD_API_ENDPOINT,
+					deviceUuid: this.deviceInfo.uuid,
+					deviceApiKey: this.deviceInfo.apiKey,
+					compression: process.env.LOG_COMPRESSION !== 'false',
+				}, this.agentLogger);
+				await cloudLogBackend.initialize();
+				this.logBackends.push(cloudLogBackend);
+				
+				// Update agentLogger with new backend
+				(this.agentLogger as any).logBackends = this.logBackends;
+				
+				this.agentLogger.infoSync('Cloud log backend initialized', {
+					component: 'Agent',
+					cloudEndpoint: this.CLOUD_API_ENDPOINT
+				});
+			} catch (error) {
+				this.agentLogger.warnSync('Failed to initialize cloud log backend', {
+					component: 'Agent',
+					error: error instanceof Error ? error.message : String(error),
+					note: 'Continuing without cloud logging'
+				});
 			}
-			
-			this.agentLogger.infoSync('MQTT Manager connected', {
+		} else if (this.CLOUD_API_ENDPOINT && enableCloudLogging && !this.deviceInfo.provisioned) {
+			this.agentLogger.warnSync('Cloud logging disabled - device not provisioned', {
+				component: 'Agent',
+				note: 'Device must be provisioned before enabling cloud log streaming'
+			});
+		}			this.agentLogger.infoSync('MQTT Manager connected', {
 				component: 'Agent',
 				brokerUrl: mqttBrokerUrl,
 				clientId: `device_${this.deviceInfo.uuid}`,
@@ -484,6 +508,17 @@ export default class DeviceAgent {
 			this.agentLogger?.warnSync('Cloud API endpoint not configured - running in standalone mode', {
 				component: 'Agent',
 				note: 'Set CLOUD_API_ENDPOINT env var to enable cloud features'
+			});
+			return;
+		}
+
+		// Check if device is provisioned before enabling cloud sync
+		if (!this.deviceInfo.provisioned || !this.deviceInfo.deviceApiKey) {
+			this.agentLogger?.warnSync('Device not provisioned - cloud sync disabled', {
+				component: 'Agent',
+				note: 'Device must be provisioned with valid API key before enabling cloud features',
+				provisioned: this.deviceInfo.provisioned,
+				hasApiKey: !!this.deviceInfo.deviceApiKey
 			});
 			return;
 		}

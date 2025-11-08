@@ -1,30 +1,30 @@
-FROM node:20
-
+# Stage 1: Builder
+FROM node:20 AS builder
 WORKDIR /usr/src/app
 
-# Copy package files
+# Copy package files and install deps (cache layer)
 COPY package*.json ./
-COPY tsconfig.json ./
-
-# Install dependencies (including devDependencies for build)
 RUN npm install
 
-# Copy source code
+# Copy TypeScript config and source
+COPY tsconfig*.json ./
 COPY src ./src
-
-# Copy database migrations (needed at runtime)
 COPY database ./database
 
-# Build TypeScript
+# Build with incremental compilation
 RUN npm run build
 
-# Remove devDependencies after build
-RUN npm prune --production
+# Stage 2: Production image
+FROM node:20
+WORKDIR /usr/src/app
+
+# Copy built files and production deps
+COPY --from=builder /usr/src/app/dist ./dist
+COPY --from=builder /usr/src/app/package*.json ./
+RUN npm install --production
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y libnotify-bin
 
 EXPOSE 3002
-
-# Run node directly to avoid npm output buffering
 CMD ["node", "dist/index.js"]

@@ -499,15 +499,15 @@ async function createMqttCredentials(uuid: string): Promise<{ username: string; 
     [mqttUsername, mqttPasswordHash]
   );
 
-  // Create MQTT ACLs (access 7 = READ + WRITE + SUBSCRIBE)
+  // Create MQTT ACLs (access 7 = READ + WRITE + SUBSCRIBE), use username in both clientid and username fields for compatibility
   await query(
-    `INSERT INTO mqtt_acls (username, topic, access, priority)
-     VALUES ($1, $2, 7, 0)
+    `INSERT INTO mqtt_acls (clientid, username, topic, access, priority)
+     VALUES ($1, $2, $3, 7, 0)
      ON CONFLICT DO NOTHING`,
-    [mqttUsername, `iot/device/${uuid}/#`]
+    [mqttUsername, mqttUsername, `iot/device/${uuid}/#`]
   );
 
-  console.log(`🔐 MQTT credentials created for: ${mqttUsername}`);
+  console.log(` MQTT credentials created for: ${mqttUsername}`);
   return { username: mqttUsername, password: mqttPassword };
 }
 
@@ -520,7 +520,7 @@ async function createVpnCredentials(uuid: string, vpnConfig: any): Promise<{ use
   
   // Fetch CA certificate from VPN server (use config URL or environment fallback)
   const vpnCaUrl = vpnConfig.ca_cert_url || process.env.VPN_CA_URL || 'http://vpn-server:8080';
-  console.log(`🔐 Fetching VPN CA certificate from: ${vpnCaUrl}`);
+  console.log(` Fetching VPN CA certificate from: ${vpnCaUrl}`);
   
   try {
     // Check if CA cert is already in config (cached)
@@ -533,9 +533,9 @@ async function createVpnCredentials(uuid: string, vpnConfig: any): Promise<{ use
         throw new Error(`Failed to fetch CA certificate: ${response.statusText}`);
       }
       caCert = await response.text();
-      console.log(`✅ VPN CA certificate fetched (${caCert.length} bytes)`);
+      console.log(` VPN CA certificate fetched (${caCert.length} bytes)`);
     } else {
-      console.log(`✅ Using cached VPN CA certificate (${caCert.length} bytes)`);
+      console.log(` Using cached VPN CA certificate (${caCert.length} bytes)`);
     }
     
     // Store VPN credentials in device record
@@ -544,10 +544,10 @@ async function createVpnCredentials(uuid: string, vpnConfig: any): Promise<{ use
       [vpnUsername, await bcrypt.hash(vpnPassword, 10), uuid]
     );
     
-    console.log(`🔐 VPN credentials created for device: ${vpnUsername}`);
+    console.log(` VPN credentials created for device: ${vpnUsername}`);
     return { username: vpnUsername, password: vpnPassword, caCert };
   } catch (error: any) {
-    console.error(`❌ Failed to create VPN credentials:`, error.message);
+    console.error(` Failed to create VPN credentials:`, error.message);
     throw new Error(`VPN setup failed: ${error.message}`);
   }
 }
@@ -628,7 +628,7 @@ async function buildProvisioningResponse(
   if (brokerConfig) {
     console.log(`📡 Using MQTT broker: ${brokerConfig.name} (${buildBrokerUrl(brokerConfig)})`);
   } else {
-    console.log('⚠️  No broker config in database, using environment fallback');
+    console.log('  No broker config in database, using environment fallback');
   }
 
   // Fetch broker configuration (works for both VPN and non-VPN scenarios)
@@ -640,7 +640,7 @@ async function buildProvisioningResponse(
     ? buildBrokerUrl(brokerConfig)
     : (process.env.MQTT_BROKER_URL || 'mqtt://mosquitto:1883');
 
-  console.log(`📡 MQTT broker URL: ${brokerUrl} (VPN: ${vpnEnabled ? 'enabled' : 'disabled'})`);
+  console.log(` MQTT broker URL: ${brokerUrl} (VPN: ${vpnEnabled ? 'enabled' : 'disabled'})`);
 
   const response: any = {
     id: device.id,
@@ -683,7 +683,7 @@ async function buildProvisioningResponse(
       config: generateOvpnConfig(uuid, vpnCredentials.caCert, vpnServerHost, vpnServerPort)
     };
     
-    console.log(`🔐 VPN configuration added to provisioning response`);
+    console.log(` VPN configuration added to provisioning response`);
   }
 
   return response;
@@ -738,7 +738,7 @@ router.post('/device/register', provisioningLimiter, async (req, res) => {
     await checkProvisioningRateLimit(ipAddress!);
 
     // Step 3: Validate provisioning key
-    console.log('🔐 Validating provisioning key...');
+    console.log(' Validating provisioning key...');
     const keyValidation = await validateProvisioningKey(validation.provisioningApiKey, ipAddress);
     
     if (!keyValidation.valid) {
@@ -750,7 +750,7 @@ router.post('/device/register', provisioningLimiter, async (req, res) => {
     }
 
     provisioningKeyRecord = keyValidation.keyRecord!;
-    console.log('✅ Provisioning key validated for fleet:', provisioningKeyRecord.fleet_id);
+    console.log(' Provisioning key validated for fleet:', provisioningKeyRecord.fleet_id);
 
     // Step 4: Log provisioning start
     await logAuditEvent({
@@ -781,7 +781,7 @@ router.post('/device/register', provisioningLimiter, async (req, res) => {
       
       if (isFullyProvisioned) {
         // Device is complete - reject as duplicate
-        console.log('⚠️  Device already registered and fully provisioned');
+        console.log('  Device already registered and fully provisioned');
         await logAuditEvent({
           eventType: AuditEventType.PROVISIONING_FAILED,
           deviceUuid: uuid,
@@ -833,11 +833,11 @@ router.post('/device/register', provisioningLimiter, async (req, res) => {
     
     if (preRegisteredDevice) {
       // Activate pre-registered device
-      console.log(`✅ Activating pre-registered device: ${preRegisteredDevice.device_name}`);
+      console.log(` Activating pre-registered device: ${preRegisteredDevice.device_name}`);
       
       // Hash device API key (same as createDeviceRecord)
       const deviceApiKeyHash = await bcrypt.hash(data.deviceApiKey, 10);
-      console.log('🔒 Device API key hashed for secure storage');
+      console.log(' Device API key hashed for secure storage');
       
       // Update the existing device record with agent data
       await DeviceModel.update(preRegisteredDevice.uuid, {
@@ -866,9 +866,9 @@ router.post('/device/register', provisioningLimiter, async (req, res) => {
       if (vpnConfigPreReg && vpnConfigPreReg.enabled) {
         try {
           vpnCredentialsPreReg = await createVpnCredentials(activatedDeviceUuid, vpnConfigPreReg);
-          console.log(`✅ VPN credentials created for pre-registered device`);
+          console.log(` VPN credentials created for pre-registered device`);
         } catch (error: any) {
-          console.error(`⚠️  VPN credential creation failed:`, error.message);
+          console.error(`  VPN credential creation failed:`, error.message);
         }
       }
       
@@ -952,9 +952,9 @@ router.post('/device/register', provisioningLimiter, async (req, res) => {
     if (vpnConfig && vpnConfig.enabled) {
       try {
         vpnCredentials = await createVpnCredentials(uuid, vpnConfig);
-        console.log(`✅ VPN credentials created for device: ${uuid.substring(0, 8)}...`);
+        console.log(` VPN credentials created for device: ${uuid.substring(0, 8)}...`);
       } catch (error: any) {
-        console.error(`⚠️  VPN credential creation failed:`, error.message);
+        console.error(`  VPN credential creation failed:`, error.message);
         // Don't fail provisioning if VPN setup fails - continue without VPN
         await logAuditEvent({
           eventType: AuditEventType.PROVISIONING_FAILED,
@@ -974,13 +974,13 @@ router.post('/device/register', provisioningLimiter, async (req, res) => {
       mqtt_username: mqttCredentials.username,
       vpn_enabled: !!vpnCredentials
     });
-    console.log(`✅ Device record updated with MQTT username: ${mqttCredentials.username}`);
+    console.log(` Device record updated with MQTT username: ${mqttCredentials.username}`);
 
     // Step 7c: Create default target state based on license
     try {
       // Get license data from system_config
       const licenseData = await SystemConfigModel.get('license_data');
-      console.log(`📋 Creating default target state for device ${uuid.substring(0, 8)}...`);
+      console.log(` Creating default target state for device ${uuid.substring(0, 8)}...`);
       
       // Generate default config based on license features
       const { apps, config } = generateDefaultTargetState(licenseData);
@@ -988,7 +988,7 @@ router.post('/device/register', provisioningLimiter, async (req, res) => {
       // Set target state (will create or update)
       await DeviceTargetStateModel.set(uuid, apps, config);
       
-      console.log(`✅ Default target state created:`, {
+      console.log(` Default target state created:`, {
         plan: licenseData?.plan || 'unknown',
         metricsInterval: config.settings.metricsIntervalMs,
         loggingLevel: config.logging.level,
@@ -996,7 +996,7 @@ router.post('/device/register', provisioningLimiter, async (req, res) => {
         metricsExportEnabled: config.features.enableMetricsExport
       });
     } catch (error) {
-      console.error('⚠️  Failed to create default target state:', error);
+      console.error('  Failed to create default target state:', error);
       // Don't fail provisioning if target state creation fails
       await logAuditEvent({
         eventType: AuditEventType.PROVISIONING_FAILED,
@@ -1037,11 +1037,11 @@ router.post('/device/register', provisioningLimiter, async (req, res) => {
     // Step 11: Build response
     const response = await buildProvisioningResponse(device, data, provisioningKeyRecord, mqttCredentials, vpnCredentials);
 
-    console.log('✅ Device registered successfully:', response.id);
+    console.log(' Device registered successfully:', response.id);
     res.status(200).json(response);
 
   } catch (error: any) {
-    console.error('❌ Error registering device:', error);
+    console.error(' Error registering device:', error);
     
     await logAuditEvent({
       eventType: AuditEventType.PROVISIONING_FAILED,
@@ -1175,7 +1175,7 @@ router.post('/device/:uuid/key-exchange', keyExchangeLimiter, async (req, res) =
       });
     }
 
-    console.log('✅ Key exchange successful - device API key verified');
+    console.log(' Key exchange successful - device API key verified');
 
     await logAuditEvent({
       eventType: AuditEventType.KEY_EXCHANGE_SUCCESS,
@@ -1196,7 +1196,7 @@ router.post('/device/:uuid/key-exchange', keyExchangeLimiter, async (req, res) =
       }
     });
   } catch (error: any) {
-    console.error('❌ Error during key exchange:', error);
+    console.error(' Error during key exchange:', error);
     
     await logAuditEvent({
       eventType: AuditEventType.KEY_EXCHANGE_FAILED,

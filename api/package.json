@@ -1,10 +1,10 @@
 {
-  "name": "Iotistic-api",
+  "name": "iotistic-api",
   "version": "2.0.0",
   "description": "Unified Iotistic API - combines Grafana control, Docker management, and cloud multi-device management",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc --incremental --tsBuildInfoFile .tsbuildinfo",
     "watch": "tsc --watch",
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",

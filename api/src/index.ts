@@ -39,6 +39,7 @@ import { startTrafficFlushService, stopTrafficFlushService } from './services/tr
 import { createEntitiesRouter } from './routes/entities';
 import { createRelationshipsRouter } from './routes/relationships';
 import { createGraphRouter } from './routes/graph';
+import alertsRoutes from './routes/alerts';
 
 // Import jobs
 
@@ -169,11 +170,14 @@ app.use(API_BASE, trafficRoutes);
 app.use(API_BASE, deviceTagsRoutes);
 app.use(`${API_BASE}/housekeeper`, housekeeperRoutes);
 app.use(`${API_BASE}/dashboard-layouts`, dashboardLayoutsRoutes);
+app.use(`${API_BASE}/alerts`, alertsRoutes);
 
 // Mount entity/graph routes
 app.use(`${API_BASE}/entities`, createEntitiesRouter(poolWrapper.pool));
 app.use(`${API_BASE}/relationships`, createRelationshipsRouter(poolWrapper.pool));
 app.use(`${API_BASE}/graph`, createGraphRouter(poolWrapper.pool));
+
+
 
 // 404 handler
 app.use((req, res) => {
