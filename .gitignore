@@ -71,3 +71,7 @@ agent/data/database.sqlite
 
 # Modbus adapter
 modbus-adapter/
+
+# Deprecated folders
+.github/sensors/
+agent/src/features/protocol-adapters/
