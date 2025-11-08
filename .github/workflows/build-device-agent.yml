@@ -48,7 +48,7 @@ jobs:
           - board: pi4-64
             platform: linux/arm64/v8
           # - board: pi5
-          #   platform: linux/arm64/v8
+          #   platform: linux/arm64/v8,
           - board: x86
             platform: linux/amd64
 
