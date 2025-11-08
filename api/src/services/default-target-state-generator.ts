@@ -30,6 +30,8 @@
  * }
  */
 
+import logger from '../utils/logger';
+
 interface LicenseData {
   plan: string; // "trial" | "starter" | "professional" | "enterprise"
   features: {
@@ -115,7 +117,7 @@ export function generateDefaultTargetStateConfig(
 
   // If no license data, return default
   if (!licenseData) {
-    console.log('⚠️  No license data found - using default config');
+    logger.warn('No license data found - using default config');
     return defaultConfig;
   }
 
@@ -124,7 +126,7 @@ export function generateDefaultTargetStateConfig(
   const features = licenseData.features || {};
   const subscriptionActive = licenseData.subscription?.status === 'active';
 
-  console.log(`🎫 Generating target state for plan: ${plan}, active: ${subscriptionActive}`);
+  logger.info(`Generating target state for plan: ${plan}, active: ${subscriptionActive}`);
 
   // Apply plan-based settings
   switch (plan) {
@@ -149,17 +151,17 @@ export function generateDefaultTargetStateConfig(
   // Apply feature-based settings
   if (features.hasDedicatedPrometheus) {
     defaultConfig.features.enableMetricsExport = true;
-    console.log('   ✅ Enabled metrics export (hasDedicatedPrometheus)');
+    logger.info('Enabled metrics export (hasDedicatedPrometheus)');
   }
 
   if (features.hasAdvancedAlerts || features.hasCustomDashboards) {
     defaultConfig.logging.level = 'debug';
-    console.log('   ✅ Enhanced logging (hasAdvancedAlerts/hasCustomDashboards)');
+    logger.info('Enhanced logging (hasAdvancedAlerts/hasCustomDashboards)');
   }
 
   // If subscription not active (and not trialing), disable premium features
   if (!subscriptionActive && licenseData.trial?.isTrialMode !== true) {
-    console.log('   ⚠️  Subscription not active - disabling premium features');
+    logger.warn('Subscription not active - disabling premium features');
     defaultConfig.features.enableMetricsExport = false;
     defaultConfig.settings.metricsIntervalMs = 300000; // 5 minutes (minimal)
   }
