@@ -1,8 +1,13 @@
 name: Build, Test & Push Device Agent
 
 on: 
-  release:
-    types: [published]
+  push:
+    branches:
+      - master
+    paths:
+      - 'agent/**' 
+      - '.github/workflows/build-device-agent.yml'
+
 jobs:
   test:
     name: Run Unit Tests
@@ -40,10 +45,6 @@ jobs:
     strategy:
       matrix:
         include:
-          - board: pi4
-            platform: linux/arm/v7
-          - board: pi4-64
-            platform: linux/arm64/v8
           - board: x86
             platform: linux/amd64
 
