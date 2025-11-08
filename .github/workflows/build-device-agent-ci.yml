@@ -37,7 +37,7 @@ jobs:
         run: npm run build
 
   version:
-    name: 📦 Bump Version
+    name: Bump Version
     needs: test
     runs-on: ubuntu-24.04
     permissions:
