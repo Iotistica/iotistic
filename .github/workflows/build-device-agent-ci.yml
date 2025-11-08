@@ -93,16 +93,11 @@ jobs:
           echo "**Git SHA:** \`${{ steps.bump.outputs.sha_short }}\`" >> $GITHUB_STEP_SUMMARY
 
   buildx:
-    name: Build & Push Device Agent
+    name: Build & Push to Docker
     needs: version
     runs-on: ubuntu-24.04
     permissions:
       contents: write
-    strategy:
-      matrix:
-        include:
-          - board: x86
-            platform: linux/amd64
 
     steps:
       - name: Checkout repository
@@ -116,12 +111,12 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Version:** \`${{ needs.version.outputs.package_version }}\`" >> $GITHUB_STEP_SUMMARY
           echo "**Git SHA:** \`${{ needs.version.outputs.sha_short }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Platform:** \`${{ matrix.board }}\` (\`${{ matrix.platform }}\`)" >> $GITHUB_STEP_SUMMARY
+          echo "**Platform:** \`linux/amd64\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Docker Tags:" >> $GITHUB_STEP_SUMMARY
-          echo "- \`iotistic/agent:latest-${{ matrix.board }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- \`iotistic/agent:${{ needs.version.outputs.sha_short }}-${{ matrix.board }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- \`iotistic/agent:${{ needs.version.outputs.package_version }}-${{ matrix.board }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`iotistic/agent:latest\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`iotistic/agent:${{ needs.version.outputs.sha_short }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`iotistic/agent:${{ needs.version.outputs.package_version }}\`" >> $GITHUB_STEP_SUMMARY
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -132,10 +127,10 @@ jobs:
       - name: Cache Docker layers
         uses: actions/cache@v4
         with:
-          path: /tmp/.buildx-cache/${{ matrix.board }}
-          key: buildx-agent-v2-${{ matrix.board }}-${{ github.sha }}
+          path: /tmp/.buildx-cache
+          key: buildx-agent-v2-${{ github.sha }}
           restore-keys: |
-            buildx-agent-v2-${{ matrix.board }}-
+            buildx-agent-v2-
 
       # Login to Docker Hub (only if tests passed)
       - name: Login to Docker Hub
@@ -153,10 +148,10 @@ jobs:
           context: ./agent
           file: ./agent/Dockerfile
           push: true
-          platforms: ${{ matrix.platform }}
-          cache-from: type=local,src=/tmp/.buildx-cache/${{ matrix.board }}
-          cache-to: type=local,dest=/tmp/.buildx-cache/${{ matrix.board }},mode=max
+          platforms: linux/amd64
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache,mode=max
           tags: |
-            iotistic/agent:latest-${{ matrix.board }}
-            iotistic/agent:${{ needs.version.outputs.sha_short }}-${{ matrix.board }}
-            iotistic/agent:${{ needs.version.outputs.package_version }}-${{ matrix.board }}
+            iotistic/agent:latest
+            iotistic/agent:${{ needs.version.outputs.sha_short }}
+            iotistic/agent:${{ needs.version.outputs.package_version }}
