@@ -741,7 +741,9 @@ router.post('/device/register', provisioningLimiter, async (req, res) => {
     const keyValidation = await validateProvisioningKey(validation.provisioningApiKey, ipAddress);
     
     if (!keyValidation.valid) {
-      await logProvisioningAttempt(ipAddress!, uuid, null, false, keyValidation.error, userAgent);
+      // Log with key ID if available (e.g., expired or limit exceeded keys)
+      const keyId = keyValidation.keyRecord?.id || null;
+      await logProvisioningAttempt(ipAddress!, uuid, keyId, false, keyValidation.error, userAgent);
       return res.status(401).json({
         error: 'Invalid provisioning key',
         message: keyValidation.error
@@ -991,8 +993,10 @@ router.post('/device/register', provisioningLimiter, async (req, res) => {
         plan: licenseData?.plan || 'unknown',
         metricsInterval: config.settings.metricsIntervalMs,
         loggingLevel: config.logging.level,
-        cloudJobsEnabled: config.features.enableCloudJobs,
-        metricsExportEnabled: config.features.enableMetricsExport
+        enableDeviceJobs: config.features.enableDeviceJobs,
+        enableDeviceRemoteAccess: config.features.enableDeviceRemoteAccess,
+        enableDeviceSensorPublish: config.features.enableDeviceSensorPublish,
+
       });
     } catch (error) {
       logger.error('  Failed to create default target state:', error);

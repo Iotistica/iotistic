@@ -21,7 +21,7 @@ export async function up(knex) {
 	// OS/agent versions for compatibility checks
 	table.string('osVersion');
 	table.string('agentVersion');
-});	console.log('✅ Added two-phase authentication fields to device table');
+});	console.log('Added two-phase authentication fields to device table');
 }
 
 export async function down(knex) {

@@ -75,11 +75,12 @@ interface TargetStateConfig {
   logging: {
     level: string;
     enableRemoteLogging: boolean;
+    enableFilePersistence: boolean;
   };
   features: {
-    enableShadow: boolean;
-    enableCloudJobs: boolean;
-    enableMetricsExport: boolean;
+    enableDeviceJobs: boolean;
+    enableDeviceSensorPublish?: boolean;
+    enableDeviceRemoteAccess: boolean;
   };
   settings: {
     metricsIntervalMs: number;
@@ -102,11 +103,12 @@ export function generateDefaultTargetStateConfig(
     logging: {
       level: 'info',
       enableRemoteLogging: true,
+      enableFilePersistence: false,
     },
     features: {
-      enableShadow: true, // Always enabled
-      enableCloudJobs: true, // Always enabled (API access required for system to work)
-      enableMetricsExport: false, // Requires dedicated Prometheus
+      enableDeviceJobs: true, // Always enabled (API access required for system to work)
+      enableDeviceSensorPublish:true,
+      enableDeviceRemoteAccess: true,
     },
     settings: {
       metricsIntervalMs: 60000, // 1 minute (starter plan)
@@ -148,11 +150,6 @@ export function generateDefaultTargetStateConfig(
       break;
   }
 
-  // Apply feature-based settings
-  if (features.hasDedicatedPrometheus) {
-    defaultConfig.features.enableMetricsExport = true;
-    logger.info('Enabled metrics export (hasDedicatedPrometheus)');
-  }
 
   if (features.hasAdvancedAlerts || features.hasCustomDashboards) {
     defaultConfig.logging.level = 'debug';
@@ -162,7 +159,6 @@ export function generateDefaultTargetStateConfig(
   // If subscription not active (and not trialing), disable premium features
   if (!subscriptionActive && licenseData.trial?.isTrialMode !== true) {
     logger.warn('Subscription not active - disabling premium features');
-    defaultConfig.features.enableMetricsExport = false;
     defaultConfig.settings.metricsIntervalMs = 300000; // 5 minutes (minimal)
   }
 

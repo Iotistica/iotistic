@@ -28,7 +28,7 @@ exports.up = async function(knex) {
       .update({ stateHash: hash });
   }
   
-  console.log(`✅ Added stateHash column and computed hashes for ${snapshots.length} record(s)`);
+  console.log(`Added stateHash column and computed hashes for ${snapshots.length} record(s)`);
 };
 
 /**
@@ -40,5 +40,5 @@ exports.down = async function(knex) {
     table.dropColumn('stateHash');
   });
   
-  console.log('✅ Removed stateHash column');
+  console.log('Removed stateHash column');
 };

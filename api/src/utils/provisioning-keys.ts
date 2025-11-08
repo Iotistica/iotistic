@@ -75,7 +75,8 @@ export async function validateProvisioningKey(
           });
           return { 
             valid: false, 
-            error: 'Provisioning key device limit exceeded' 
+            error: 'Provisioning key device limit exceeded',
+            keyRecord: record // Include key record for audit logging
           };
         }
 
@@ -93,7 +94,8 @@ export async function validateProvisioningKey(
           });
           return { 
             valid: false, 
-            error: 'Provisioning key has expired' 
+            error: 'Provisioning key has expired',
+            keyRecord: record // Include key record for audit logging
           };
         }
 

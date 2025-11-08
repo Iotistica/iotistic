@@ -192,6 +192,8 @@ export interface TargetState {
 		};
 		features?: {
 			enableCloudJobs?: boolean;
+			enableJobEngine?: boolean;
+			enableDeviceJobs?: boolean;
 			enableShadow?: boolean;
 			enableLogs?: boolean;
 		};

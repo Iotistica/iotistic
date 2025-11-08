@@ -83,16 +83,18 @@ $template = @"
                 - /var/run/docker.sock:/var/run/docker.sock
                 - agent-{AGENT_NUMBER}-data:/app/data
             environment:
-                - PORT=4002
+                - AGENT_VERSION=1.0.0
                 - DEVICE_API_PORT=4848{AGENT_NUMBER}
                 - CLOUD_API_ENDPOINT=http://host.docker.internal:4002
                 - NODE_ENV=development
                 - MQTT_PERSIST_TO_DB=true
                 - MQTT_DB_SYNC_INTERVAL=70000
-                - REPORT_INTERVAL_MS=2000
-                - METRICS_INTERVAL_MS=2000
+                - REPORT_INTERVAL_MS=20000
+                - METRICS_INTERVAL_MS=30000
                 - LOG_COMPRESSION=true
+                - REQUIRE_PROVISIONING=false
                 - PROVISIONING_API_KEY={PROVISIONING_KEY}
+                
             depends_on:
                 api:
                     condition: service_healthy

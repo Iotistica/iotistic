@@ -53,7 +53,7 @@ export async function up(knex) {
 		table.timestamp('createdAt').defaultTo(knex.fn.now());
 	});
 
-	console.log('✅ Created database tables: app, service, image, stateSnapshot');
+	console.log('Created database tables: app, service, image, stateSnapshot');
 }
 
 export async function down(knex) {

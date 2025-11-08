@@ -18,7 +18,7 @@ export async function up(knex) {
 		table.timestamp('updatedAt').defaultTo(knex.fn.now());
 	});
 
-	console.log('✅ Created device table for provisioning');
+	console.log('Created device table for provisioning');
 }
 
 export async function down(knex) {

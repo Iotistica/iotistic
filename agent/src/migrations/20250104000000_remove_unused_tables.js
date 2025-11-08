@@ -10,18 +10,18 @@
  */
 
 export async function up(knex) {
-	console.log('🗑️  Removing unused tables: app, service, image');
+	console.log('Removing unused tables: app, service, image');
 	
 	// Drop tables in reverse order of dependencies
 	await knex.schema.dropTableIfExists('service');
 	await knex.schema.dropTableIfExists('image');
 	await knex.schema.dropTableIfExists('app');
 	
-	console.log('✅ Removed unused tables');
+	console.log('Removed unused tables');
 }
 
 export async function down(knex) {
-	console.log('⚠️  Recreating app, service, and image tables');
+	console.log('Recreating app, service, and image tables');
 	
 	// Recreate app table
 	await knex.schema.createTable('app', (table) => {
@@ -64,5 +64,5 @@ export async function down(knex) {
 		table.timestamp('createdAt').defaultTo(knex.fn.now());
 	});
 	
-	console.log('✅ Recreated tables (rollback complete)');
+	console.log('Recreated tables (rollback complete)');
 }

@@ -21,6 +21,7 @@ import type {
 } from './types';
 import mqtt from 'mqtt';
 import { buildApiEndpoint } from '../utils/api-utils';
+import type { AgentLogger } from '../logging/agent-logger';
 
 // Dynamic import for uuid (ESM module)
 let uuidv4: () => string;
@@ -52,8 +53,11 @@ function generateAPIKey(): string {
 
 export class DeviceManager {
 	private deviceInfo: DeviceInfo | null = null;
+	private logger?: AgentLogger;
 
-	constructor() {}
+	constructor(logger?: AgentLogger) {
+		this.logger = logger;
+	}
 
 	/**
 	 * Initialize device manager and load device info from database
@@ -69,12 +73,16 @@ export class DeviceManager {
 				provisioned: false,
 			};
 			await this.saveDeviceInfo();
-			console.log('New device created:', {
+			this.logger?.infoSync('New device created', {
+				component: 'DeviceManager',
+				operation: 'initialize',
 				uuid: this.deviceInfo.uuid,
-				deviceApiKey: `${this.deviceInfo.deviceApiKey?.substring(0, 8)}...`,
+				deviceApiKeyPreview: `${this.deviceInfo.deviceApiKey?.substring(0, 8)}...`,
 			});
 		} else {
-			console.log('Device loaded:', {
+			this.logger?.infoSync('Device loaded', {
+				component: 'DeviceManager',
+				operation: 'initialize',
 				uuid: this.deviceInfo.uuid,
 				deviceId: this.deviceInfo.deviceId,
 				provisioned: this.deviceInfo.provisioned,
@@ -209,7 +217,10 @@ export class DeviceManager {
 
 		try {
 			// Phase 1: Register device with cloud API
-			console.log('🔐 Phase 1: Registering device with provisioning key...');
+			this.logger?.infoSync('Phase 1: Registering device with provisioning key', {
+				component: 'DeviceManager',
+				operation: 'provision',
+			});
 			const response = await this.registerWithAPI(
 				this.deviceInfo.apiEndpoint || 'http://localhost:3002',
 				{
@@ -232,7 +243,10 @@ export class DeviceManager {
 			this.deviceInfo.mqttBrokerUrl = response.mqtt.broker;
 
 			// Phase 2: Exchange keys - verify device can authenticate with deviceApiKey
-			console.log('🔐 Phase 2: Exchanging keys...');
+			this.logger?.infoSync('Phase 2: Exchanging keys', {
+				component: 'DeviceManager',
+				operation: 'provision',
+			});
 			await this.exchangeKeys(
 				this.deviceInfo.apiEndpoint || 'http://localhost:3002',
 				this.deviceInfo.uuid,
@@ -240,7 +254,10 @@ export class DeviceManager {
 			);
 
 			// Phase 3: Remove provisioning key (one-time use complete)
-			console.log('🔐 Phase 3: Removing provisioning key...');
+			this.logger?.infoSync('Phase 3: Removing provisioning key', {
+				component: 'DeviceManager',
+				operation: 'provision',
+			});
 			this.deviceInfo.provisioningApiKey = undefined;
 
 			// Mark as provisioned
@@ -250,7 +267,9 @@ export class DeviceManager {
 			// Save to database
 			await this.saveDeviceInfo();
 
-			console.log('✅ Device provisioned successfully:', {
+			this.logger?.infoSync('Device provisioned successfully', {
+				component: 'DeviceManager',
+				operation: 'provision',
 				uuid: this.deviceInfo.uuid,
 				deviceId: this.deviceInfo.deviceId,
 				deviceName: this.deviceInfo.deviceName,
@@ -261,7 +280,14 @@ export class DeviceManager {
 
 			return this.getDeviceInfo();
 		} catch (error: any) {
-			console.error('❌ Provisioning failed:', error.message);
+			this.logger?.errorSync(
+				'Provisioning failed',
+				error instanceof Error ? error : new Error(String(error)),
+				{
+					component: 'DeviceManager',
+					operation: 'provision',
+				}
+			);
 			throw error;
 		}
 	}
@@ -281,10 +307,14 @@ export class DeviceManager {
 
 		const url = buildApiEndpoint(apiEndpoint, '/device/register');
 		
-		console.log('📡 Registering device with API:', url);
-		console.log('   UUID:', provisionRequest.uuid);
-		console.log('   Device Name:', provisionRequest.deviceName);
-		console.log('   Device Type:', provisionRequest.deviceType);
+		this.logger?.infoSync('Registering device with API', {
+			component: 'DeviceManager',
+			operation: 'registerWithAPI',
+			url,
+			uuid: provisionRequest.uuid,
+			deviceName: provisionRequest.deviceName,
+			deviceType: provisionRequest.deviceType,
+		});
 
 		try {
 			const response = await fetch(url, {
@@ -305,7 +335,14 @@ export class DeviceManager {
 
 			return result;
 		} catch (error: any) {
-			console.error('❌ Registration failed:', error.message);
+			this.logger?.errorSync(
+				'Registration failed',
+				error instanceof Error ? error : new Error(String(error)),
+				{
+					component: 'DeviceManager',
+					operation: 'registerWithAPI',
+				}
+			);
 			throw new Error(`Failed to register device: ${error.message}`);
 		}
 	}
@@ -317,7 +354,11 @@ export class DeviceManager {
 	async exchangeKeys(apiEndpoint: string, uuid: string, deviceApiKey: string): Promise<void> {
 		const url = buildApiEndpoint(apiEndpoint, `/device/${uuid}/key-exchange`);
 		
-		console.log('🔑 Exchanging keys for device:', uuid);
+		this.logger?.infoSync('Exchanging keys for device', {
+			component: 'DeviceManager',
+			operation: 'exchangeKeys',
+			uuid,
+		});
 
 		try {
 			const response = await fetch(url, {
@@ -338,9 +379,19 @@ export class DeviceManager {
 			}
 
 			const result = await response.json();
-			console.log('✅ Key exchange successful');
+			this.logger?.infoSync('Key exchange successful', {
+				component: 'DeviceManager',
+				operation: 'exchangeKeys',
+			});
 		} catch (error: any) {
-			console.error('❌ Key exchange failed:', error.message);
+			this.logger?.errorSync(
+				'Key exchange failed',
+				error instanceof Error ? error : new Error(String(error)),
+				{
+					component: 'DeviceManager',
+					operation: 'exchangeKeys',
+				}
+			);
 			throw new Error(`Failed to exchange keys: ${error.message}`);
 		}
 	}
@@ -370,7 +421,14 @@ export class DeviceManager {
 
 			return await response.json();
 		} catch (error: any) {
-			console.error('Failed to fetch device:', error.message);
+			this.logger?.errorSync(
+				'Failed to fetch device',
+				error instanceof Error ? error : new Error(String(error)),
+				{
+					component: 'DeviceManager',
+					operation: 'fetchDevice',
+				}
+			);
 			return null;
 		}
 	}
@@ -420,8 +478,11 @@ export class DeviceManager {
 
 		await this.saveDeviceInfo();
 
-		console.log('🔄 Device reset (unprovisioned)');
-		console.log('   UUID and deviceApiKey preserved for re-registration');
+		this.logger?.infoSync('Device reset (unprovisioned)', {
+			component: 'DeviceManager',
+			operation: 'reset',
+			note: 'UUID and deviceApiKey preserved for re-registration',
+		});
 	}
 }
 

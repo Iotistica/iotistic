@@ -13,7 +13,7 @@
  */
 
 export async function up(knex) {
-	console.log('🧹 Cleaning up old state snapshots...');
+	console.log('Cleaning up old state snapshots...');
 	
 	// Get the latest snapshot for each type
 	const latestCurrent = await knex('stateSnapshot')
@@ -41,15 +41,15 @@ export async function up(knex) {
 			.whereNotIn('id', idsToKeep)
 			.delete();
 		
-		console.log(`✅ Deleted ${deleteCount} old state snapshot(s)`);
+		console.log(`Deleted ${deleteCount} old state snapshot(s)`);
 		console.log(`   Kept ${idsToKeep.length} latest snapshot(s)`);
 	} else {
-		console.log('✅ No old snapshots to clean up');
+		console.log('No old snapshots to clean up');
 	}
 	
 	// Show final state
 	const remaining = await knex('stateSnapshot').select('id', 'type', 'createdAt');
-	console.log('📊 Remaining snapshots:');
+	console.log('Remaining snapshots:');
 	remaining.forEach(row => {
 		console.log(`   - ${row.type}: ID ${row.id} (${row.createdAt})`);
 	});
@@ -57,5 +57,5 @@ export async function up(knex) {
 
 export async function down(knex) {
 	// No rollback needed - we can't restore deleted snapshots
-	console.log('⚠️  Cannot restore deleted snapshots (no rollback available)');
+	console.log('Cannot restore deleted snapshots (no rollback available)');
 }
