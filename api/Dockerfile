@@ -6,7 +6,7 @@ WORKDIR /usr/src/app
 COPY package*.json ./
 RUN npm install
 
-# Copy TypeScript config and source
+# Copy TypeScript config and sourcedfgdf
 COPY tsconfig*.json ./
 COPY src ./src
 COPY database ./database
