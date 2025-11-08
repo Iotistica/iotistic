@@ -8,3 +8,6 @@ coverage/
 *.swp
 *.swo
 *~
+
+# Deprecated folder
+agent/src/features/protocol-adapters/
