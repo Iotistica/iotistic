@@ -337,6 +337,7 @@ export function createHousekeeper(config: HousekeeperConfig = {}) {
       await import('./tasks/device-logs-partition-maintenance'),
       await import('./tasks/device-metrics-partition-maintenance'),
       await import('./tasks/events-partition-maintenance'),
+      await import('./tasks/trivy-image-scanner'),
       // Add more tasks here
     ];
 
