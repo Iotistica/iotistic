@@ -1,4 +1,4 @@
-name: Build, Test & Push Device Agent
+name: Release Build, Test & Push Device Agent
 
 on: 
   release:
