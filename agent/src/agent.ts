@@ -237,17 +237,6 @@ export default class DeviceAgent {
 	private async initializeDatabase(): Promise<void> {
 		await db.initialized();
 		this.agentLogger.infoSync('Database initialized', { component: 'Agent' });
-		
-		// Import protocol adapter config from JSON files (one-time migration)
-		try {
-			const { importProtocolAdapterConfig } = await import('./config/import-protocol-config.js');
-			await importProtocolAdapterConfig();
-		} catch (error: any) {
-			this.agentLogger.warnSync('Protocol adapter config import skipped', {
-				component: 'Agent',
-				error: error.message
-			});
-		}
 	}
 
 	private async initializeDeviceManager(): Promise<void> {
@@ -347,14 +336,14 @@ export default class DeviceAgent {
 			const mqttPassword = this.deviceInfo.mqttPassword || process.env.MQTT_PASSWORD;
 			
 			// Debug: Log broker URL being used
-			this.agentLogger.infoSync(`🔍 MQTT Broker URL: ${mqttBrokerUrl}`, {
+			this.agentLogger.debugSync(`MQTT Broker URL: ${mqttBrokerUrl}`, {
 				component: 'Agent',
 				source: this.deviceInfo.mqttBrokerUrl ? 'provisioning' : 'environment',
 				hasUsername: !!mqttUsername
 			});
 			
 			if (!mqttBrokerUrl) {
-				this.agentLogger.infoSync('MQTT disabled - no broker URL provided', {
+				this.agentLogger.debugSync('MQTT disabled - no broker URL provided', {
 					component: 'Agent',
 					note: 'Provision device or set MQTT_BROKER env var to enable'
 				});
@@ -401,10 +390,8 @@ export default class DeviceAgent {
 					cloudEndpoint: this.CLOUD_API_ENDPOINT
 				});
 			} catch (error) {
-				this.agentLogger.warnSync('Failed to initialize cloud log backend', {
-					component: 'Agent',
-					error: error instanceof Error ? error.message : String(error),
-					note: 'Continuing without cloud logging'
+				this.agentLogger.errorSync('Failed to initialize cloud log backend. Continuing without cloud logging', error instanceof Error ? error : new Error(String(error)), {
+					component: 'Agent'
 				});
 			}
 		} else if (this.CLOUD_API_ENDPOINT && enableCloudLogging && !this.deviceInfo.provisioned) {

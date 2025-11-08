@@ -20,6 +20,7 @@ import {
 import { EventPublisher, objectsAreEqual } from './event-sourcing';
 import EventSourcingConfig from '../events/event-sourcing';
 import { deviceSensorSync } from './device-sensor-sync';
+import logger from '../utils/logger';
 
 const eventPublisher = new EventPublisher();
 
@@ -65,17 +66,17 @@ export async function processDeviceStateReport(
   for (const uuid in stateReport) {
     const deviceState = stateReport[uuid];
 
-    console.log(`📥 Received state report from device ${uuid.substring(0, 8)}... (${options.source})`, {
+    logger.info(`Received state report from device ${uuid.substring(0, 8)}... (${options.source})`, {
       version: deviceState.version,
       hasVersion: deviceState.version !== undefined,
       versionType: typeof deviceState.version
     });
 
     // 🔍 DEBUG: Log what agent is sending
-    console.log('🔍 DEBUG - Agent state report structure:');
-    console.log('  - apps:', deviceState.apps ? Object.keys(deviceState.apps).slice(0, 3) : 'empty');
-    console.log('  - config:', deviceState.config ? Object.keys(deviceState.config).slice(0, 3) : 'empty');
-    console.log('  - config.sensors:', deviceState.config?.sensors ? `${deviceState.config.sensors.length} sensors` : 'missing');
+    logger.info('DEBUG - Agent state report structure:');
+    logger.info('  - apps:', deviceState.apps ? Object.keys(deviceState.apps).slice(0, 3) : 'empty');
+    logger.info('  - config:', deviceState.config ? Object.keys(deviceState.config).slice(0, 3) : 'empty');
+    logger.info('  - config.sensors:', deviceState.config?.sensors ? `${deviceState.config.sensors.length} sensors` : 'missing');
     
     // Ensure device exists and mark as online
     await DeviceModel.getOrCreate(uuid);
@@ -99,11 +100,11 @@ export async function processDeviceStateReport(
     try {
       await deviceSensorSync.syncCurrentStateToTable(uuid, deviceState);
     } catch (error) {
-      console.error(`⚠️  Failed to reconcile sensors for device ${uuid.substring(0, 8)}:`, error);
+      logger.error(`Failed to reconcile sensors for device ${uuid.substring(0, 8)}:`, error);
       // Don't fail the entire state report if reconciliation fails
     }
 
-    // 🎉 EVENT SOURCING: Publish current state updated event
+    // EVENT SOURCING: Publish current state updated event
     const oldState = await DeviceCurrentStateModel.get(uuid);
     
     // Use hash comparison for efficient change detection
@@ -186,7 +187,7 @@ export async function processDeviceStateReport(
         
         if (!streamId) {
           // Redis Stream unavailable - fallback to direct write
-          console.warn(`⚠️  Redis Stream unavailable, using direct write for ${uuid.substring(0, 8)}...`);
+          logger.warn(`Redis Stream unavailable, using direct write for ${uuid.substring(0, 8)}...`);
           await DeviceMetricsModel.record(uuid, metrics);
         }
         
@@ -195,7 +196,7 @@ export async function processDeviceStateReport(
         
       } catch (error) {
         // Error with Redis - fallback to direct write
-        console.error('⚠️  Redis error, using direct PostgreSQL write:', error);
+        logger.error('Redis error, using direct PostgreSQL write:', error);
         await DeviceMetricsModel.record(uuid, {
           cpu_usage: deviceState.cpu_usage,
           cpu_temp: deviceState.cpu_temp,
@@ -224,6 +225,6 @@ export async function processDeviceStateReport(
       }
     }
 
-    console.log(`✅ Processed state report for device ${uuid.substring(0, 8)}... (${options.source})`);
+    logger.info(`Processed state report for device ${uuid.substring(0, 8)}... (${options.source})`);
   }
 }

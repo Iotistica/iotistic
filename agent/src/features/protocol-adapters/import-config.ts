@@ -8,7 +8,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 export async function importProtocolAdapterConfig(): Promise<void> {
-  console.log('🔄 Importing protocol adapter configuration from JSON files...');
+  console.log('Importing protocol adapter configuration from JSON files...');
 
   // Import Modbus config
   const modbusConfigPath = path.join(__dirname, './modbus/config/windows.json');
@@ -16,9 +16,9 @@ export async function importProtocolAdapterConfig(): Promise<void> {
     try {
       const modbusConfig = JSON.parse(fs.readFileSync(modbusConfigPath, 'utf-8'));
       await DeviceSensorModel.importFromJson('modbus', modbusConfig);
-      console.log('✅ Imported Modbus configuration');
+      console.log('Imported Modbus configuration');
     } catch (error: any) {
-      console.error('❌ Failed to import Modbus config:', error.message);
+      console.error('Failed to import Modbus config:', error.message);
     }
   }
 
@@ -28,9 +28,9 @@ export async function importProtocolAdapterConfig(): Promise<void> {
     try {
       const canConfig = JSON.parse(fs.readFileSync(canConfigPath, 'utf-8'));
       await DeviceSensorModel.importFromJson('can', canConfig);
-      console.log('✅ Imported CAN configuration');
+      console.log('Imported CAN configuration');
     } catch (error: any) {
-      console.error('❌ Failed to import CAN config:', error.message);
+      console.error('Failed to import CAN config:', error.message);
     }
   }
 
@@ -40,11 +40,11 @@ export async function importProtocolAdapterConfig(): Promise<void> {
     try {
       const opcuaConfig = JSON.parse(fs.readFileSync(opcuaConfigPath, 'utf-8'));
       await DeviceSensorModel.importFromJson('opcua', opcuaConfig);
-      console.log('✅ Imported OPC-UA configuration');
+      console.log('Imported OPC-UA configuration');
     } catch (error: any) {
-      console.error('❌ Failed to import OPC-UA config:', error.message);
+      console.error('Failed to import OPC-UA config:', error.message);
     }
   }
 
-  console.log('✅ Protocol adapter configuration import complete');
+  console.log('Protocol adapter configuration import complete');
 }

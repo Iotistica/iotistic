@@ -408,40 +408,28 @@ export class ApiBinder extends EventEmitter {
 		// This ensures version tracking works after agent restarts
 		this.currentVersion = targetVersion;
 		
-		this.logger?.infoSync('Version tracking update', {
-			component: 'Sync',
-			operation: 'poll',
-			targetVersion: targetVersion,
-			currentVersion: this.currentVersion,
-			hasVersion: !!deviceState.version
-		});
-		
-	// Check if target state changed
-	const newTargetState: DeviceState = { 
-		apps: deviceState.apps || {},
-		config: deviceState.config || {}
-	};
+		// Check if target state changed
+		const newTargetState: DeviceState = { 
+			apps: deviceState.apps || {},
+			config: deviceState.config || {}
+		};
 	
-	// 🔍 DEBUG: Log what we received from API
-	console.log('🔍 API Response - deviceState keys:', Object.keys(deviceState));
-	console.log('🔍 API Response - has config:', !!deviceState.config);
-	console.log('🔍 API Response - config keys:', Object.keys(deviceState.config || {}));
-	console.log('🔍 API Response - sensors count:', deviceState.config?.sensors?.length || 0);
-	console.log('🔍 Built newTargetState:', {
-		apps: Object.keys(newTargetState.apps).length,
-		config: Object.keys(newTargetState.config || {}).length,
-		hasSensors: !!newTargetState.config?.sensors
-	});
 	
-	// Debug: Log the actual comparison strings
+	// Compare states to detect changes
 	const currentStateStr = JSON.stringify(this.targetState);
-	const newStateStr = JSON.stringify(newTargetState);		if (currentStateStr !== newStateStr) {
+	const newStateStr = JSON.stringify(newTargetState);
+	
+	if (currentStateStr !== newStateStr) {
 			this.logger?.infoSync('New target state received from cloud', {
 				component: 'Sync',
 				operation: 'poll',
+				deviceStateKeys: Object.keys(deviceState),
 				version: targetVersion,
 				appCount: Object.keys(newTargetState.apps).length,
 				configKeyCount: Object.keys(newTargetState.config || {}).length,
+				sensorsCount: deviceState.config?.sensors?.length || 0,
+		        newTargetStateApps: Object.keys(newTargetState.apps).length,
+		        newTargetStateConfigKeys: Object.keys(newTargetState.config || {}).length,
 				hasChanges: true
 			});
 			

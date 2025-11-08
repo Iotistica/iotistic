@@ -41,7 +41,7 @@ export const initialized = async (): Promise<void> => {
 		directory: path.join(__dirname, 'migrations'),
 	});
 	
-	console.log('✅ Database initialized at:', databasePath);
+	console.log('Database initialized at:', databasePath);
 };
 
 /**

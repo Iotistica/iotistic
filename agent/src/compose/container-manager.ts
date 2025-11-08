@@ -352,30 +352,43 @@ export class ContainerManager extends EventEmitter {
 		try {
 			const stateHash = this.getStateHash(this.targetState);
 			
-			// 🔍 DEBUG: Log save attempt
-			console.log('🔍 saveTargetStateToDB called');
-			console.log('  - New hash:', stateHash.substring(0, 8));
-			console.log('  - Last saved hash:', this.lastSavedTargetStateHash?.substring(0, 8) || 'none');
-			console.log('  - Apps count:', Object.keys(this.targetState.apps).length);
-			console.log('  - Config keys:', Object.keys(this.targetState.config || {}).length);
-			console.log('  - Has sensors:', !!this.targetState.config?.sensors);
+			// Log save attempt details
+			this.logger?.debugSync('Target state save attempt', {
+				component: 'ContainerManager',
+				operation: 'saveTargetState',
+				newHashPreview: stateHash.substring(0, 8),
+				lastSavedHashPreview: this.lastSavedTargetStateHash?.substring(0, 8) || 'none',
+				appsCount: Object.keys(this.targetState.apps).length,
+				configKeys: Object.keys(this.targetState.config || {}).length,
+				hasSensors: !!this.targetState.config?.sensors
+			});
 			
 			// Skip if state hasn't changed (compare hashes)
 			if (stateHash === this.lastSavedTargetStateHash) {
-				console.log('  ⏭️  Skipping save - state unchanged');
+				this.logger?.debugSync('Skipping save - state unchanged', {
+					component: 'ContainerManager',
+					operation: 'saveTargetState'
+				});
 				return;
 			}
 			
-		console.log('  💾 Saving to SQLite...');
+		this.logger?.debugSync('Saving target state to database', {
+			component: 'ContainerManager',
+			operation: 'saveTargetState'
+		});
 		this.lastSavedTargetStateHash = stateHash;
 		
 		const stateJson = JSON.stringify(this.targetState);
 		
-		// 🔍 DEBUG: Log the actual JSON being saved
-		console.log('  📄 State JSON preview (first 500 chars):', stateJson.substring(0, 500));
-		console.log('  📄 State JSON length:', stateJson.length);
-		console.log('  📄 Has "config" in JSON:', stateJson.includes('"config"'));
-		console.log('  📄 Has "sensors" in JSON:', stateJson.includes('"sensors"'));
+		// Log JSON details for debugging
+		this.logger?.debugSync('Target state JSON details', {
+			component: 'ContainerManager',
+			operation: 'saveTargetState',
+			jsonPreview: stateJson.substring(0, 500),
+			jsonLength: stateJson.length,
+			hasConfigField: stateJson.includes('"config"'),
+			hasSensorsField: stateJson.includes('"sensors"')
+		});
 		
 		// Delete old target snapshots and insert new (with hash)
 		await db.models('stateSnapshot')

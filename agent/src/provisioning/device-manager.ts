@@ -69,12 +69,12 @@ export class DeviceManager {
 				provisioned: false,
 			};
 			await this.saveDeviceInfo();
-			console.log('📱 New device created:', {
+			console.log('New device created:', {
 				uuid: this.deviceInfo.uuid,
 				deviceApiKey: `${this.deviceInfo.deviceApiKey?.substring(0, 8)}...`,
 			});
 		} else {
-			console.log('📱 Device loaded:', {
+			console.log('Device loaded:', {
 				uuid: this.deviceInfo.uuid,
 				deviceId: this.deviceInfo.deviceId,
 				provisioned: this.deviceInfo.provisioned,

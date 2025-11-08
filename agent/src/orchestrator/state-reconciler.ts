@@ -249,30 +249,18 @@ export class StateReconciler extends EventEmitter {
 	private async saveTargetStateToDB(): Promise<void> {
 		try {
 			const stateHash = this.getStateHash(this.targetState);
-
-			console.log('🔍 StateReconciler.saveTargetStateToDB called');
-			console.log('  - New hash:', stateHash.substring(0, 8));
-			console.log('  - Last saved hash:', this.lastSavedStateHash?.substring(0, 8) || 'none');
-			console.log('  - Apps count:', Object.keys(this.targetState.apps).length);
-			console.log('  - Config keys:', Object.keys(this.targetState.config || {}).length);
-			console.log('  - Has sensors:', !!this.targetState.config?.sensors);
-
 			// Skip if state hasn't changed
 			if (stateHash === this.lastSavedStateHash) {
-				console.log('  ⏭️  Skipping save - state unchanged');
+				this.logger?.debugSync('Skipping save - state unchanged', {
+					component: 'StateReconciler',
+					operation: 'saveTargetState',
+				});
 				return;
 			}
 
-			console.log('  💾 Saving to SQLite...');
 			this.lastSavedStateHash = stateHash;
 
 			const stateJson = JSON.stringify(this.targetState);
-
-			// Debug: Log the actual JSON being saved
-			console.log('  📄 State JSON preview (first 500 chars):', stateJson.substring(0, 500));
-			console.log('  📄 State JSON length:', stateJson.length);
-			console.log('  📄 Has "config" in JSON:', stateJson.includes('"config"'));
-			console.log('  📄 Has "sensors" in JSON:', stateJson.includes('"sensors"'));
 
 			// Delete old target snapshots and insert new
 			await db('stateSnapshot')
@@ -285,7 +273,6 @@ export class StateReconciler extends EventEmitter {
 				stateHash: stateHash,
 			});
 
-			console.log('  ✅ Saved to SQLite successfully');
 		} catch (error) {
 			this.logger?.errorSync(
 				'Failed to save target state to DB',
