@@ -12,7 +12,7 @@ on:
       - 'dependabot/**'
 
 env:
-  IMAGE_NAME: obcommunity/open-balena-ui
+  IMAGE_NAME: iotistic/api
   BASE_VERSION: '0.1.0' # Where action-vtl starts if there are no existing tags
   NODE_VERSION: 20 # Match the Dockerfile version
 
@@ -43,14 +43,6 @@ jobs:
 
       - name: Project dependencies
         run: npm ci
-
-      - name: Linting
-        if: false # ESLint needs added to dev-dependencies and configured properly...
-        run: npm run lint
-
-      - name: Testing
-        if: false # Jest (or similar) needs added to dev-dependencies and configured properly...
-        run: npm run test
 
       - name: Build
         run: npm run build
@@ -124,10 +116,10 @@ jobs:
         id: docker_build
         uses: docker/build-push-action@v6
         with:
-          context: .
+          context: ./api
           provenance: mode=max
           sbom: true
-          file: ./Dockerfile
+          file: ./api/Dockerfile
           push: ${{ steps.vtl.outputs.docker_push }}
           tags: ${{ steps.vtl.outputs.docker_tags }}
           labels: ${{ steps.vtl.outputs.oci_labels }}
