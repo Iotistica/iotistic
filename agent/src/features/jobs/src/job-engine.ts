@@ -34,6 +34,35 @@ export class JobEngine {
    * Ported from C++ exec_steps method
    */
   async executeSteps(jobDocument: JobDocument, jobHandlerDir: string): Promise<JobResult> {
+    // Validate jobDocument
+    if (!jobDocument) {
+      const errorMsg = 'Job document is undefined or null';
+      this.logger.error(`${JobEngine.TAG}: ${errorMsg}`);
+      return {
+        success: false,
+        exitCode: 1,
+        reason: errorMsg,
+        stdout: '',
+        stderr: errorMsg,
+        executedSteps: 0,
+        failedStep: 'validation'
+      };
+    }
+
+    if (!jobDocument.steps || !Array.isArray(jobDocument.steps)) {
+      const errorMsg = 'Job document missing required "steps" array';
+      this.logger.error(`${JobEngine.TAG}: ${errorMsg}`, { jobDocument });
+      return {
+        success: false,
+        exitCode: 1,
+        reason: errorMsg,
+        stdout: '',
+        stderr: errorMsg,
+        executedSteps: 0,
+        failedStep: 'validation'
+      };
+    }
+
     this.logger.info(`${JobEngine.TAG}: Starting job execution with ${jobDocument.steps.length} steps`);
     
     let overallSuccess = true;

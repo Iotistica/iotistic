@@ -220,11 +220,36 @@ export class JobsFeature extends BaseFeature {
         const cloudJob = response.data;
         this.logger.info(`Received job from HTTP polling: ${cloudJob.job_id}`);
         
+        // Validate job document
+        if (!cloudJob.job_document) {
+          this.logger.error(`HTTP job response missing job_document for job ${cloudJob.job_id}`, {
+            jobId: cloudJob.job_id,
+            cloudJob
+          });
+          return;
+        }
+
+        // Parse job_document if it's a string
+        let jobDocument = cloudJob.job_document;
+        if (typeof jobDocument === 'string') {
+          try {
+            jobDocument = JSON.parse(jobDocument);
+            this.logger.debug(`Parsed job_document from string`, { jobId: cloudJob.job_id });
+          } catch (error) {
+            this.logger.error(`Failed to parse job_document JSON`, {
+              jobId: cloudJob.job_id,
+              error: error instanceof Error ? error.message : String(error),
+              jobDocument: jobDocument
+            });
+            return;
+          }
+        }
+        
         // Convert to JobExecutionData format
         const jobData: JobExecutionData = {
           jobId: cloudJob.job_id,
           deviceUuid: this.deviceUuid,
-          jobDocument: cloudJob.job_document,
+          jobDocument: jobDocument,
           status: 'QUEUED' as any,
           versionNumber: 1,
           executionNumber: 1
@@ -284,10 +309,40 @@ export class JobsFeature extends BaseFeature {
       return;
     }
 
+    // Validate critical fields
+    if (!message.execution.jobId) {
+      this.logger.error(`MQTT job notification missing jobId`, { message });
+      return;
+    }
+
+    if (!message.execution.jobDocument) {
+      this.logger.error(`MQTT job notification missing jobDocument for job ${message.execution.jobId}`, { 
+        jobId: message.execution.jobId,
+        executionData: message.execution 
+      });
+      return;
+    }
+
+    // Parse job_document if it's a string
+    let jobDocument = message.execution.jobDocument;
+    if (typeof jobDocument === 'string') {
+      try {
+        jobDocument = JSON.parse(jobDocument);
+        this.logger.debug(`Parsed jobDocument from string`, { jobId: message.execution.jobId });
+      } catch (error) {
+        this.logger.error(`Failed to parse jobDocument JSON`, {
+          jobId: message.execution.jobId,
+          error: error instanceof Error ? error.message : String(error),
+          jobDocument: jobDocument
+        });
+        return;
+      }
+    }
+
     const jobData: JobExecutionData = {
       jobId: message.execution.jobId,
       deviceUuid: message.execution.deviceUuid || message.execution.thingName || this.deviceUuid,
-      jobDocument: message.execution.jobDocument,
+      jobDocument: jobDocument,
       status: message.execution.status || 'QUEUED',
       queuedAt: message.execution.queuedAt ? new Date(message.execution.queuedAt) : undefined,
       startedAt: message.execution.startedAt ? new Date(message.execution.startedAt) : undefined,
@@ -339,6 +394,35 @@ export class JobsFeature extends BaseFeature {
 
     try {
       this.logger.info(`Starting execution of job ${jobData.jobId}`);
+
+      // Validate job document
+      if (!jobData.jobDocument) {
+        this.logger.error('Job document is missing from job data', {
+          jobId: jobData.jobId,
+          jobDataKeys: Object.keys(jobData),
+          jobData: JSON.stringify(jobData)
+        });
+        throw new Error('Job document is missing from job data');
+      }
+
+      this.logger.debug('Job document received', {
+        jobId: jobData.jobId,
+        jobDocumentType: typeof jobData.jobDocument,
+        hasSteps: 'steps' in jobData.jobDocument,
+        stepsType: typeof jobData.jobDocument.steps,
+        jobDocumentKeys: Object.keys(jobData.jobDocument),
+        jobDocument: JSON.stringify(jobData.jobDocument)
+      });
+
+      if (!jobData.jobDocument.steps || !Array.isArray(jobData.jobDocument.steps)) {
+        this.logger.error('Job document missing required "steps" array', {
+          jobId: jobData.jobId,
+          jobDocument: JSON.stringify(jobData.jobDocument),
+          stepsValue: jobData.jobDocument.steps,
+          stepsType: typeof jobData.jobDocument.steps
+        });
+        throw new Error('Job document missing required "steps" array');
+      }
 
       // Update job status to IN_PROGRESS
       await this.updateJobStatus(jobData.jobId, {
