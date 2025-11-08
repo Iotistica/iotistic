@@ -1,15 +1,17 @@
 name: CI
 
 on:
+  # Manual trigger only
+  workflow_dispatch:
   # Do not build 3rd party package updates automatically to avoid some hacked package stealing secrets https://securitylab.github.com/research/github-actions-preventing-pwn-requests/
-  push:
-    branches-ignore:
-      - 'renovate/3rd-party**'
-      - 'dependabot/**'
-  pull_request:
-    branches-ignore:
-      - 'renovate/3rd-party**'
-      - 'dependabot/**'
+  # push:
+  #   branches-ignore:
+  #     - 'renovate/3rd-party**'
+  #     - 'dependabot/**'
+  # pull_request:
+  #   branches-ignore:
+  #     - 'renovate/3rd-party**'
+  #     - 'dependabot/**'
 
 env:
   IMAGE_NAME: iotistic/api
@@ -41,10 +43,7 @@ jobs:
           baseVersion: ${{ env.BASE_VERSION }}
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Project dependencies
-        run: npm ci
-
-      - name: Build
+      - name:      - name: Build
         run: npm run build
 
   # Build the docker container in all branches (without pushing)
@@ -120,6 +119,12 @@ jobs:
           provenance: mode=max
           sbom: true
           file: ./api/Dockerfile
+tion@v6
+        with:
+          context: .
+          provenance: mode=max
+          sbom: true
+          file: ./Dockerfile
           push: ${{ steps.vtl.outputs.docker_push }}
           tags: ${{ steps.vtl.outputs.docker_tags }}
           labels: ${{ steps.vtl.outputs.oci_labels }}
