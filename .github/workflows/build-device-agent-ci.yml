@@ -416,7 +416,11 @@ jobs:
           sudo npm ci --legacy-peer-deps
           sudo npm run build
           
+          # Install PM2 globally for process management
+          sudo npm install -g pm2
+          
           echo "✓ Agent installed and built"
+          echo "✓ PM2 installed"
 
       - name: Create directories and environment file
         run: |
@@ -447,44 +451,38 @@ jobs:
           
           echo "✓ Permissions set"
 
-      - name: Install systemd service
+      - name: Start agent with PM2
         run: |
-          sudo cp agent/scripts/iotistic-agent.service /etc/systemd/system/
-          sudo systemctl daemon-reload
+          cd /opt/iotistic/agent
           
-          echo "✓ Systemd service installed"
-
-      - name: Debug - Check file permissions and structure
-        run: |
-          echo "Checking agent installation..."
-          ls -la /opt/iotistic/agent/
-          echo ""
-          echo "Checking dist directory..."
-          ls -la /opt/iotistic/agent/dist/
-          echo ""
-          echo "Checking if index.js exists and is readable..."
-          sudo -u iotistic test -r /opt/iotistic/agent/dist/index.js && echo "✓ File is readable by iotistic user" || echo "✗ File NOT readable"
-          echo ""
-          echo "Testing node execution as iotistic user..."
-          sudo -u iotistic /usr/bin/node --version
-
-      - name: Start agent service
-        run: |
-          sudo systemctl start iotistic-agent
-          echo "✓ Agent service started"
+          # Start with PM2 as iotistic user, loading env file
+          sudo -u iotistic pm2 start dist/index.js \
+            --name iotistic-agent \
+            --cwd /opt/iotistic/agent \
+            --log /var/log/iotistic/agent.log \
+            --time \
+            --env-file /etc/iotistic/agent.env
+          
+          echo "✓ Agent started with PM2"
           
           # Wait for agent to initialize
           sleep 20
 
-      - name: Check service status
+      - name: Check PM2 status
         run: |
-          if sudo systemctl is-active --quiet iotistic-agent; then
-            echo "✓ Agent service is active"
-            sudo systemctl status iotistic-agent --no-pager
+          echo "PM2 Process List:"
+          sudo -u iotistic pm2 list
+          
+          echo ""
+          echo "Agent Process Info:"
+          sudo -u iotistic pm2 info iotistic-agent
+          
+          # Check if process is online
+          if sudo -u iotistic pm2 list | grep -q "online"; then
+            echo "✓ Agent is running (online)"
           else
-            echo "✗ Agent service is not active"
-            sudo systemctl status iotistic-agent --no-pager
-            sudo journalctl -u iotistic-agent -n 100 --no-pager
+            echo "✗ Agent is not running"
+            sudo -u iotistic pm2 logs iotistic-agent --nostream --lines 100
             exit 1
           fi
 
@@ -497,57 +495,55 @@ jobs:
             echo "✓ Agent API is responding"
           else
             echo "⚠ Agent API not responding"
-            sudo journalctl -u iotistic-agent -n 50 --no-pager
+            sudo -u iotistic pm2 logs iotistic-agent --nostream --lines 50
           fi
 
       - name: Verify auto-reconciliation started
         run: |
           echo "Checking for auto-reconciliation in logs..."
           
-          if sudo journalctl -u iotistic-agent --no-pager | grep -q "Auto-reconciliation started"; then
+          if sudo -u iotistic pm2 logs iotistic-agent --nostream --lines 500 | grep -q "Auto-reconciliation started"; then
             echo "✓ Auto-reconciliation started"
           else
             echo "✗ Auto-reconciliation did not start"
             echo "Full logs:"
-            sudo journalctl -u iotistic-agent -n 200 --no-pager
+            sudo -u iotistic pm2 logs iotistic-agent --nostream --lines 500
             exit 1
           fi
 
-      - name: Show service logs
+      - name: Show PM2 logs
         if: always()
         run: |
           echo "========================================="
-          echo "Agent Service Logs:"
+          echo "Agent Logs (PM2):"
           echo "========================================="
-          sudo journalctl -u iotistic-agent -n 200 --no-pager
+          sudo -u iotistic pm2 logs iotistic-agent --nostream --lines 200
 
       - name: Cleanup
         if: always()
         run: |
-          sudo systemctl stop iotistic-agent || true
-          sudo systemctl disable iotistic-agent || true
-          sudo rm -f /etc/systemd/system/iotistic-agent.service
-          sudo systemctl daemon-reload
+          sudo -u iotistic pm2 stop iotistic-agent || true
+          sudo -u iotistic pm2 delete iotistic-agent || true
 
       - name: Generate systemd test summary
         if: always()
         run: |
-          echo "# Agent Systemd Service Test" >> $GITHUB_STEP_SUMMARY
+          echo "# Agent PM2 Process Manager Test" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "## Installation" >> $GITHUB_STEP_SUMMARY
           echo "- **Location**: \`/opt/iotistic/agent\`" >> $GITHUB_STEP_SUMMARY
           echo "- **User**: \`iotistic\` (non-root)" >> $GITHUB_STEP_SUMMARY
-          echo "- **Service**: \`iotistic-agent.service\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Process Manager**: PM2" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "## Tests Performed" >> $GITHUB_STEP_SUMMARY
           echo "1. System dependencies installation (SQLite, Docker, etc.)" >> $GITHUB_STEP_SUMMARY
           echo "2. Agent build and installation" >> $GITHUB_STEP_SUMMARY
-          echo "3. Systemd service configuration" >> $GITHUB_STEP_SUMMARY
-          echo "4. Service startup and status check" >> $GITHUB_STEP_SUMMARY
+          echo "3. PM2 process manager setup" >> $GITHUB_STEP_SUMMARY
+          echo "4. Process startup and status check" >> $GITHUB_STEP_SUMMARY
           echo "5. API health verification" >> $GITHUB_STEP_SUMMARY
           echo "6. Auto-reconciliation verification" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Agent systemd service validated successfully!" >> $GITHUB_STEP_SUMMARY
+          echo "Agent running with PM2 validated successfully!" >> $GITHUB_STEP_SUMMARY
 
   report:
     name: Generate Reports
