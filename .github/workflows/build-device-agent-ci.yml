@@ -414,7 +414,20 @@ jobs:
           
           cd /opt/iotistic/agent
           sudo npm ci --legacy-peer-deps
+          
+          echo "Building TypeScript..."
           sudo npm run build
+          
+          # Verify build output
+          if [ -f dist/index.js ]; then
+            echo "✓ Build successful - dist/index.js exists"
+            ls -la dist/
+          else
+            echo "✗ Build failed - dist/index.js not found"
+            echo "Checking build output:"
+            ls -la
+            exit 1
+          fi
           
           # Install PM2 globally for process management
           sudo npm install -g pm2
