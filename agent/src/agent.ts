@@ -443,7 +443,21 @@ export default class DeviceAgent {
     }
 
     // Cache device info for reuse across all methods
-    this.deviceInfo = deviceInfo; // Now set the device ID on the logger
+    this.deviceInfo = deviceInfo;
+    
+    // Always update agent version on startup (in case of upgrades)
+    const currentVersion = process.env.AGENT_VERSION || getPackageVersion();
+    if (this.deviceInfo.agentVersion !== currentVersion) {
+      this.agentLogger.infoSync("Updating agent version", {
+        component: "Agent",
+        oldVersion: this.deviceInfo.agentVersion || "unknown",
+        newVersion: currentVersion,
+      });
+      await this.deviceManager.updateAgentVersion(currentVersion);
+      this.deviceInfo = this.deviceManager.getDeviceInfo();
+    }
+    
+    // Now set the device ID on the logger
     this.agentLogger.setDeviceId(this.deviceInfo.uuid);
 
     this.agentLogger.infoSync("Device manager initialized", {
@@ -452,6 +466,7 @@ export default class DeviceAgent {
       name: this.deviceInfo.deviceName || "Not set",
       provisioned: this.deviceInfo.provisioned,
       hasApiKey: !!this.deviceInfo.deviceApiKey,
+      agentVersion: this.deviceInfo.agentVersion,
     });
   }
 

@@ -501,6 +501,18 @@ export class DeviceManager {
 	}
 
 	/**
+	 * Update agent version
+	 */
+	async updateAgentVersion(version: string): Promise<void> {
+		if (!this.deviceInfo) {
+			throw new Error('Device manager not initialized');
+		}
+
+		this.deviceInfo.agentVersion = version;
+		await this.saveDeviceInfo();
+	}
+
+	/**
 	 * Reset device (unprovision)
 	 * Useful for testing or re-provisioning
 	 * Keeps UUID and deviceApiKey, clears server registration

@@ -4,7 +4,7 @@ set -e
 # Iotistic Agent - Systemd Installation Script
 # Version: AGENT_VERSION_PLACEHOLDER
 # This script installs the Iotistic agent as a native systemd service with PM2
-# Usage: curl -sSL https://apps.iotistic.com/agent/install-systemd.sh | bash
+# Usage: curl -sSL https://apps.iotistic.ca/agent/install-systemd.sh | bash
 #
 # Environment Variables (CI/Non-interactive mode):
 #   IOTISTIC_AGENT_VERSION        - Agent version to install (default: dev)
@@ -365,3 +365,4 @@ else
     journalctl -u iotistic-agent -n 50 --no-pager
     exit 1
 fi
+
