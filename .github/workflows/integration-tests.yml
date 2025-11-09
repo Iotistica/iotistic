@@ -23,77 +23,32 @@ jobs:
     runs-on: ubuntu-24.04
     
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Create .env file
+      - name: Display test suite information
         run: |
-          cat > .env << EOF
-          # PostgreSQL
-          POSTGRES_DB=iotistic
-          POSTGRES_USER=postgres
-          POSTGRES_PASSWORD=postgres
-          
-          # Redis
-          REDIS_PORT_EXT=6379
-          
-          # API
-          API_PORT_EXT=4002
-          PORT=3002
-          NODE_ENV=development
-          
-          # Database
-          DB_HOST=postgres
-          DB_PORT=5432
-          DB_NAME=iotistic
-          DB_USER=postgres
-          DB_PASSWORD=postgres
-          
-          # MQTT
-          MOSQUITTO_PORT_EXT=5883
-          MOSQUITTO_WS_PORT_EXT=59002
-          MQTT_BROKER_URL=mqtt://mosquitto:1883
-          MQTT_USERNAME=admin
-          MQTT_PASSWORD=iotistic42!
-          
-          # Neo4j
-          NEO4J_URI=bolt://neo4j:7687
-          NEO4J_USERNAME=neo4j
-          NEO4J_PASSWORD=iotistic123
-          
-          # VPN
-          VPN_SERVER_PORT=1194
-          VPN_API_PORT=3200
-          VPN_MGMT_PORT=7505
-          VPN_CA_PORT=8080
-          
-          # License
-          LICENSE_PUBLIC_KEY=${{ secrets.LICENSE_PUBLIC_KEY }}
-          IOTISTIC_LICENSE_KEY=${{ secrets.IOTISTIC_LICENSE_KEY }}
-          
-          # Logging
-          FORCE_COLOR=1
-          LOG_COMPRESSION=true
-          EOF
-
-      - name: Start Docker Compose stack
-        run: |
-          echo "Starting all services..."
-          docker compose up -d --build
-          
-          echo "Waiting for services to be healthy..."
-          timeout 180 bash -c '
-            until docker compose ps | grep -q "healthy"; do
-              echo "Waiting for services to become healthy..."
-              sleep 5
-            done
-          '
-          
-          echo "Services status:"
-          docker compose ps
+          echo "E2E Integration Test Suite"
+          echo "=========================="
+          echo ""
+          echo "Test Stack (docker-compose.e2e.yml):"
+          echo "  - PostgreSQL 16"
+          echo "  - Redis 7"
+          echo "  - Neo4j 5.15"
+          echo "  - Mosquitto MQTT Broker"
+          echo "  - API Server"
+          echo "  - Dashboard UI"
+          echo "  - Agent-12 & Agent-13"
+          echo "  - VPN Server"
+          echo "  - Protocol Simulators (Modbus, CANbus, OPC-UA)"
+          echo ""
+          echo "Test Jobs:"
+          echo "  1. PostgreSQL connectivity"
+          echo "  2. Redis connectivity"
+          echo "  3. Neo4j connectivity"
+          echo "  4. Mosquitto MQTT broker"
+          echo "  5. API server functionality"
+          echo "  6. Agent connectivity"
+          echo "  7. Dashboard UI"
+          echo ""
+          echo "=========================="
 
   test-postgres:
     name: Test PostgreSQL
