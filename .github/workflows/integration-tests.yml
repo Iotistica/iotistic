@@ -530,7 +530,7 @@ jobs:
         run: docker compose -f $COMPOSE_FILE down -v
 
   test-agents:
-    name: Test Agent Connectivity
+    name: Test Agent 
     needs: [test-postgres, test-redis, test-api]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
