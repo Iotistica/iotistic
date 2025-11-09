@@ -578,13 +578,24 @@ jobs:
           echo "========================================="
           echo "Agent Logs (PM2):"
           echo "========================================="
-          sudo pm2 logs iotistic-agent --nostream --lines 200
+          
+          # Check if PM2 is available
+          if command -v pm2 >/dev/null 2>&1; then
+            sudo pm2 logs iotistic-agent --nostream --lines 200 || true
+          else
+            echo "PM2 not found in PATH, checking log files directly..."
+            [ -f /var/log/iotistic/agent-out.log ] && cat /var/log/iotistic/agent-out.log || echo "No output log file"
+            echo "---"
+            [ -f /var/log/iotistic/agent-error.log ] && cat /var/log/iotistic/agent-error.log || echo "No error log file"
+          fi
 
       - name: Cleanup
         if: always()
         run: |
-          sudo pm2 stop iotistic-agent || true
-          sudo pm2 delete iotistic-agent || true
+          if command -v pm2 >/dev/null 2>&1; then
+            sudo pm2 stop iotistic-agent || true
+            sudo pm2 delete iotistic-agent || true
+          fi
 
       - name: Generate systemd test summary
         if: always()
