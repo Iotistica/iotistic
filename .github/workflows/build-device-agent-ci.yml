@@ -418,12 +418,15 @@ jobs:
           echo "Building TypeScript..."
           sudo npm run build
           
+          # Show what was built
+          echo "Build output:"
+          ls -la dist/ | head -20
+          
           # Verify build output - the entry point is dist/app.js
           if [ -f dist/app.js ]; then
             echo "✓ Build successful - dist/app.js exists"
           else
             echo "✗ Build failed - dist/app.js not found"
-            ls -la dist/src/ || echo "dist/src not found"
             exit 1
           fi
           
@@ -578,24 +581,13 @@ jobs:
           echo "========================================="
           echo "Agent Logs (PM2):"
           echo "========================================="
-          
-          # Check if PM2 is available
-          if command -v pm2 >/dev/null 2>&1; then
-            sudo pm2 logs iotistic-agent --nostream --lines 200 || true
-          else
-            echo "PM2 not found in PATH, checking log files directly..."
-            [ -f /var/log/iotistic/agent-out.log ] && cat /var/log/iotistic/agent-out.log || echo "No output log file"
-            echo "---"
-            [ -f /var/log/iotistic/agent-error.log ] && cat /var/log/iotistic/agent-error.log || echo "No error log file"
-          fi
+          sudo pm2 logs iotistic-agent --nostream --lines 200
 
       - name: Cleanup
         if: always()
         run: |
-          if command -v pm2 >/dev/null 2>&1; then
-            sudo pm2 stop iotistic-agent || true
-            sudo pm2 delete iotistic-agent || true
-          fi
+          sudo pm2 stop iotistic-agent || true
+          sudo pm2 delete iotistic-agent || true
 
       - name: Generate systemd test summary
         if: always()
