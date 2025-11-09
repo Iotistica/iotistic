@@ -251,14 +251,15 @@ Requires=docker.service
 Wants=network-online.target
 
 [Service]
-Type=forking
+Type=simple
 User=root
 WorkingDirectory=/opt/iotistic/agent
+Environment=PM2_HOME=/root/.pm2
 
-# Start PM2 process
-ExecStart=/usr/bin/pm2 start /opt/iotistic/agent/ecosystem.config.js
+# Start PM2 process (using no-daemon mode for systemd)
+ExecStart=/usr/bin/pm2 start /opt/iotistic/agent/ecosystem.config.js --no-daemon
 ExecReload=/usr/bin/pm2 reload /opt/iotistic/agent/ecosystem.config.js
-ExecStop=/usr/bin/pm2 stop iotistic-agent
+ExecStop=/usr/bin/pm2 kill
 
 # Restart behavior
 Restart=always
