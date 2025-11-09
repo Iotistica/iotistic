@@ -87,7 +87,7 @@ jobs:
 
       - name: Display version info
         run: |
-          echo "## Version Bumped" >> $GITHUB_STEP_SUMMARY
+          echo "## Version" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**New Version:** \`${{ steps.bump.outputs.package_version }}\`" >> $GITHUB_STEP_SUMMARY
           echo "**Git SHA:** \`${{ steps.bump.outputs.sha_short }}\`" >> $GITHUB_STEP_SUMMARY
