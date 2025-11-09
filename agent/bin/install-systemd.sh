@@ -242,7 +242,16 @@ chmod 600 /etc/iotistic/agent.env
 # Create systemd service file
 echo ""
 echo "Creating systemd service..."
-cat > /etc/systemd/system/iotistic-agent.service << 'EOFSVC'
+
+# Find PM2 path
+PM2_PATH=$(which pm2)
+if [ -z "$PM2_PATH" ]; then
+    echo "Error: PM2 not found in PATH"
+    exit 1
+fi
+echo "PM2 found at: $PM2_PATH"
+
+cat > /etc/systemd/system/iotistic-agent.service << EOFSVC
 [Unit]
 Description=Iotistic Agent - IoT Device Management Service
 Documentation=https://github.com/Iotistica/iotistic
@@ -255,11 +264,12 @@ Type=simple
 User=root
 WorkingDirectory=/opt/iotistic/agent
 Environment=PM2_HOME=/root/.pm2
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 # Start PM2 process (using no-daemon mode for systemd)
-ExecStart=/usr/bin/pm2 start /opt/iotistic/agent/ecosystem.config.js --no-daemon
-ExecReload=/usr/bin/pm2 reload /opt/iotistic/agent/ecosystem.config.js
-ExecStop=/usr/bin/pm2 kill
+ExecStart=$PM2_PATH start /opt/iotistic/agent/ecosystem.config.js --no-daemon
+ExecReload=$PM2_PATH reload /opt/iotistic/agent/ecosystem.config.js
+ExecStop=$PM2_PATH kill
 
 # Restart behavior
 Restart=always
