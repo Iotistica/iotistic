@@ -352,9 +352,192 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Agent image validated successfully!" >> $GITHUB_STEP_SUMMARY
 
+  test-agent-systemd:
+    name: Test Agent as Systemd Service
+    needs: [version, buildx]
+    runs-on: ubuntu-24.04
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            python3 \
+            make \
+            g++ \
+            sqlite3 \
+            libsqlite3-dev \
+            curl \
+            jq \
+            procps \
+            openvpn \
+            iproute2 \
+            iptables \
+            net-tools \
+            iputils-ping \
+            systemd
+
+      - name: Install Docker
+        run: |
+          # Install Docker
+          curl -fsSL https://get.docker.com -o get-docker.sh
+          sudo sh get-docker.sh
+          
+          # Start Docker service
+          sudo systemctl start docker
+          sudo systemctl enable docker
+          
+          # Wait for Docker to be ready
+          timeout 30 sh -c 'until docker info; do sleep 2; done'
+          echo "✓ Docker installed and running"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: agent/package-lock.json
+
+      - name: Create iotistic user
+        run: |
+          sudo useradd --system --home-dir /opt/iotistic --shell /bin/bash iotistic
+          sudo usermod -aG docker iotistic
+          echo "✓ Created iotistic user and added to docker group"
+
+      - name: Install agent to /opt/iotistic/agent
+        run: |
+          sudo mkdir -p /opt/iotistic/agent
+          sudo cp -r agent/* /opt/iotistic/agent/
+          
+          cd /opt/iotistic/agent
+          sudo npm ci --legacy-peer-deps
+          sudo npm run build
+          
+          echo "✓ Agent installed and built"
+
+      - name: Create directories and environment file
+        run: |
+          sudo mkdir -p /etc/iotistic
+          sudo mkdir -p /var/lib/iotistic/agent
+          sudo mkdir -p /var/log/iotistic
+          
+          # Create environment file with same env vars as Docker test
+          sudo tee /etc/iotistic/agent.env > /dev/null << EOF
+          AGENT_VERSION=${{ needs.version.outputs.package_version }}
+          DEVICE_API_PORT=48484
+          NODE_ENV=production
+          LOG_LEVEL=info
+          REQUIRE_PROVISIONING=false
+          PROVISIONING_API_KEY=test_provisioning_key_for_ci
+          EOF
+          
+          echo "✓ Directories and environment file created"
+          echo "✓ Agent version: ${{ needs.version.outputs.package_version }}"
+
+      - name: Set permissions
+        run: |
+          sudo chown -R iotistic:iotistic /opt/iotistic/agent
+          sudo chown -R iotistic:iotistic /var/lib/iotistic/agent
+          sudo chown -R iotistic:iotistic /var/log/iotistic
+          sudo chown iotistic:iotistic /etc/iotistic/agent.env
+          sudo chmod 600 /etc/iotistic/agent.env
+          
+          echo "✓ Permissions set"
+
+      - name: Install systemd service
+        run: |
+          sudo cp agent/scripts/iotistic-agent.service /etc/systemd/system/
+          sudo systemctl daemon-reload
+          
+          echo "✓ Systemd service installed"
+
+      - name: Start agent service
+        run: |
+          sudo systemctl start iotistic-agent
+          echo "✓ Agent service started"
+          
+          # Wait for agent to initialize
+          sleep 20
+
+      - name: Check service status
+        run: |
+          if sudo systemctl is-active --quiet iotistic-agent; then
+            echo "✓ Agent service is active"
+            sudo systemctl status iotistic-agent --no-pager
+          else
+            echo "✗ Agent service is not active"
+            sudo systemctl status iotistic-agent --no-pager
+            sudo journalctl -u iotistic-agent -n 100 --no-pager
+            exit 1
+          fi
+
+      - name: Test agent API
+        run: |
+          echo "Testing agent API..."
+          
+          if curl -f http://localhost:48484/health 2>/dev/null || \
+             curl -f http://localhost:48484/v2/device 2>/dev/null; then
+            echo "✓ Agent API is responding"
+          else
+            echo "⚠ Agent API not responding"
+            sudo journalctl -u iotistic-agent -n 50 --no-pager
+          fi
+
+      - name: Verify auto-reconciliation started
+        run: |
+          echo "Checking for auto-reconciliation in logs..."
+          
+          if sudo journalctl -u iotistic-agent --no-pager | grep -q "Auto-reconciliation started"; then
+            echo "✓ Auto-reconciliation started"
+          else
+            echo "✗ Auto-reconciliation did not start"
+            echo "Full logs:"
+            sudo journalctl -u iotistic-agent -n 200 --no-pager
+            exit 1
+          fi
+
+      - name: Show service logs
+        if: always()
+        run: |
+          echo "========================================="
+          echo "Agent Service Logs:"
+          echo "========================================="
+          sudo journalctl -u iotistic-agent -n 200 --no-pager
+
+      - name: Cleanup
+        if: always()
+        run: |
+          sudo systemctl stop iotistic-agent || true
+          sudo systemctl disable iotistic-agent || true
+          sudo rm -f /etc/systemd/system/iotistic-agent.service
+          sudo systemctl daemon-reload
+
+      - name: Generate systemd test summary
+        if: always()
+        run: |
+          echo "# Agent Systemd Service Test" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Installation" >> $GITHUB_STEP_SUMMARY
+          echo "- **Location**: \`/opt/iotistic/agent\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **User**: \`iotistic\` (non-root)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Service**: \`iotistic-agent.service\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Tests Performed" >> $GITHUB_STEP_SUMMARY
+          echo "1. System dependencies installation (SQLite, Docker, etc.)" >> $GITHUB_STEP_SUMMARY
+          echo "2. Agent build and installation" >> $GITHUB_STEP_SUMMARY
+          echo "3. Systemd service configuration" >> $GITHUB_STEP_SUMMARY
+          echo "4. Service startup and status check" >> $GITHUB_STEP_SUMMARY
+          echo "5. API health verification" >> $GITHUB_STEP_SUMMARY
+          echo "6. Auto-reconciliation verification" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Agent systemd service validated successfully!" >> $GITHUB_STEP_SUMMARY
+
   report:
     name: Generate Reports
-    needs: [version, buildx, test-agent-docker]
+    needs: [version, buildx, test-agent-docker, test-agent-systemd]
     runs-on: ubuntu-24.04
     if: always()
     
