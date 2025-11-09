@@ -36,6 +36,19 @@ import {
   SensorsFeature as SensorsFeature,
   SensorConfig,
 } from "./features/sensors/index.js";
+import { readFileSync } from "fs";
+import { join } from "path";
+
+// Read version from package.json
+const getPackageVersion = (): string => {
+  try {
+    const packageJsonPath = join(process.cwd(), "package.json");
+    const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8"));
+    return packageJson.version || "unknown";
+  } catch (error) {
+    return "unknown";
+  }
+};
 
 export default class DeviceAgent {
   private orchestratorDriver!: IOrchestratorDriver;
@@ -363,7 +376,7 @@ export default class DeviceAgent {
             : undefined,
           macAddress,
           osVersion,
-          agentVersion: process.env.AGENT_VERSION || "1.0.0",
+          agentVersion: process.env.AGENT_VERSION || getPackageVersion(),
         });
         deviceInfo = this.deviceManager.getDeviceInfo();
         this.agentLogger.infoSync("Device auto-provisioned successfully", {

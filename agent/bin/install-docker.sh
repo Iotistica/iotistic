@@ -1,0 +1,148 @@
+#!/bin/bash
+set -e
+
+# Iotistic Agent - Docker Installation Script
+# This script installs the Iotistic agent as a Docker container
+# Usage: curl -sSL https://install.iotistic.com/install-docker.sh | bash
+
+echo "=================================="
+echo "Iotistic Agent - Docker Installer"
+echo "=================================="
+echo ""
+
+# Check if running as root
+if [ "$EUID" -ne 0 ]; then 
+    echo "Error: This script must be run as root (use sudo)"
+    exit 1
+fi
+
+# Detect OS
+if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    OS=$ID
+    OS_VERSION=$VERSION_ID
+else
+    echo "Error: Cannot detect OS"
+    exit 1
+fi
+
+echo "Detected OS: $OS $OS_VERSION"
+
+# Install Docker if not present
+if ! command -v docker &> /dev/null; then
+    echo "Docker not found. Installing Docker..."
+    curl -fsSL https://get.docker.com -o get-docker.sh
+    sh get-docker.sh
+    rm get-docker.sh
+    
+    # Start and enable Docker
+    systemctl start docker
+    systemctl enable docker
+    
+    echo "✓ Docker installed successfully"
+else
+    echo "✓ Docker is already installed"
+    docker --version
+fi
+
+# Create directories
+echo "Creating directories..."
+mkdir -p /var/lib/iotistic/agent
+mkdir -p /var/log/iotistic
+
+# Prompt for configuration
+echo ""
+echo "Configuration:"
+echo "-------------"
+
+# Provisioning key (optional)
+read -p "Enter provisioning API key (leave empty for local mode): " PROVISIONING_KEY
+if [ -z "$PROVISIONING_KEY" ]; then
+    REQUIRE_PROVISIONING="false"
+    PROVISIONING_KEY="local_mode"
+    echo "Running in local mode (no cloud connection)"
+else
+    REQUIRE_PROVISIONING="true"
+    echo "Cloud provisioning enabled"
+fi
+
+# Agent port
+read -p "Enter device API port [48484]: " DEVICE_API_PORT
+DEVICE_API_PORT=${DEVICE_API_PORT:-48484}
+
+# Get latest version
+echo ""
+echo "Fetching latest agent version..."
+LATEST_VERSION=$(curl -s https://registry.hub.docker.com/v2/repositories/iotistic/agent/tags | jq -r '.results[].name' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
+if [ -z "$LATEST_VERSION" ]; then
+    LATEST_VERSION="latest"
+fi
+echo "Using version: $LATEST_VERSION"
+
+# Pull the image
+echo ""
+echo "Pulling Docker image..."
+docker pull iotistic/agent:$LATEST_VERSION
+
+# Stop and remove existing container if it exists
+if docker ps -a | grep -q iotistic-agent; then
+    echo "Stopping existing agent container..."
+    docker stop iotistic-agent || true
+    docker rm iotistic-agent || true
+fi
+
+# Create and start container
+echo ""
+echo "Starting agent container..."
+docker run -d \
+    --name iotistic-agent \
+    --restart unless-stopped \
+    -v /var/run/docker.sock:/var/run/docker.sock \
+    -v /var/lib/iotistic/agent:/app/data \
+    -p ${DEVICE_API_PORT}:48484 \
+    -e DEVICE_API_PORT=48484 \
+    -e NODE_ENV=production \
+    -e LOG_LEVEL=info \
+    -e ORCHESTRATOR_TYPE=docker-compose \
+    -e ORCHESTRATOR_INTERVAL=30000 \
+    -e REQUIRE_PROVISIONING=${REQUIRE_PROVISIONING} \
+    -e PROVISIONING_API_KEY=${PROVISIONING_KEY} \
+    iotistic/agent:$LATEST_VERSION
+
+# Wait for container to start
+echo "Waiting for agent to start..."
+sleep 10
+
+# Check if container is running
+if docker ps | grep -q iotistic-agent; then
+    echo ""
+    echo "✓ Agent container is running"
+    
+    # Show logs
+    echo ""
+    echo "Recent logs:"
+    echo "------------"
+    docker logs --tail=20 iotistic-agent
+    
+    echo ""
+    echo "=================================="
+    echo "Installation complete!"
+    echo "=================================="
+    echo ""
+    echo "Agent is running as Docker container 'iotistic-agent'"
+    echo "Device API: http://localhost:${DEVICE_API_PORT}"
+    echo ""
+    echo "Useful commands:"
+    echo "  docker logs -f iotistic-agent          # View logs"
+    echo "  docker restart iotistic-agent          # Restart agent"
+    echo "  docker stop iotistic-agent             # Stop agent"
+    echo "  docker start iotistic-agent            # Start agent"
+    echo ""
+else
+    echo ""
+    echo "✗ Error: Agent container failed to start"
+    echo ""
+    echo "Container logs:"
+    docker logs iotistic-agent
+    exit 1
+fi

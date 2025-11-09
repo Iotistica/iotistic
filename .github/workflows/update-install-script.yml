@@ -1,9 +1,9 @@
-name: Sync install.sh to Azure Blob
+name: Upload Installation Scripts to Azure
 
 on:
-  # Run after test-full-installation workflow completes successfully
+  # Run after agent CI workflow completes successfully
   workflow_run:
-    workflows: ["Test Full Installation"]
+    workflows: ["CI Build, Test & Push Device Agent"]
     types:
       - completed
     branches:
@@ -13,10 +13,11 @@ on:
   workflow_dispatch:
 
 jobs:
-  upload-server-bat:
+  upload-install-scripts:
     runs-on: ubuntu-latest
     # Only run if the test workflow succeeded (or if manually triggered)
     if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -26,13 +27,78 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Upload install.sh
+      - name: Upload install-docker.sh
         run: |
           az storage blob upload \
             --account-name ${{ secrets.AZURE_STORAGE_ACCOUNT }} \
             --container-name scripts \
-            --name install.sh \
-            --file bin/install.sh \
+            --name install-docker.sh \
+            --file agent/bin/install-docker.sh \
             --overwrite true \
-            --content-type application/octet-stream \
-            --content-disposition "attachment; filename=install.sh"
+            --content-type application/x-sh \
+            --content-disposition "attachment; filename=install-docker.sh"
+          
+          echo "✓ Uploaded install-docker.sh"
+
+      - name: Upload install-systemd.sh
+        run: |
+          az storage blob upload \
+            --account-name ${{ secrets.AZURE_STORAGE_ACCOUNT }} \
+            --container-name scripts \
+            --name install-systemd.sh \
+            --file agent/bin/install-systemd.sh \
+            --overwrite true \
+            --content-type application/x-sh \
+            --content-disposition "attachment; filename=install-systemd.sh"
+          
+          echo "✓ Uploaded install-systemd.sh"
+
+      - name: Upload legacy install.sh (if exists)
+        run: |
+          if [ -f bin/install.sh ]; then
+            az storage blob upload \
+              --account-name ${{ secrets.AZURE_STORAGE_ACCOUNT }} \
+              --container-name scripts \
+              --name install.sh \
+              --file bin/install.sh \
+              --overwrite true \
+              --content-type application/octet-stream \
+              --content-disposition "attachment; filename=install.sh"
+            
+            echo "✓ Uploaded install.sh"
+          else
+            echo "⚠ install.sh not found, skipping"
+          fi
+
+      - name: Generate summary
+        run: |
+          echo "# Installation Scripts Updated" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Uploaded Scripts" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Docker Installation" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo "curl -sSL https://install.iotistic.com/install-docker.sh | sudo bash" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Systemd Installation (with PM2)" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo "curl -sSL https://install.iotistic.com/install-systemd.sh | sudo bash" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Features" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**install-docker.sh:**" >> $GITHUB_STEP_SUMMARY
+          echo "- Installs Docker if needed" >> $GITHUB_STEP_SUMMARY
+          echo "- Pulls latest agent image from Docker Hub" >> $GITHUB_STEP_SUMMARY
+          echo "- Runs agent as Docker container with auto-restart" >> $GITHUB_STEP_SUMMARY
+          echo "- Interactive configuration (provisioning key, port)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**install-systemd.sh:**" >> $GITHUB_STEP_SUMMARY
+          echo "- Installs all system dependencies (SQLite, Docker, OpenVPN, etc.)" >> $GITHUB_STEP_SUMMARY
+          echo "- Installs Node.js 20 and PM2 process manager" >> $GITHUB_STEP_SUMMARY
+          echo "- Downloads and builds latest agent release" >> $GITHUB_STEP_SUMMARY
+          echo "- Creates systemd service with PM2" >> $GITHUB_STEP_SUMMARY
+          echo "- Interactive configuration (provisioning key, port)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✓ All installation scripts uploaded successfully!" >> $GITHUB_STEP_SUMMARY
