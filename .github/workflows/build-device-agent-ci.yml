@@ -661,9 +661,85 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Agent running with PM2 validated successfully!" >> $GITHUB_STEP_SUMMARY
 
+  upload-install-scripts:
+    name: Upload Installation Scripts
+    needs: [version, buildx, test-agent-docker, test-agent-systemd]
+    runs-on: ubuntu-24.04
+    if: success()
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Upload install-docker.sh
+        run: |
+          az storage blob upload \
+            --account-name ${{ secrets.AZURE_STORAGE_ACCOUNT }} \
+            --container-name scripts \
+            --name install-docker.sh \
+            --file agent/bin/install-docker.sh \
+            --overwrite true \
+            --content-type application/x-sh \
+            --content-disposition "attachment; filename=install-docker.sh"
+          
+          echo "✓ Uploaded install-docker.sh"
+
+      - name: Upload install-systemd.sh
+        run: |
+          az storage blob upload \
+            --account-name ${{ secrets.AZURE_STORAGE_ACCOUNT }} \
+            --container-name scripts \
+            --name install-systemd.sh \
+            --file agent/bin/install-systemd.sh \
+            --overwrite true \
+            --content-type application/x-sh \
+            --content-disposition "attachment; filename=install-systemd.sh"
+          
+          echo "✓ Uploaded install-systemd.sh"
+
+      - name: Upload legacy install.sh (if exists)
+        run: |
+          if [ -f bin/install.sh ]; then
+            az storage blob upload \
+              --account-name ${{ secrets.AZURE_STORAGE_ACCOUNT }} \
+              --container-name scripts \
+              --name install.sh \
+              --file bin/install.sh \
+              --overwrite true \
+              --content-type application/octet-stream \
+              --content-disposition "attachment; filename=install.sh"
+            
+            echo "✓ Uploaded install.sh"
+          else
+            echo "⚠ install.sh not found, skipping"
+          fi
+
+      - name: Generate upload summary
+        run: |
+          echo "# Installation Scripts Uploaded" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Available Scripts" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Docker Installation" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo "curl -sSL https://install.iotistic.com/install-docker.sh | sudo bash" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Systemd Installation (with PM2)" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo "curl -sSL https://install.iotistic.com/install-systemd.sh | sudo bash" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✓ Scripts uploaded to Azure Blob Storage" >> $GITHUB_STEP_SUMMARY
+
   report:
     name: Generate Reports
-    needs: [version, buildx, test-agent-docker, test-agent-systemd]
+    needs: [version, buildx, test-agent-docker, test-agent-systemd, upload-install-scripts]
     runs-on: ubuntu-24.04
     if: always()
     
