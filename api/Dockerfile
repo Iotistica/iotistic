@@ -20,6 +20,7 @@ WORKDIR /usr/src/app
 
 # Copy built files and production deps
 COPY --from=builder /usr/src/app/dist ./dist
+COPY --from=builder /usr/src/app/database ./database
 COPY --from=builder /usr/src/app/package*.json ./
 RUN npm install --production
 
