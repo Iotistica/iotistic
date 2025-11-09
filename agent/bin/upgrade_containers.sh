@@ -56,7 +56,7 @@ if [ -n "${PROVISIONING_API_KEY:-}" ]; then
 
 # Device Provisioning
 PROVISIONING_API_KEY=${PROVISIONING_API_KEY}
-CLOUD_API_ENDPOINT=${CLOUD_API_ENDPOINT:-https://cloud.iotistic.com}
+CLOUD_API_ENDPOINT=${CLOUD_API_ENDPOINT:-https://cloud.iotistic.ca}
 EOF
     echo "   ✅ Provisioning enabled"
 else

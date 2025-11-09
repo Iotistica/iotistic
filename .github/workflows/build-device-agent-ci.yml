@@ -673,14 +673,14 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Both scripts support non-interactive installation via environment variables:" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- \`IOTISTIC_CLOUD_API_ENDPOINT\`: Cloud API URL (e.g., https://api.iotistic.com)" >> $GITHUB_STEP_SUMMARY
+          echo "- \`IOTISTIC_CLOUD_API_ENDPOINT\`: Cloud API URL (e.g., https://api.iotistic.ca)" >> $GITHUB_STEP_SUMMARY
           echo "- \`IOTISTIC_PROVISIONING_KEY\`: Provisioning API key (leave empty for local mode)" >> $GITHUB_STEP_SUMMARY
           echo "- \`IOTISTIC_DEVICE_PORT\`: Device API port (default: 48484)" >> $GITHUB_STEP_SUMMARY
           echo "- \`IOTISTIC_AGENT_VERSION\`: Specific version to install (default: latest)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Example with cloud connection:**" >> $GITHUB_STEP_SUMMARY
           echo '```bash' >> $GITHUB_STEP_SUMMARY
-          echo "export IOTISTIC_CLOUD_API_ENDPOINT=https://api.iotistic.com" >> $GITHUB_STEP_SUMMARY
+          echo "export IOTISTIC_CLOUD_API_ENDPOINT=https://api.iotistic.ca" >> $GITHUB_STEP_SUMMARY
           echo "export IOTISTIC_PROVISIONING_KEY=your-api-key-here" >> $GITHUB_STEP_SUMMARY
           echo "curl -sSL https://apps.iotistic.ca/agent/install-docker.sh | sudo -E bash" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY

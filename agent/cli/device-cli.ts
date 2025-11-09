@@ -128,7 +128,7 @@ SYSTEM:
 EXAMPLES:
 
   # Set cloud API endpoint
-  device-cli config set-api https://cloud.iotistic.com
+  device-cli config set-api https://cloud.iotistic.ca
 
   # View current configuration
   device-cli config show

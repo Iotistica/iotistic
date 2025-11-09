@@ -121,11 +121,11 @@ npm run dev  # Starts on localhost:3000
 ### Scenario 2: Local Development with Remote API
 ```bash
 # .env.local
-VITE_API_URL=https://api.staging.iotistic.com
+VITE_API_URL=https://api.staging.iotistic.ca
 
 npm run dev
 ```
-**API URL**: `https://api.staging.iotistic.com` (override)
+**API URL**: `https://api.staging.iotistic.ca` (override)
 
 ### Scenario 3: Kubernetes with Shared Ingress (Standard)
 ```yaml
@@ -149,19 +149,19 @@ dashboard:
 ```yaml
 # Helm values.yaml
 dashboard:
-  apiUrl: "https://api-customer-abc.iotistic.com"
+  apiUrl: "https://api-customer-abc.iotistic.ca"
 ```
-**API URL**: `https://api-customer-abc.iotistic.com` (explicit override)
+**API URL**: `https://api-customer-abc.iotistic.ca` (explicit override)
 
 ### Scenario 5: Pre-Built Image for Specific Environment
 ```bash
 # Build for production
 docker build \
-  --build-arg VITE_API_URL=https://api.production.iotistic.com \
+  --build-arg VITE_API_URL=https://api.production.iotistic.ca \
   -t iotistic/dashboard:production \
   .
 ```
-**API URL**: `https://api.production.iotistic.com` (baked into build)
+**API URL**: `https://api.production.iotistic.ca` (baked into build)
 
 ## Debugging
 

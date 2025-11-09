@@ -140,7 +140,7 @@ stripe subscriptions create \
 ### Production Webhook Configuration
 
 Ensure webhook endpoint is configured in Stripe:
-- URL: `https://billing.iotistic.com/api/webhooks/stripe`
+- URL: `https://billing.iotistic.ca/api/webhooks/stripe`
 - Events:
   - `customer.subscription.created` ✅
   - `customer.subscription.updated` ✅

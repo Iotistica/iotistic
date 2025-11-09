@@ -34,10 +34,10 @@ device-cli help
 #### Set Cloud API Endpoint
 
 ```bash
-device-cli config set-api https://api.iotistic.com
+device-cli config set-api https://api.iotistic.ca
 
 # With port
-device-cli config set-api https://api.iotistic.com:3002
+device-cli config set-api https://api.iotistic.ca:3002
 
 # Local development
 device-cli config set-api http://localhost:3002
@@ -45,7 +45,7 @@ device-cli config set-api http://localhost:3002
 
 **Output:**
 ```
-✅ Cloud API endpoint updated to: https://api.iotistic.com
+✅ Cloud API endpoint updated to: https://api.iotistic.ca
 ⚠️  Restart the device agent for changes to take effect:
    sudo systemctl restart device-agent
 ```
@@ -58,7 +58,7 @@ device-cli config get-api
 
 **Output:**
 ```
-📡 Cloud API Endpoint: https://api.iotistic.com
+📡 Cloud API Endpoint: https://api.iotistic.ca
 ```
 
 #### Set Any Configuration Value
@@ -99,7 +99,7 @@ device-cli config show
 📋 Device Configuration:
 
 {
-  "cloudApiEndpoint": "https://api.iotistic.com",
+  "cloudApiEndpoint": "https://api.iotistic.ca",
   "pollInterval": 60000,
   "reportInterval": 10000,
   "deviceName": "Living Room Sensor"
@@ -126,7 +126,7 @@ device-cli status
 ```
 📊 Device Status:
 
-✅ API Endpoint: https://api.iotistic.com
+✅ API Endpoint: https://api.iotistic.ca
 ✅ Database: 2.45 KB
 ✅ Config File: /app/data/device-config.json
 
@@ -195,7 +195,7 @@ Location: `/app/data/device-config.json`
 
 ```json
 {
-  "cloudApiEndpoint": "https://api.iotistic.com",
+  "cloudApiEndpoint": "https://api.iotistic.ca",
   "pollInterval": 60000,
   "reportInterval": 10000,
   "metricsInterval": 300000,
@@ -255,7 +255,7 @@ configLoader.watchConfig((newConfig) => {
 device-cli config set-api https://567cea7e-66b6-4e92-a622-ac53067b271a.mock.pstmn.io
 
 # Switch to production
-device-cli config set-api https://cloud.iotistic.com
+device-cli config set-api https://cloud.iotistic.ca
 
 # Restart to apply
 sudo systemctl restart device-agent
@@ -418,7 +418,7 @@ device-cli status
 device-cli config show
 
 # 3. Set production API
-device-cli config set-api https://cloud.iotistic.com
+device-cli config set-api https://cloud.iotistic.ca
 
 # 4. Adjust intervals for production
 device-cli config set pollInterval 60000

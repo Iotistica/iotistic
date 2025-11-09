@@ -63,7 +63,7 @@ sudo ln -s /home/iotistic/agent/dist/cli/device-cli.js /usr/local/bin/device-cli
 sudo chmod +x /home/iotistic/agent/dist/cli/device-cli.js
 
 # Use anywhere
-device-cli config set-api https://cloud.iotistic.com
+device-cli config set-api https://cloud.iotistic.ca
 device-cli config show
 device-cli status
 ```
@@ -100,7 +100,7 @@ device-cli config get-api
 **Format**:
 ```json
 {
-  "cloudApiEndpoint": "https://api.iotistic.com",
+  "cloudApiEndpoint": "https://api.iotistic.ca",
   "pollInterval": 60000,
   "reportInterval": 10000,
   "metricsInterval": 300000,
@@ -179,7 +179,7 @@ sudo systemctl restart device-agent
 # Test with mock...
 
 # Switch to production
-device-cli config set-api https://cloud.iotistic.com
+device-cli config set-api https://cloud.iotistic.ca
 sudo systemctl restart device-agent
 
 # Verify
@@ -226,7 +226,7 @@ All configuration can be set via environment variables:
 
 ```bash
 # Cloud API
-CLOUD_API_ENDPOINT=https://api.iotistic.com
+CLOUD_API_ENDPOINT=https://api.iotistic.ca
 POLL_INTERVAL=60000
 REPORT_INTERVAL=10000
 METRICS_INTERVAL=300000
@@ -340,7 +340,7 @@ sudo chmod +x dist/cli/device-cli.js
 
 # Test commands
 device-cli help
-device-cli config set-api https://cloud.iotistic.com
+device-cli config set-api https://cloud.iotistic.ca
 device-cli config show
 device-cli status
 ```

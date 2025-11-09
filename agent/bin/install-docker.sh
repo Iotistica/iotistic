@@ -9,7 +9,7 @@ set -e
 # Environment Variables (CI/Non-interactive mode):
 #   IOTISTIC_AGENT_VERSION        - Agent version to install (default: latest)
 #   IOTISTIC_DEVICE_PORT          - Device API port (default: 48484)
-#   IOTISTIC_CLOUD_API_ENDPOINT   - Cloud API endpoint (e.g., https://api.iotistic.com)
+#   IOTISTIC_CLOUD_API_ENDPOINT   - Cloud API endpoint (e.g., https://api.iotistic.ca)
 #   IOTISTIC_PROVISIONING_KEY     - Provisioning API key (optional, default: local_mode)
 #   IOTISTIC_REQUIRE_PROVISIONING - Set to "false" to skip provisioning requirement
 

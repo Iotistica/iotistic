@@ -384,7 +384,7 @@ export function requireFeature(feature: keyof LicenseData['features']) {
         error: 'Feature not available',
         message: `This feature requires a higher plan. Current plan: ${license.getLicense().plan}`,
         feature,
-        upgradeUrl: process.env.BILLING_UPGRADE_URL || 'https://Iotistic.com/upgrade',
+        upgradeUrl: process.env.BILLING_UPGRADE_URL || 'https://iotistic.ca/upgrade',
       });
     }
     
@@ -409,7 +409,7 @@ export async function checkDeviceLimit(req: Request, res: Response, next: NextFu
       message: `Maximum devices (${maxDevices}) reached. Upgrade your plan to add more devices.`,
       currentDevices: devices.length,
       maxDevices,
-      upgradeUrl: process.env.BILLING_UPGRADE_URL || 'https://Iotistic.com/upgrade',
+      upgradeUrl: process.env.BILLING_UPGRADE_URL || 'https://iotistic.ca/upgrade',
     });
   }
   
@@ -427,7 +427,7 @@ export function requireActiveSubscription(req: Request, res: Response, next: Nex
       error: 'Subscription inactive',
       message: 'Your subscription is not active. Please update your payment method.',
       status: license.getLicense().subscription.status,
-      billingUrl: process.env.BILLING_PORTAL_URL || 'https://Iotistic.com/billing',
+      billingUrl: process.env.BILLING_PORTAL_URL || 'https://iotistic.ca/billing',
     });
   }
   
@@ -579,7 +579,7 @@ router.get('/license', async (req, res) => {
           percentUsed: Math.round((devices.length / licenseData.features.maxDevices) * 100),
         },
       },
-      upgradeUrl: process.env.BILLING_UPGRADE_URL || 'https://Iotistic.com/upgrade',
+      upgradeUrl: process.env.BILLING_UPGRADE_URL || 'https://iotistic.ca/upgrade',
     });
   } catch (error) {
     console.error('Error fetching license info:', error);
@@ -658,9 +658,9 @@ IOTISTIC_LICENSE_KEY=eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9... # JWT from Global B
 LICENSE_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\nMIIBIj..." # Public key for validation
 
 # Optional: Global Billing API (for usage reporting)
-# BILLING_API_URL=https://billing.Iotistic.com
-# BILLING_UPGRADE_URL=https://Iotistic.com/upgrade
-# BILLING_PORTAL_URL=https://Iotistic.com/billing
+# BILLING_API_URL=https://billing.iotistic.ca
+# BILLING_UPGRADE_URL=https://iotistic.ca/upgrade
+# BILLING_PORTAL_URL=https://iotistic.ca/billing
 ```
 
 ---

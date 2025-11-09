@@ -121,9 +121,9 @@ LICENSE_PUBLIC_KEY=<public-key>
 
 **Optional**:
 ```bash
-BILLING_API_URL=https://billing.Iotistic.com
-BILLING_UPGRADE_URL=https://Iotistic.com/upgrade
-BILLING_PORTAL_URL=https://Iotistic.com/billing
+BILLING_API_URL=https://billing.iotistic.ca
+BILLING_UPGRADE_URL=https://iotistic.ca/upgrade
+BILLING_PORTAL_URL=https://iotistic.ca/billing
 INSTANCE_ID=us-east-1-prod
 ```
 

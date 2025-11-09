@@ -43,7 +43,7 @@ router.get('/license', async (req, res) => {
           percentUsed: Math.round((devices.length / licenseData.features.maxDevices) * 100),
         },
       },
-      upgradeUrl: process.env.BILLING_UPGRADE_URL || 'https://Iotistic.com/upgrade',
+      upgradeUrl: process.env.BILLING_UPGRADE_URL || 'https://iotistic.ca/upgrade',
     });
   } catch (error) {
     console.error('Error fetching license info:', error);

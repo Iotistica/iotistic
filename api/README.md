@@ -59,7 +59,7 @@ docker run -d \
 | `IOTISTIC_LICENSE_KEY` | - | License JWT for feature control (optional, runs in unlicensed mode if not set) |
 | `LICENSE_PUBLIC_KEY` | - | RSA public key for license validation |
 | `BILLING_API_URL` | - | Global billing API URL (for usage reporting) |
-| `BILLING_UPGRADE_URL` | `https://Iotistic.com/upgrade` | Upgrade page URL (shown in feature-blocked errors) |
+| `BILLING_UPGRADE_URL` | `https://iotistic.ca/upgrade` | Upgrade page URL (shown in feature-blocked errors) |
 
 ## API Endpoints
 

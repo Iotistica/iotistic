@@ -127,7 +127,7 @@ router.post('/api/alerts/advanced', requireFeature('hasAdvancedAlerts'), async (
   "error": "Feature not available",
   "message": "This feature requires a higher plan. Current plan: starter",
   "feature": "canExportData",
-  "upgradeUrl": "https://Iotistic.com/upgrade"
+  "upgradeUrl": "https://iotistic.ca/upgrade"
 }
 ```
 
@@ -208,7 +208,7 @@ await SystemConfigModel.set('feature_toggle_beta', { enabled: true });
       "percentUsed": 46
     }
   },
-  "upgradeUrl": "https://Iotistic.com/upgrade"
+  "upgradeUrl": "https://iotistic.ca/upgrade"
 }
 ```
 
@@ -244,11 +244,11 @@ MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...
 **Optional**:
 ```bash
 # Global Billing API URL (for usage reporting)
-BILLING_API_URL=https://billing.Iotistic.com
+BILLING_API_URL=https://billing.iotistic.ca
 
 # Upgrade/portal URLs (shown in error messages)
-BILLING_UPGRADE_URL=https://Iotistic.com/upgrade
-BILLING_PORTAL_URL=https://Iotistic.com/billing
+BILLING_UPGRADE_URL=https://iotistic.ca/upgrade
+BILLING_PORTAL_URL=https://iotistic.ca/billing
 
 # Instance ID (for multi-region deployments)
 INSTANCE_ID=us-east-1-prod

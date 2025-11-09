@@ -128,7 +128,7 @@ def setup_server():
     identity = ModbusDeviceIdentification()
     identity.VendorName = 'Iotistic'
     identity.ProductCode = 'MODSIM'
-    identity.VendorUrl = 'https://iotistic.com'
+    identity.VendorUrl = 'https://iotistic.ca'
     identity.ProductName = 'Modbus TCP Simulator'
     identity.ModelName = 'Industrial Sensor Simulator'
     identity.MajorMinorRevision = '1.0.0'

@@ -252,9 +252,9 @@ sensor -status         # Sensor initialization status
 ## 🏢 About
 
 **Sensor Technology**: BOSCH BME688 4-in-1 environmental sensor with SPE connectivity  
-**SPE Technology**: Provided by [Iotistic Inc](https://Iotistic.com) - Leader in SPE technology  
+**SPE Technology**: Provided by [Iotistic Inc](https://iotistic.ca) - Leader in SPE technology  
 **Software Development**: IoT software experts team by [iotistic.ca](http://www.iotistic.ca)
 
 ---
 
-*For technical support and additional resources, visit [Iotistic.com](https://Iotistic.com)*
+*For technical support and additional resources, visit [iotistic.ca](https://iotistic.ca)*

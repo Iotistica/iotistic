@@ -184,7 +184,7 @@ const ProfessionalServices = () => {
         </Typography>
         <Box display="flex" gap={2} justifyContent="center" flexWrap="wrap">
           <Typography variant="body2">
-            📧 sales@iotistic.com
+            📧 sales@iotistic.ca
           </Typography>
           <Typography variant="body2">
             📞 +1 (555) 123-4567

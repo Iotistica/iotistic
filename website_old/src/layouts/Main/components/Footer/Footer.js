@@ -74,7 +74,7 @@ const Footer = () => {
             </IconButton>
             <IconButton
               aria-label="Email"
-              href="mailto:info@iotistic.com"
+              href="mailto:info@iotistic.ca"
               size="small"
             >
               <EmailIcon fontSize="small" />
