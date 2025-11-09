@@ -257,6 +257,15 @@ services:
             dockerfile: Dockerfile
         container_name: iotistic-canbus-sim
         restart: unless-stopped
+        ports:
+            - "11898:11898"
+        networks:
+            - iotistic-net
+        logging:
+            driver: "json-file"
+            options:
+                max-size: "5m"
+                max-file: "2"
     
     opcua-simulator:
         build:
@@ -264,6 +273,15 @@ services:
             dockerfile: Dockerfile
         container_name: iotistic-opcua-sim
         restart: unless-stopped
+        ports:
+            - "4840:4840"
+        networks:
+            - iotistic-net
+        logging:
+            driver: "json-file"
+            options:
+                max-size: "5m"
+                max-file: "2"
 
     neo4j:
         image: neo4j:5.15-community
