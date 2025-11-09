@@ -9,23 +9,9 @@ concurrency:
   cancel-in-progress: true
 
 on:
-  push:
-    branches:
-      - master
-    paths:
-      - 'agent/**'
-      - 'api/**'
-      - 'dashboard/**'
-      - 'docker-compose.e2e.yml'
-      - '.github/workflows/integration-tests.yml'
-      - '.github/scripts/setup-env.sh'
-  pull_request:
-    branches:
-      - master
-  workflow_dispatch:  # Manual trigger
-  schedule:
-    # Run daily at 2 AM UTC (optional - for regular testing)
-    - cron: '0 2 * * *'
+  release:
+    types: [published]
+  workflow_dispatch:
 
 jobs:
   setup:
