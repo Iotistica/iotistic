@@ -418,24 +418,13 @@ jobs:
           echo "Building TypeScript..."
           sudo npm run build
           
-          # Verify build output
-          echo "Checking dist folder contents:"
-          ls -laR dist/ || echo "dist folder not found"
-          
-          if [ -f dist/index.js ]; then
-            echo "✓ Build successful - dist/index.js exists"
+          # Verify build output - the entry point is dist/src/index.js
+          if [ -f dist/src/index.js ]; then
+            echo "✓ Build successful - dist/src/index.js exists"
           else
-            echo "✗ dist/index.js not found, checking for alternative entry points..."
-            # Check for other possible entry points
-            find dist -name "*.js" -type f | head -20
-            
-            # Use the device entry point which might be built instead
-            if [ -f dist/device-entry.js ]; then
-              echo "Found dist/device-entry.js, will use that"
-            else
-              echo "No suitable entry point found"
-              exit 1
-            fi
+            echo "✗ Build failed - dist/src/index.js not found"
+            ls -la dist/src/ || echo "dist/src not found"
+            exit 1
           fi
           
           # Install PM2 globally for process management
@@ -482,7 +471,7 @@ jobs:
           module.exports = {
             apps: [{
               name: 'iotistic-agent',
-              script: 'dist/index.js',
+              script: 'dist/src/index.js',
               cwd: '/opt/iotistic/agent',
               instances: 1,
               autorestart: true,
