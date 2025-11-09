@@ -530,31 +530,89 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Upload install-docker.sh
+      - name: Enable blob versioning (if not already enabled)
+        run: |
+          # Check if versioning is already enabled
+          VERSIONING_ENABLED=$(az storage account blob-service-properties show \
+            --account-name ${{ secrets.AZURE_STORAGE_ACCOUNT }} \
+            --query 'isVersioningEnabled' -o tsv 2>/dev/null || echo "false")
+          
+          if [ "$VERSIONING_ENABLED" != "true" ]; then
+            echo "Enabling blob versioning on storage account..."
+            az storage account blob-service-properties update \
+              --account-name ${{ secrets.AZURE_STORAGE_ACCOUNT }} \
+              --enable-versioning true
+            echo "✓ Blob versioning enabled"
+          else
+            echo "✓ Blob versioning already enabled"
+          fi
+
+      - name: Prepare versioned scripts
+        run: |
+          # Create temporary directory for versioned scripts
+          mkdir -p /tmp/iotistic-scripts
+          
+          # Replace version placeholder in install-docker.sh
+          sed "s/AGENT_VERSION_PLACEHOLDER/${{ needs.version.outputs.package_version }}/g" \
+            agent/bin/install-docker.sh > /tmp/iotistic-scripts/install-docker.sh
+          
+          # Replace version placeholder in install-systemd.sh
+          sed "s/AGENT_VERSION_PLACEHOLDER/${{ needs.version.outputs.package_version }}/g" \
+            agent/bin/install-systemd.sh > /tmp/iotistic-scripts/install-systemd.sh
+          
+          echo "✓ Prepared scripts with version ${{ needs.version.outputs.package_version }}"
+
+      - name: Upload install-docker.sh (latest)
         run: |
           az storage blob upload \
             --account-name ${{ secrets.AZURE_STORAGE_ACCOUNT }} \
             --container-name scripts \
             --name install-docker.sh \
-            --file agent/bin/install-docker.sh \
+            --file /tmp/iotistic-scripts/install-docker.sh \
             --overwrite true \
             --content-type application/x-sh \
             --content-disposition "attachment; filename=install-docker.sh"
           
-          echo "✓ Uploaded install-docker.sh"
+          echo "✓ Uploaded install-docker.sh (latest)"
 
-      - name: Upload install-systemd.sh
+      - name: Upload install-docker.sh (versioned)
+        run: |
+          az storage blob upload \
+            --account-name ${{ secrets.AZURE_STORAGE_ACCOUNT }} \
+            --container-name scripts \
+            --name install-docker-${{ needs.version.outputs.package_version }}.sh \
+            --file /tmp/iotistic-scripts/install-docker.sh \
+            --overwrite true \
+            --content-type application/x-sh \
+            --content-disposition "attachment; filename=install-docker-${{ needs.version.outputs.package_version }}.sh"
+          
+          echo "✓ Uploaded install-docker-${{ needs.version.outputs.package_version }}.sh"
+
+      - name: Upload install-systemd.sh (latest)
         run: |
           az storage blob upload \
             --account-name ${{ secrets.AZURE_STORAGE_ACCOUNT }} \
             --container-name scripts \
             --name install-systemd.sh \
-            --file agent/bin/install-systemd.sh \
+            --file /tmp/iotistic-scripts/install-systemd.sh \
             --overwrite true \
             --content-type application/x-sh \
             --content-disposition "attachment; filename=install-systemd.sh"
           
-          echo "✓ Uploaded install-systemd.sh"
+          echo "✓ Uploaded install-systemd.sh (latest)"
+
+      - name: Upload install-systemd.sh (versioned)
+        run: |
+          az storage blob upload \
+            --account-name ${{ secrets.AZURE_STORAGE_ACCOUNT }} \
+            --container-name scripts \
+            --name install-systemd-${{ needs.version.outputs.package_version }}.sh \
+            --file /tmp/iotistic-scripts/install-systemd.sh \
+            --overwrite true \
+            --content-type application/x-sh \
+            --content-disposition "attachment; filename=install-systemd-${{ needs.version.outputs.package_version }}.sh"
+          
+          echo "✓ Uploaded install-systemd-${{ needs.version.outputs.package_version }}.sh"
 
       - name: Upload legacy install.sh (if exists)
         run: |
@@ -577,7 +635,7 @@ jobs:
         run: |
           echo "# Installation Scripts Uploaded" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## Available Scripts" >> $GITHUB_STEP_SUMMARY
+          echo "## Latest Scripts" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Docker Installation" >> $GITHUB_STEP_SUMMARY
           echo '```bash' >> $GITHUB_STEP_SUMMARY
@@ -587,6 +645,18 @@ jobs:
           echo "### Systemd Installation (with PM2)" >> $GITHUB_STEP_SUMMARY
           echo '```bash' >> $GITHUB_STEP_SUMMARY
           echo "curl -sSL https://install.iotistic.com/install-systemd.sh | sudo bash" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Version ${{ needs.version.outputs.package_version }} Scripts" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Docker Installation (Versioned)" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo "curl -sSL https://install.iotistic.com/install-docker-${{ needs.version.outputs.package_version }}.sh | sudo bash" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Systemd Installation (Versioned)" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo "curl -sSL https://install.iotistic.com/install-systemd-${{ needs.version.outputs.package_version }}.sh | sudo bash" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "✓ Scripts uploaded to Azure Blob Storage" >> $GITHUB_STEP_SUMMARY

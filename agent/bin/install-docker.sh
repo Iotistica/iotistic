@@ -2,11 +2,15 @@
 set -e
 
 # Iotistic Agent - Docker Installation Script
+# Version: AGENT_VERSION_PLACEHOLDER
 # This script installs the Iotistic agent as a Docker container
 # Usage: curl -sSL https://install.iotistic.com/install-docker.sh | bash
 
+SCRIPT_VERSION="AGENT_VERSION_PLACEHOLDER"
+
 echo "=================================="
 echo "Iotistic Agent - Docker Installer"
+echo "Version: $SCRIPT_VERSION"
 echo "=================================="
 echo ""
 
