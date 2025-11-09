@@ -415,8 +415,9 @@ jobs:
           cd /opt/iotistic/agent
           sudo npm ci --legacy-peer-deps
           
-          echo "Building TypeScript..."
-          sudo npm run build
+          echo "Building TypeScript with build config..."
+          sudo npx tsc --project tsconfig.build.json
+          sudo npm run copy:migrations
           
           # Show current directory and what was built
           echo "Current directory: $(pwd)"
