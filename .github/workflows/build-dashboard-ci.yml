@@ -222,3 +222,26 @@ jobs:
           docker images iotistic/dashboard:latest --format "{{.Repository}}:{{.Tag}} - {{.Size}}" >> $GITHUB_STEP_SUMMARY || echo "Image not available" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
 
+  trigger-integration-tests:
+    name: Trigger Integration Tests
+    needs: [version, buildx]
+    runs-on: ubuntu-24.04
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    
+    steps:
+      - name: Trigger integration tests
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'integration-tests.yml',
+              ref: 'master',
+              inputs: {
+                dashboard_version: '${{ needs.version.outputs.new_version }}'
+              }
+            });
+            
+            console.log('Integration tests triggered with Dashboard version: ${{ needs.version.outputs.new_version }}');

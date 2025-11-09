@@ -25,20 +25,31 @@ on:
         type: string
   workflow_dispatch:
     inputs:
+      test_mode:
+        description: 'Test mode: incremental (one service) or full-stack (all latest)'
+        required: false
+        type: choice
+        options:
+          - incremental
+          - full-stack
+        default: full-stack
       agent_version:
-        description: 'Agent version to test (default: latest)'
+        description: 'Agent version to test (default: latest from package.json)'
         required: false
         type: string
       api_version:
-        description: 'API version to test (default: latest)'
+        description: 'API version to test (default: latest from package.json)'
         required: false
         type: string
       dashboard_version:
-        description: 'Dashboard version to test (default: latest)'
+        description: 'Dashboard version to test (default: latest from package.json)'
         required: false
         type: string
   release:
     types: [published]
+  schedule:
+    # Run full stack tests nightly at 2 AM UTC
+    - cron: '0 2 * * *'
 
 jobs:
   determine-versions:
@@ -83,11 +94,50 @@ jobs:
           echo "  - Agent: $AGENT_VERSION"
           echo "  - API: $API_VERSION"
           echo "  - Dashboard: $DASHBOARD_VERSION"
+          
+          # Check if images exist on Docker Hub
+          echo ""
+          echo "Checking if images exist on Docker Hub..."
+          
+          # Function to check if image exists
+          check_image() {
+            local image=$1
+            if docker manifest inspect "$image" > /dev/null 2>&1; then
+              echo "✓ $image exists"
+              return 0
+            else
+              echo "✗ $image NOT FOUND"
+              return 1
+            fi
+          }
+          
+          # Check all images
+          MISSING=0
+          check_image "iotistic/agent:$AGENT_VERSION" || MISSING=1
+          check_image "iotistic/api:$API_VERSION" || MISSING=1
+          check_image "iotistic/dashboard:$DASHBOARD_VERSION" || MISSING=1
+          
+          if [ $MISSING -eq 1 ]; then
+            echo ""
+            echo "ERROR: Some images are missing on Docker Hub!"
+            echo "Please ensure all builds have completed successfully."
+            exit 1
+          fi
+          
+          echo ""
+          echo "All images found! Proceeding with tests..."
 
       - name: Display test configuration
         run: |
           {
             echo "## Integration Test Configuration"
+            echo ""
+            echo "### Test Mode"
+            if [ "${{ inputs.test_mode }}" = "full-stack" ] || [ "${{ github.event_name }}" = "schedule" ]; then
+              echo "**Mode**: Full Stack (All Latest Versions)"
+            else
+              echo "**Mode**: Incremental (Mixed Versions - Testing Backward Compatibility)"
+            fi
             echo ""
             echo "### Versions Under Test"
             echo "- **Agent**: \`${{ steps.versions.outputs.agent_version }}\`"
