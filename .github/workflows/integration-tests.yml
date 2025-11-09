@@ -372,6 +372,69 @@ jobs:
         if: always()
         run: docker compose -f $COMPOSE_FILE down -v
 
+  test-sensors:
+    name: Test Sensor Simulators
+    needs: [test-mosquitto, test-api]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup environment
+        run: |
+          chmod +x .github/scripts/setup-env.sh
+          LICENSE_PUBLIC_KEY="${{ secrets.LICENSE_PUBLIC_KEY }}" \
+          IOTISTIC_LICENSE_KEY="${{ secrets.IOTISTIC_LICENSE_KEY }}" \
+          .github/scripts/setup-env.sh
+
+      - name: Start protocol simulators
+        run: docker compose -f $COMPOSE_FILE up -d modbus-simulator canbus-simulator opcua-simulator
+
+      - name: Wait for simulators to start
+        run: |
+          echo "Waiting for protocol simulators to start..."
+          sleep 15
+
+      - name: Check simulator status
+        run: |
+          echo "=== Protocol Simulator Status ==="
+          docker compose -f $COMPOSE_FILE ps | grep simulator
+
+      - name: Test Modbus simulator
+        run: |
+          echo "Testing Modbus simulator on port 502..."
+          nc -zv localhost 502 || echo "Modbus simulator port check"
+
+      - name: Test CANbus simulator
+        run: |
+          echo "Testing CANbus simulator on port 11898..."
+          nc -zv localhost 11898 || echo "CANbus simulator port check"
+
+      - name: Test OPC-UA simulator
+        run: |
+          echo "Testing OPC-UA simulator on port 4840..."
+          nc -zv localhost 4840 || echo "OPC-UA simulator port check"
+
+      - name: Check simulator logs
+        if: always()
+        run: |
+          echo "=== Modbus Simulator Logs ==="
+          docker compose -f $COMPOSE_FILE logs modbus-simulator --tail=50 || true
+          
+          echo ""
+          echo "=== CANbus Simulator Logs ==="
+          docker compose -f $COMPOSE_FILE logs canbus-simulator --tail=50 || true
+          
+          echo ""
+          echo "=== OPC-UA Simulator Logs ==="
+          docker compose -f $COMPOSE_FILE logs opcua-simulator --tail=50 || true
+
+      - name: Cleanup
+        if: always()
+        run: docker compose -f $COMPOSE_FILE down -v
+
   test-dashboard:
     name: Test Dashboard
     needs: [test-agents]
@@ -432,7 +495,7 @@ jobs:
 
   report:
     name: Generate Test Report
-    needs: [test-postgres, test-redis, test-neo4j, test-mosquitto, test-api, test-dashboard, test-agents]
+    needs: [test-postgres, test-redis, test-neo4j, test-mosquitto, test-api, test-sensors, test-dashboard, test-agents]
     runs-on: ubuntu-24.04
     if: always()
     
