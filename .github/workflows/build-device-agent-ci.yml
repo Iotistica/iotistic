@@ -106,10 +106,16 @@ jobs:
           echo "**Git SHA:** \`${{ needs.version.outputs.sha_short }}\`" >> $GITHUB_STEP_SUMMARY
           echo "**Platform:** \`linux/amd64\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Docker Tags:" >> $GITHUB_STEP_SUMMARY
-          echo "- \`iotistic/agent:latest\`" >> $GITHUB_STEP_SUMMARY
-          echo "- \`iotistic/agent:${{ needs.version.outputs.sha_short }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- \`iotistic/agent:${{ needs.version.outputs.package_version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "### Docker Images:" >> $GITHUB_STEP_SUMMARY
+          echo "- [\`iotistic/agent:latest\`](https://hub.docker.com/r/iotistic/agent/tags?name=latest)" >> $GITHUB_STEP_SUMMARY
+          echo "- [\`iotistic/agent:${{ needs.version.outputs.sha_short }}\`](https://hub.docker.com/r/iotistic/agent/tags?name=${{ needs.version.outputs.sha_short }})" >> $GITHUB_STEP_SUMMARY
+          echo "- [\`iotistic/agent:${{ needs.version.outputs.package_version }}\`](https://hub.docker.com/r/iotistic/agent/tags?name=${{ needs.version.outputs.package_version }})" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Installation Scripts:" >> $GITHUB_STEP_SUMMARY
+          echo "- [install-docker.sh](https://apps.iotistic.com/agent/install-docker.sh) ([checksum](https://apps.iotistic.com/agent/install-docker.sh.sha256))" >> $GITHUB_STEP_SUMMARY
+          echo "- [install-systemd.sh](https://apps.iotistic.com/agent/install-systemd.sh) ([checksum](https://apps.iotistic.com/agent/install-systemd.sh.sha256))" >> $GITHUB_STEP_SUMMARY
+          echo "- [install-docker-${{ needs.version.outputs.package_version }}.sh](https://apps.iotistic.com/agent/versions/install-docker-${{ needs.version.outputs.package_version }}.sh) ([checksum](https://apps.iotistic.com/agent/versions/install-docker-${{ needs.version.outputs.package_version }}.sh.sha256))" >> $GITHUB_STEP_SUMMARY
+          echo "- [install-systemd-${{ needs.version.outputs.package_version }}.sh](https://apps.iotistic.com/agent/versions/install-systemd-${{ needs.version.outputs.package_version }}.sh) ([checksum](https://apps.iotistic.com/agent/versions/install-systemd-${{ needs.version.outputs.package_version }}.sh.sha256))" >> $GITHUB_STEP_SUMMARY
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -615,12 +621,12 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Docker Installation" >> $GITHUB_STEP_SUMMARY
           echo '```bash' >> $GITHUB_STEP_SUMMARY
-          echo "curl -sSL https://install.iotistic.com/agent/install-docker.sh | sudo bash" >> $GITHUB_STEP_SUMMARY
+          echo "curl -sSL https://apps.iotistic.com/agent/install-docker.sh | sudo bash" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Systemd Installation (with PM2)" >> $GITHUB_STEP_SUMMARY
           echo '```bash' >> $GITHUB_STEP_SUMMARY
-          echo "curl -sSL https://install.iotistic.com/agent/install-systemd.sh | sudo bash" >> $GITHUB_STEP_SUMMARY
+          echo "curl -sSL https://apps.iotistic.com/agent/install-systemd.sh | sudo bash" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "## Verified Install (with SHA256 checksum)" >> $GITHUB_STEP_SUMMARY
@@ -628,8 +634,8 @@ jobs:
           echo "### Docker Installation (Verified)" >> $GITHUB_STEP_SUMMARY
           echo '```bash' >> $GITHUB_STEP_SUMMARY
           echo "# Download script and checksum" >> $GITHUB_STEP_SUMMARY
-          echo "curl -sSL https://install.iotistic.com/agent/install-docker.sh -o install-docker.sh" >> $GITHUB_STEP_SUMMARY
-          echo "curl -sSL https://install.iotistic.com/agent/install-docker.sh.sha256 -o install-docker.sh.sha256" >> $GITHUB_STEP_SUMMARY
+          echo "curl -sSL https://apps.iotistic.com/agent/install-docker.sh -o install-docker.sh" >> $GITHUB_STEP_SUMMARY
+          echo "curl -sSL https://apps.iotistic.com/agent/install-docker.sh.sha256 -o install-docker.sh.sha256" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "# Verify checksum" >> $GITHUB_STEP_SUMMARY
           echo "sha256sum -c install-docker.sh.sha256" >> $GITHUB_STEP_SUMMARY
@@ -641,8 +647,8 @@ jobs:
           echo "### Systemd Installation (Verified)" >> $GITHUB_STEP_SUMMARY
           echo '```bash' >> $GITHUB_STEP_SUMMARY
           echo "# Download script and checksum" >> $GITHUB_STEP_SUMMARY
-          echo "curl -sSL https://install.iotistic.com/agent/install-systemd.sh -o install-systemd.sh" >> $GITHUB_STEP_SUMMARY
-          echo "curl -sSL https://install.iotistic.com/agent/install-systemd.sh.sha256 -o install-systemd.sh.sha256" >> $GITHUB_STEP_SUMMARY
+          echo "curl -sSL https://apps.iotistic.com/agent/install-systemd.sh -o install-systemd.sh" >> $GITHUB_STEP_SUMMARY
+          echo "curl -sSL https://apps.iotistic.com/agent/install-systemd.sh.sha256 -o install-systemd.sh.sha256" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "# Verify checksum" >> $GITHUB_STEP_SUMMARY
           echo "sha256sum -c install-systemd.sh.sha256" >> $GITHUB_STEP_SUMMARY
@@ -655,12 +661,12 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Docker Installation (Versioned)" >> $GITHUB_STEP_SUMMARY
           echo '```bash' >> $GITHUB_STEP_SUMMARY
-          echo "curl -sSL https://install.iotistic.com/agent/versions/install-docker-${{ needs.version.outputs.package_version }}.sh | sudo bash" >> $GITHUB_STEP_SUMMARY
+          echo "curl -sSL https://apps.iotistic.com/agent/versions/install-docker-${{ needs.version.outputs.package_version }}.sh | sudo bash" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Systemd Installation (Versioned)" >> $GITHUB_STEP_SUMMARY
           echo '```bash' >> $GITHUB_STEP_SUMMARY
-          echo "curl -sSL https://install.iotistic.com/agent/versions/install-systemd-${{ needs.version.outputs.package_version }}.sh | sudo bash" >> $GITHUB_STEP_SUMMARY
+          echo "curl -sSL https://apps.iotistic.com/agent/versions/install-systemd-${{ needs.version.outputs.package_version }}.sh | sudo bash" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "## Environment Variables" >> $GITHUB_STEP_SUMMARY
@@ -676,7 +682,7 @@ jobs:
           echo '```bash' >> $GITHUB_STEP_SUMMARY
           echo "export IOTISTIC_CLOUD_API_ENDPOINT=https://api.iotistic.com" >> $GITHUB_STEP_SUMMARY
           echo "export IOTISTIC_PROVISIONING_KEY=your-api-key-here" >> $GITHUB_STEP_SUMMARY
-          echo "curl -sSL https://install.iotistic.com/agent/install-docker.sh | sudo -E bash" >> $GITHUB_STEP_SUMMARY
+          echo "curl -sSL https://apps.iotistic.com/agent/install-docker.sh | sudo -E bash" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "---" >> $GITHUB_STEP_SUMMARY
