@@ -479,15 +479,13 @@ jobs:
               },
               output: '/var/log/iotistic/agent-out.log',
               error: '/var/log/iotistic/agent-error.log',
-              log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
-              uid: 'iotistic',
-              gid: 'iotistic'
+              log_date_format: 'YYYY-MM-DD HH:mm:ss Z'
             }]
           };
           EOFCONFIG
           
-          # Start with PM2 using ecosystem file
-          pm2 start ecosystem.config.js
+          # Start with PM2 using ecosystem file (as root to access Docker socket)
+          sudo pm2 start ecosystem.config.js
           
           echo "✓ Agent started with PM2"
           
@@ -497,18 +495,18 @@ jobs:
       - name: Check PM2 status
         run: |
           echo "PM2 Process List:"
-          pm2 list
+          sudo pm2 list
           
           echo ""
           echo "Agent Process Info:"
-          pm2 info iotistic-agent
+          sudo pm2 info iotistic-agent
           
           # Check if process is online
-          if pm2 list | grep -q "online"; then
+          if sudo pm2 list | grep -q "online"; then
             echo "✓ Agent is running (online)"
           else
             echo "✗ Agent is not running"
-            pm2 logs iotistic-agent --nostream --lines 100
+            sudo pm2 logs iotistic-agent --nostream --lines 100
             exit 1
           fi
 
@@ -521,19 +519,19 @@ jobs:
             echo "✓ Agent API is responding"
           else
             echo "⚠ Agent API not responding"
-            pm2 logs iotistic-agent --nostream --lines 50
+            sudo pm2 logs iotistic-agent --nostream --lines 50
           fi
 
       - name: Verify auto-reconciliation started
         run: |
           echo "Checking for auto-reconciliation in logs..."
           
-          if pm2 logs iotistic-agent --nostream --lines 500 | grep -q "Auto-reconciliation started"; then
+          if sudo pm2 logs iotistic-agent --nostream --lines 500 | grep -q "Auto-reconciliation started"; then
             echo "✓ Auto-reconciliation started"
           else
             echo "✗ Auto-reconciliation did not start"
             echo "Full logs:"
-            pm2 logs iotistic-agent --nostream --lines 500
+            sudo pm2 logs iotistic-agent --nostream --lines 500
             exit 1
           fi
 
@@ -543,13 +541,13 @@ jobs:
           echo "========================================="
           echo "Agent Logs (PM2):"
           echo "========================================="
-          pm2 logs iotistic-agent --nostream --lines 200
+          sudo pm2 logs iotistic-agent --nostream --lines 200
 
       - name: Cleanup
         if: always()
         run: |
-          pm2 stop iotistic-agent || true
-          pm2 delete iotistic-agent || true
+          sudo pm2 stop iotistic-agent || true
+          sudo pm2 delete iotistic-agent || true
 
       - name: Generate systemd test summary
         if: always()
