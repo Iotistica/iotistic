@@ -8,7 +8,7 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM users WHERE username = 'admin') THEN
     INSERT INTO users (
       username,
-      password,
+      password_hash,
       email,
       role,
       created_at,
@@ -36,5 +36,5 @@ CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 -- Add comment
 COMMENT ON TABLE users IS 'System users with authentication credentials';
 COMMENT ON COLUMN users.username IS 'Unique username for login';
-COMMENT ON COLUMN users.password IS 'Bcrypt hashed password';
+COMMENT ON COLUMN users.password_hash IS 'Bcrypt hashed password';
 COMMENT ON COLUMN users.role IS 'User role: admin, user, viewer';
