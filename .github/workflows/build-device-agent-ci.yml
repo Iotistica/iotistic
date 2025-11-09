@@ -354,7 +354,7 @@ jobs:
 
   test-agent-systemd:
     name: Test Agent as Systemd Service
-    needs: [version, buildx]
+    needs: version
     runs-on: ubuntu-24.04
     
     steps:
@@ -453,6 +453,20 @@ jobs:
           sudo systemctl daemon-reload
           
           echo "✓ Systemd service installed"
+
+      - name: Debug - Check file permissions and structure
+        run: |
+          echo "Checking agent installation..."
+          ls -la /opt/iotistic/agent/
+          echo ""
+          echo "Checking dist directory..."
+          ls -la /opt/iotistic/agent/dist/
+          echo ""
+          echo "Checking if index.js exists and is readable..."
+          sudo -u iotistic test -r /opt/iotistic/agent/dist/index.js && echo "✓ File is readable by iotistic user" || echo "✗ File NOT readable"
+          echo ""
+          echo "Testing node execution as iotistic user..."
+          sudo -u iotistic /usr/bin/node --version
 
       - name: Start agent service
         run: |
