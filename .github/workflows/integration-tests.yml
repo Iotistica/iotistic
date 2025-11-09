@@ -59,66 +59,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Create .env file
+      - name: Setup environment
         run: |
-          cat > .env << EOF
-          # PostgreSQL
-          POSTGRES_DB=iotistic
-          POSTGRES_USER=postgres
-          POSTGRES_PASSWORD=postgres
-          
-          # Redis
-          REDIS_PORT_EXT=6379
-          REDIS_HOST=redis
-          REDIS_PORT=6379
-          
-          # API
-          API_PORT_EXT=4002
-          PORT=3002
-          NODE_ENV=development
-          
-          # Database Connection
-          DB_HOST=postgres
-          DB_PORT=5432
-          DB_NAME=iotistic
-          DB_USER=postgres
-          DB_PASSWORD=postgres
-          DB_POOL_SIZE=20
-          
-          # MQTT
-          MOSQUITTO_PORT_EXT=5883
-          MOSQUITTO_WS_PORT_EXT=59002
-          MQTT_BROKER_URL=mqtt://mosquitto:1883
-          MQTT_USERNAME=admin
-          MQTT_PASSWORD=iotistic42!
-          MQTT_PERSIST_TO_DB=true
-          MQTT_DB_SYNC_INTERVAL=10000
-          MQTT_MONITOR_ENABLED=true
-          
-          # Neo4j
-          NEO4J_URI=bolt://neo4j:7687
-          NEO4J_USERNAME=neo4j
-          NEO4J_PASSWORD=iotistic123
-          
-          # Dashboard
-          DASHBOARD_PORT_EXT=3000
-          
-          # VPN
-          VPN_SERVER_PORT=1194
-          VPN_API_PORT=3200
-          VPN_MGMT_PORT=7505
-          VPN_CA_PORT=8080
-          VPN_SERVER_HOST=localhost
-          VPN_DB_NAME=iotistic_vpn
-          
-          # License Keys
-          LICENSE_PUBLIC_KEY=${{ secrets.LICENSE_PUBLIC_KEY }}
-          IOTISTIC_LICENSE_KEY=${{ secrets.IOTISTIC_LICENSE_KEY }}
-          
-          # Logging
-          FORCE_COLOR=1
-          LOG_COMPRESSION=true
-          EOF
+          chmod +x .github/scripts/setup-env.sh
+          LICENSE_PUBLIC_KEY="${{ secrets.LICENSE_PUBLIC_KEY }}" \
+          IOTISTIC_LICENSE_KEY="${{ secrets.IOTISTIC_LICENSE_KEY }}" \
+          .github/scripts/setup-env.sh
 
       - name: Start PostgreSQL
         run: docker compose -f $COMPOSE_FILE up -d postgres
@@ -151,66 +97,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Create .env file
+      - name: Setup environment
         run: |
-          cat > .env << EOF
-          # PostgreSQL
-          POSTGRES_DB=iotistic
-          POSTGRES_USER=postgres
-          POSTGRES_PASSWORD=postgres
-          
-          # Redis
-          REDIS_PORT_EXT=6379
-          REDIS_HOST=redis
-          REDIS_PORT=6379
-          
-          # API
-          API_PORT_EXT=4002
-          PORT=3002
-          NODE_ENV=development
-          
-          # Database Connection
-          DB_HOST=postgres
-          DB_PORT=5432
-          DB_NAME=iotistic
-          DB_USER=postgres
-          DB_PASSWORD=postgres
-          DB_POOL_SIZE=20
-          
-          # MQTT
-          MOSQUITTO_PORT_EXT=5883
-          MOSQUITTO_WS_PORT_EXT=59002
-          MQTT_BROKER_URL=mqtt://mosquitto:1883
-          MQTT_USERNAME=admin
-          MQTT_PASSWORD=iotistic42!
-          MQTT_PERSIST_TO_DB=true
-          MQTT_DB_SYNC_INTERVAL=10000
-          MQTT_MONITOR_ENABLED=true
-          
-          # Neo4j
-          NEO4J_URI=bolt://neo4j:7687
-          NEO4J_USERNAME=neo4j
-          NEO4J_PASSWORD=iotistic123
-          
-          # Dashboard
-          DASHBOARD_PORT_EXT=3000
-          
-          # VPN
-          VPN_SERVER_PORT=1194
-          VPN_API_PORT=3200
-          VPN_MGMT_PORT=7505
-          VPN_CA_PORT=8080
-          VPN_SERVER_HOST=localhost
-          VPN_DB_NAME=iotistic_vpn
-          
-          # License Keys
-          LICENSE_PUBLIC_KEY=${{ secrets.LICENSE_PUBLIC_KEY }}
-          IOTISTIC_LICENSE_KEY=${{ secrets.IOTISTIC_LICENSE_KEY }}
-          
-          # Logging
-          FORCE_COLOR=1
-          LOG_COMPRESSION=true
-          EOF
+          chmod +x .github/scripts/setup-env.sh
+          LICENSE_PUBLIC_KEY="${{ secrets.LICENSE_PUBLIC_KEY }}" \
+          IOTISTIC_LICENSE_KEY="${{ secrets.IOTISTIC_LICENSE_KEY }}" \
+          .github/scripts/setup-env.sh
 
       - name: Start Redis
         run: docker compose -f $COMPOSE_FILE up -d redis
@@ -243,66 +135,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Create .env file
+      - name: Setup environment
         run: |
-          cat > .env << EOF
-          # PostgreSQL
-          POSTGRES_DB=iotistic
-          POSTGRES_USER=postgres
-          POSTGRES_PASSWORD=postgres
-          
-          # Redis
-          REDIS_PORT_EXT=6379
-          REDIS_HOST=redis
-          REDIS_PORT=6379
-          
-          # API
-          API_PORT_EXT=4002
-          PORT=3002
-          NODE_ENV=development
-          
-          # Database Connection
-          DB_HOST=postgres
-          DB_PORT=5432
-          DB_NAME=iotistic
-          DB_USER=postgres
-          DB_PASSWORD=postgres
-          DB_POOL_SIZE=20
-          
-          # MQTT
-          MOSQUITTO_PORT_EXT=5883
-          MOSQUITTO_WS_PORT_EXT=59002
-          MQTT_BROKER_URL=mqtt://mosquitto:1883
-          MQTT_USERNAME=admin
-          MQTT_PASSWORD=iotistic42!
-          MQTT_PERSIST_TO_DB=true
-          MQTT_DB_SYNC_INTERVAL=10000
-          MQTT_MONITOR_ENABLED=true
-          
-          # Neo4j
-          NEO4J_URI=bolt://neo4j:7687
-          NEO4J_USERNAME=neo4j
-          NEO4J_PASSWORD=iotistic123
-          
-          # Dashboard
-          DASHBOARD_PORT_EXT=3000
-          
-          # VPN
-          VPN_SERVER_PORT=1194
-          VPN_API_PORT=3200
-          VPN_MGMT_PORT=7505
-          VPN_CA_PORT=8080
-          VPN_SERVER_HOST=localhost
-          VPN_DB_NAME=iotistic_vpn
-          
-          # License Keys
-          LICENSE_PUBLIC_KEY=${{ secrets.LICENSE_PUBLIC_KEY }}
-          IOTISTIC_LICENSE_KEY=${{ secrets.IOTISTIC_LICENSE_KEY }}
-          
-          # Logging
-          FORCE_COLOR=1
-          LOG_COMPRESSION=true
-          EOF
+          chmod +x .github/scripts/setup-env.sh
+          LICENSE_PUBLIC_KEY="${{ secrets.LICENSE_PUBLIC_KEY }}" \
+          IOTISTIC_LICENSE_KEY="${{ secrets.IOTISTIC_LICENSE_KEY }}" \
+          .github/scripts/setup-env.sh
 
       - name: Start Neo4j
         run: docker compose -f $COMPOSE_FILE up -d neo4j
@@ -335,66 +173,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Create .env file
+      - name: Setup environment
         run: |
-          cat > .env << EOF
-          # PostgreSQL
-          POSTGRES_DB=iotistic
-          POSTGRES_USER=postgres
-          POSTGRES_PASSWORD=postgres
-          
-          # Redis
-          REDIS_PORT_EXT=6379
-          REDIS_HOST=redis
-          REDIS_PORT=6379
-          
-          # API
-          API_PORT_EXT=4002
-          PORT=3002
-          NODE_ENV=development
-          
-          # Database Connection
-          DB_HOST=postgres
-          DB_PORT=5432
-          DB_NAME=iotistic
-          DB_USER=postgres
-          DB_PASSWORD=postgres
-          DB_POOL_SIZE=20
-          
-          # MQTT
-          MOSQUITTO_PORT_EXT=5883
-          MOSQUITTO_WS_PORT_EXT=59002
-          MQTT_BROKER_URL=mqtt://mosquitto:1883
-          MQTT_USERNAME=admin
-          MQTT_PASSWORD=iotistic42!
-          MQTT_PERSIST_TO_DB=true
-          MQTT_DB_SYNC_INTERVAL=10000
-          MQTT_MONITOR_ENABLED=true
-          
-          # Neo4j
-          NEO4J_URI=bolt://neo4j:7687
-          NEO4J_USERNAME=neo4j
-          NEO4J_PASSWORD=iotistic123
-          
-          # Dashboard
-          DASHBOARD_PORT_EXT=3000
-          
-          # VPN
-          VPN_SERVER_PORT=1194
-          VPN_API_PORT=3200
-          VPN_MGMT_PORT=7505
-          VPN_CA_PORT=8080
-          VPN_SERVER_HOST=localhost
-          VPN_DB_NAME=iotistic_vpn
-          
-          # License Keys
-          LICENSE_PUBLIC_KEY=${{ secrets.LICENSE_PUBLIC_KEY }}
-          IOTISTIC_LICENSE_KEY=${{ secrets.IOTISTIC_LICENSE_KEY }}
-          
-          # Logging
-          FORCE_COLOR=1
-          LOG_COMPRESSION=true
-          EOF
+          chmod +x .github/scripts/setup-env.sh
+          LICENSE_PUBLIC_KEY="${{ secrets.LICENSE_PUBLIC_KEY }}" \
+          IOTISTIC_LICENSE_KEY="${{ secrets.IOTISTIC_LICENSE_KEY }}" \
+          .github/scripts/setup-env.sh
 
       - name: Start PostgreSQL and Mosquitto
         run: docker compose -f $COMPOSE_FILE up -d postgres mosquitto
@@ -429,66 +213,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Create .env file
+      - name: Setup environment
         run: |
-          cat > .env << EOF
-          # PostgreSQL
-          POSTGRES_DB=iotistic
-          POSTGRES_USER=postgres
-          POSTGRES_PASSWORD=postgres
-          
-          # Redis
-          REDIS_PORT_EXT=6379
-          REDIS_HOST=redis
-          REDIS_PORT=6379
-          
-          # API
-          API_PORT_EXT=4002
-          PORT=3002
-          NODE_ENV=development
-          
-          # Database Connection
-          DB_HOST=postgres
-          DB_PORT=5432
-          DB_NAME=iotistic
-          DB_USER=postgres
-          DB_PASSWORD=postgres
-          DB_POOL_SIZE=20
-          
-          # MQTT
-          MOSQUITTO_PORT_EXT=5883
-          MOSQUITTO_WS_PORT_EXT=59002
-          MQTT_BROKER_URL=mqtt://mosquitto:1883
-          MQTT_USERNAME=admin
-          MQTT_PASSWORD=iotistic42!
-          MQTT_PERSIST_TO_DB=true
-          MQTT_DB_SYNC_INTERVAL=10000
-          MQTT_MONITOR_ENABLED=true
-          
-          # Neo4j
-          NEO4J_URI=bolt://neo4j:7687
-          NEO4J_USERNAME=neo4j
-          NEO4J_PASSWORD=iotistic123
-          
-          # Dashboard
-          DASHBOARD_PORT_EXT=3000
-          
-          # VPN
-          VPN_SERVER_PORT=1194
-          VPN_API_PORT=3200
-          VPN_MGMT_PORT=7505
-          VPN_CA_PORT=8080
-          VPN_SERVER_HOST=localhost
-          VPN_DB_NAME=iotistic_vpn
-          
-          # License Keys
-          LICENSE_PUBLIC_KEY=${{ secrets.LICENSE_PUBLIC_KEY }}
-          IOTISTIC_LICENSE_KEY=${{ secrets.IOTISTIC_LICENSE_KEY }}
-          
-          # Logging
-          FORCE_COLOR=1
-          LOG_COMPRESSION=true
-          EOF
+          chmod +x .github/scripts/setup-env.sh
+          LICENSE_PUBLIC_KEY="${{ secrets.LICENSE_PUBLIC_KEY }}" \
+          IOTISTIC_LICENSE_KEY="${{ secrets.IOTISTIC_LICENSE_KEY }}" \
+          .github/scripts/setup-env.sh
 
       - name: Start dependencies and API
         run: docker compose -f $COMPOSE_FILE up -d postgres redis neo4j mosquitto api
@@ -647,66 +377,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Create .env file
+      - name: Setup environment
         run: |
-          cat > .env << EOF
-          # PostgreSQL
-          POSTGRES_DB=iotistic
-          POSTGRES_USER=postgres
-          POSTGRES_PASSWORD=postgres
-          
-          # Redis
-          REDIS_PORT_EXT=6379
-          REDIS_HOST=redis
-          REDIS_PORT=6379
-          
-          # API
-          API_PORT_EXT=4002
-          PORT=3002
-          NODE_ENV=development
-          
-          # Database Connection
-          DB_HOST=postgres
-          DB_PORT=5432
-          DB_NAME=iotistic
-          DB_USER=postgres
-          DB_PASSWORD=postgres
-          DB_POOL_SIZE=20
-          
-          # MQTT
-          MOSQUITTO_PORT_EXT=5883
-          MOSQUITTO_WS_PORT_EXT=59002
-          MQTT_BROKER_URL=mqtt://mosquitto:1883
-          MQTT_USERNAME=admin
-          MQTT_PASSWORD=iotistic42!
-          MQTT_PERSIST_TO_DB=true
-          MQTT_DB_SYNC_INTERVAL=10000
-          MQTT_MONITOR_ENABLED=true
-          
-          # Neo4j
-          NEO4J_URI=bolt://neo4j:7687
-          NEO4J_USERNAME=neo4j
-          NEO4J_PASSWORD=iotistic123
-          
-          # Dashboard
-          DASHBOARD_PORT_EXT=3000
-          
-          # VPN
-          VPN_SERVER_PORT=1194
-          VPN_API_PORT=3200
-          VPN_MGMT_PORT=7505
-          VPN_CA_PORT=8080
-          VPN_SERVER_HOST=localhost
-          VPN_DB_NAME=iotistic_vpn
-          
-          # License Keys
-          LICENSE_PUBLIC_KEY=${{ secrets.LICENSE_PUBLIC_KEY }}
-          IOTISTIC_LICENSE_KEY=${{ secrets.IOTISTIC_LICENSE_KEY }}
-          
-          # Logging
-          FORCE_COLOR=1
-          LOG_COMPRESSION=true
-          EOF
+          chmod +x .github/scripts/setup-env.sh
+          LICENSE_PUBLIC_KEY="${{ secrets.LICENSE_PUBLIC_KEY }}" \
+          IOTISTIC_LICENSE_KEY="${{ secrets.IOTISTIC_LICENSE_KEY }}" \
+          .github/scripts/setup-env.sh
 
       - name: Start dependencies, API and Dashboard
         run: docker compose -f $COMPOSE_FILE up -d postgres redis neo4j mosquitto api dashboard
@@ -761,66 +437,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Create .env file
+      - name: Setup environment
         run: |
-          cat > .env << EOF
-          # PostgreSQL
-          POSTGRES_DB=iotistic
-          POSTGRES_USER=postgres
-          POSTGRES_PASSWORD=postgres
-          
-          # Redis
-          REDIS_PORT_EXT=6379
-          REDIS_HOST=redis
-          REDIS_PORT=6379
-          
-          # API
-          API_PORT_EXT=4002
-          PORT=3002
-          NODE_ENV=development
-          
-          # Database Connection
-          DB_HOST=postgres
-          DB_PORT=5432
-          DB_NAME=iotistic
-          DB_USER=postgres
-          DB_PASSWORD=postgres
-          DB_POOL_SIZE=20
-          
-          # MQTT
-          MOSQUITTO_PORT_EXT=5883
-          MOSQUITTO_WS_PORT_EXT=59002
-          MQTT_BROKER_URL=mqtt://mosquitto:1883
-          MQTT_USERNAME=admin
-          MQTT_PASSWORD=iotistic42!
-          MQTT_PERSIST_TO_DB=true
-          MQTT_DB_SYNC_INTERVAL=10000
-          MQTT_MONITOR_ENABLED=true
-          
-          # Neo4j
-          NEO4J_URI=bolt://neo4j:7687
-          NEO4J_USERNAME=neo4j
-          NEO4J_PASSWORD=iotistic123
-          
-          # Dashboard
-          DASHBOARD_PORT_EXT=3000
-          
-          # VPN
-          VPN_SERVER_PORT=1194
-          VPN_API_PORT=3200
-          VPN_MGMT_PORT=7505
-          VPN_CA_PORT=8080
-          VPN_SERVER_HOST=localhost
-          VPN_DB_NAME=iotistic_vpn
-          
-          # License Keys
-          LICENSE_PUBLIC_KEY=${{ secrets.LICENSE_PUBLIC_KEY }}
-          IOTISTIC_LICENSE_KEY=${{ secrets.IOTISTIC_LICENSE_KEY }}
-          
-          # Logging
-          FORCE_COLOR=1
-          LOG_COMPRESSION=true
-          EOF
+          chmod +x .github/scripts/setup-env.sh
+          LICENSE_PUBLIC_KEY="${{ secrets.LICENSE_PUBLIC_KEY }}" \
+          IOTISTIC_LICENSE_KEY="${{ secrets.IOTISTIC_LICENSE_KEY }}" \
+          .github/scripts/setup-env.sh
 
       - name: Start services for metrics
         run: docker compose -f $COMPOSE_FILE up -d
