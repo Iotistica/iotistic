@@ -373,9 +373,83 @@ jobs:
         if: always()
         run: docker compose down -v
 
+  test-dashboard:
+    name: Test Dashboard
+    needs: [test-agents]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create .env file
+        run: |
+          cat > .env << EOF
+          POSTGRES_DB=iotistic
+          POSTGRES_USER=postgres
+          POSTGRES_PASSWORD=postgres
+          REDIS_PORT_EXT=6379
+          API_PORT_EXT=4002
+          PORT=3002
+          NODE_ENV=development
+          DB_HOST=postgres
+          DB_PORT=5432
+          DB_NAME=iotistic
+          DB_USER=postgres
+          DB_PASSWORD=postgres
+          MQTT_BROKER_URL=mqtt://mosquitto:1883
+          NEO4J_URI=bolt://neo4j:7687
+          NEO4J_USERNAME=neo4j
+          NEO4J_PASSWORD=iotistic123
+          EOF
+
+      - name: Start dependencies, API and Dashboard
+        run: docker compose up -d postgres redis neo4j mosquitto api dashboard
+
+      - name: Wait for API to be ready
+        run: |
+          echo "Waiting for API to be ready..."
+          timeout 120 bash -c '
+            until curl -f http://localhost:4002/health 2>/dev/null; do
+              echo "API not ready yet..."
+              sleep 3
+            done
+          '
+          echo "API is ready!"
+
+      - name: Wait for Dashboard to be ready
+        run: |
+          echo "Waiting for Dashboard to be ready..."
+          timeout 120 bash -c '
+            until curl -f http://localhost:3000 2>/dev/null; do
+              echo "Dashboard not ready yet..."
+              sleep 3
+            done
+          '
+          echo "Dashboard is ready!"
+
+      - name: Test Dashboard endpoints
+        run: |
+          echo "Testing Dashboard home page..."
+          curl -f http://localhost:3000
+          
+          echo "Testing Dashboard static assets..."
+          curl -f http://localhost:3000/assets/ || echo "Assets directory check skipped"
+
+      - name: Check Dashboard logs
+        if: always()
+        run: |
+          echo "=== Dashboard logs ==="
+          docker compose logs dashboard --tail=100 || true
+
+      - name: Cleanup
+        if: always()
+        run: docker compose down -v
+
   report:
     name: Generate Test Report
-    needs: [test-postgres, test-redis, test-neo4j, test-mosquitto, test-api, test-agents]
+    needs: [test-postgres, test-redis, test-neo4j, test-mosquitto, test-api, test-dashboard, test-agents]
     runs-on: ubuntu-24.04
     if: always()
     
