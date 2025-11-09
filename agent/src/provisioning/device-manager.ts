@@ -195,6 +195,28 @@ export class DeviceManager {
 	}
 
 	/**
+	 * Mark device as running in local mode (no cloud provisioning needed)
+	 */
+	async markAsLocalMode(): Promise<void> {
+		if (!this.deviceInfo) {
+			throw new Error('Device manager not initialized');
+		}
+
+		this.deviceInfo.provisioned = false; // Explicitly mark as NOT cloud-provisioned
+		this.deviceInfo.deviceName = this.deviceInfo.deviceName || `device-${this.deviceInfo.uuid.slice(0, 8)}`;
+		this.deviceInfo.deviceType = this.deviceInfo.deviceType || 'standalone';
+		
+		await this.saveDeviceInfo();
+
+		this.logger?.infoSync('Device configured for local mode', {
+			component: 'DeviceManager',
+			operation: 'markAsLocalMode',
+			uuid: this.deviceInfo.uuid,
+			deviceName: this.deviceInfo.deviceName,
+		});
+	}
+
+	/**
 	 * Provision device using two-phase authentication
 	 * Phase 1: Register device using provisioningApiKey
 	 * Phase 2: Exchange keys and remove provisioning key

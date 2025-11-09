@@ -130,6 +130,7 @@ docker run -d \
     -v /var/lib/iotistic/agent:/app/data \
     -p ${DEVICE_API_PORT}:48484 \
     -e DEVICE_API_PORT=48484 \
+    -e AGENT_VERSION=${AGENT_VERSION} \
     -e NODE_ENV=production \
     -e LOG_LEVEL=info \
     -e ORCHESTRATOR_TYPE=docker-compose \

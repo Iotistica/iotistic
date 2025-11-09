@@ -567,52 +567,52 @@ jobs:
           az storage blob upload \
             --account-name ${{ secrets.AZURE_STORAGE_ACCOUNT }} \
             --container-name scripts \
-            --name install-docker.sh \
+            --name agent/install-docker.sh \
             --file /tmp/iotistic-scripts/install-docker.sh \
             --overwrite true \
             --content-type application/x-sh \
             --content-disposition "attachment; filename=install-docker.sh"
           
-          echo "✓ Uploaded install-docker.sh (latest)"
+          echo "✓ Uploaded agent/install-docker.sh (latest)"
 
       - name: Upload install-docker.sh (versioned)
         run: |
           az storage blob upload \
             --account-name ${{ secrets.AZURE_STORAGE_ACCOUNT }} \
             --container-name scripts \
-            --name install-docker-${{ needs.version.outputs.package_version }}.sh \
+            --name agent/versions/install-docker-${{ needs.version.outputs.package_version }}.sh \
             --file /tmp/iotistic-scripts/install-docker.sh \
             --overwrite true \
             --content-type application/x-sh \
             --content-disposition "attachment; filename=install-docker-${{ needs.version.outputs.package_version }}.sh"
           
-          echo "✓ Uploaded install-docker-${{ needs.version.outputs.package_version }}.sh"
+          echo "✓ Uploaded agent/versions/install-docker-${{ needs.version.outputs.package_version }}.sh"
 
       - name: Upload install-systemd.sh (latest)
         run: |
           az storage blob upload \
             --account-name ${{ secrets.AZURE_STORAGE_ACCOUNT }} \
             --container-name scripts \
-            --name install-systemd.sh \
+            --name agent/install-systemd.sh \
             --file /tmp/iotistic-scripts/install-systemd.sh \
             --overwrite true \
             --content-type application/x-sh \
             --content-disposition "attachment; filename=install-systemd.sh"
           
-          echo "✓ Uploaded install-systemd.sh (latest)"
+          echo "✓ Uploaded agent/install-systemd.sh (latest)"
 
       - name: Upload install-systemd.sh (versioned)
         run: |
           az storage blob upload \
             --account-name ${{ secrets.AZURE_STORAGE_ACCOUNT }} \
             --container-name scripts \
-            --name install-systemd-${{ needs.version.outputs.package_version }}.sh \
+            --name agent/versions/install-systemd-${{ needs.version.outputs.package_version }}.sh \
             --file /tmp/iotistic-scripts/install-systemd.sh \
             --overwrite true \
             --content-type application/x-sh \
             --content-disposition "attachment; filename=install-systemd-${{ needs.version.outputs.package_version }}.sh"
           
-          echo "✓ Uploaded install-systemd-${{ needs.version.outputs.package_version }}.sh"
+          echo "✓ Uploaded agent/versions/install-systemd-${{ needs.version.outputs.package_version }}.sh"
 
       - name: Upload legacy install.sh (if exists)
         run: |
