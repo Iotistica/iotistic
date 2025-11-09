@@ -9,6 +9,7 @@ set -e
 # Environment Variables (CI/Non-interactive mode):
 #   IOTISTIC_AGENT_VERSION        - Agent version to install (default: dev)
 #   IOTISTIC_DEVICE_PORT          - Device API port (default: 48484)
+#   IOTISTIC_CLOUD_API_ENDPOINT   - Cloud API endpoint (e.g., https://api.iotistic.com)
 #   IOTISTIC_PROVISIONING_KEY     - Provisioning API key (optional, default: local_mode)
 #   IOTISTIC_REQUIRE_PROVISIONING - Set to "false" to skip provisioning requirement
 
@@ -137,6 +138,7 @@ if [ -n "$CI" ] || [ ! -t 0 ]; then
     PROVISIONING_KEY="${IOTISTIC_PROVISIONING_KEY:-local_mode}"
     DEVICE_API_PORT="${IOTISTIC_DEVICE_PORT:-48484}"
     AGENT_VERSION="${IOTISTIC_AGENT_VERSION:-dev}"
+    CLOUD_API_ENDPOINT="${IOTISTIC_CLOUD_API_ENDPOINT:-}"
     
     # Check REQUIRE_PROVISIONING env var, default based on provisioning key
     if [ -n "$IOTISTIC_REQUIRE_PROVISIONING" ]; then
@@ -151,6 +153,9 @@ if [ -n "$CI" ] || [ ! -t 0 ]; then
     echo "Using current repository code (CI mode)"
 else
     # Interactive mode - prompt user
+    # Cloud API endpoint
+    read -p "Enter cloud API endpoint (leave empty for local mode): " CLOUD_API_ENDPOINT
+    
     # Provisioning key (optional)
     read -p "Enter provisioning API key (leave empty for local mode): " PROVISIONING_KEY
     if [ -z "$PROVISIONING_KEY" ]; then
@@ -221,6 +226,11 @@ REQUIRE_PROVISIONING=${REQUIRE_PROVISIONING}
 PROVISIONING_API_KEY=${PROVISIONING_KEY}
 STATE_FILE=/var/lib/iotistic/agent/target-state.json
 EOF
+
+# Add CLOUD_API_ENDPOINT if provided
+if [ -n "$CLOUD_API_ENDPOINT" ]; then
+    echo "CLOUD_API_ENDPOINT=${CLOUD_API_ENDPOINT}" >> /etc/iotistic/agent.env
+fi
 
 # Create PM2 ecosystem config
 echo ""

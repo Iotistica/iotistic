@@ -9,6 +9,7 @@ set -e
 # Environment Variables (CI/Non-interactive mode):
 #   IOTISTIC_AGENT_VERSION        - Agent version to install (default: latest)
 #   IOTISTIC_DEVICE_PORT          - Device API port (default: 48484)
+#   IOTISTIC_CLOUD_API_ENDPOINT   - Cloud API endpoint (e.g., https://api.iotistic.com)
 #   IOTISTIC_PROVISIONING_KEY     - Provisioning API key (optional, default: local_mode)
 #   IOTISTIC_REQUIRE_PROVISIONING - Set to "false" to skip provisioning requirement
 
@@ -71,6 +72,7 @@ if [ -n "$CI" ] || [ ! -t 0 ]; then
     PROVISIONING_KEY="${IOTISTIC_PROVISIONING_KEY:-local_mode}"
     DEVICE_API_PORT="${IOTISTIC_DEVICE_PORT:-48484}"
     AGENT_VERSION="${IOTISTIC_AGENT_VERSION:-latest}"
+    CLOUD_API_ENDPOINT="${IOTISTIC_CLOUD_API_ENDPOINT:-}"
     
     # Check REQUIRE_PROVISIONING env var, default based on provisioning key
     if [ -n "$IOTISTIC_REQUIRE_PROVISIONING" ]; then
@@ -82,6 +84,9 @@ if [ -n "$CI" ] || [ ! -t 0 ]; then
     fi
 else
     # Interactive mode - prompt user
+    # Cloud API endpoint
+    read -p "Enter cloud API endpoint (leave empty for local mode): " CLOUD_API_ENDPOINT
+    
     # Provisioning key (optional)
     read -p "Enter provisioning API key (leave empty for local mode): " PROVISIONING_KEY
     if [ -z "$PROVISIONING_KEY" ]; then
@@ -123,20 +128,29 @@ fi
 # Create and start container
 echo ""
 echo "Starting agent container..."
-docker run -d \
-    --name iotistic-agent \
-    --restart unless-stopped \
-    -v /var/run/docker.sock:/var/run/docker.sock \
-    -v /var/lib/iotistic/agent:/app/data \
-    -p ${DEVICE_API_PORT}:48484 \
-    -e DEVICE_API_PORT=48484 \
+
+# Build environment variables for docker run
+ENV_VARS="-e DEVICE_API_PORT=48484 \
     -e AGENT_VERSION=${AGENT_VERSION} \
     -e NODE_ENV=production \
     -e LOG_LEVEL=info \
     -e ORCHESTRATOR_TYPE=docker-compose \
     -e ORCHESTRATOR_INTERVAL=30000 \
     -e REQUIRE_PROVISIONING=${REQUIRE_PROVISIONING} \
-    -e PROVISIONING_API_KEY=${PROVISIONING_KEY} \
+    -e PROVISIONING_API_KEY=${PROVISIONING_KEY}"
+
+# Add CLOUD_API_ENDPOINT if provided
+if [ -n "$CLOUD_API_ENDPOINT" ]; then
+    ENV_VARS="$ENV_VARS -e CLOUD_API_ENDPOINT=${CLOUD_API_ENDPOINT}"
+fi
+
+docker run -d \
+    --name iotistic-agent \
+    --restart unless-stopped \
+    -v /var/run/docker.sock:/var/run/docker.sock \
+    -v /var/lib/iotistic/agent:/app/data \
+    -p ${DEVICE_API_PORT}:48484 \
+    $ENV_VARS \
     iotistic/agent:$AGENT_VERSION
 
 # Wait for container to start

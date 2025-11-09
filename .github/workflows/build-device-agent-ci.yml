@@ -173,6 +173,7 @@ jobs:
           CI: true
           IOTISTIC_AGENT_VERSION: ${{ needs.version.outputs.package_version }}
           IOTISTIC_DEVICE_PORT: 48484
+          IOTISTIC_CLOUD_API_ENDPOINT: ''
           IOTISTIC_REQUIRE_PROVISIONING: false
         run: |
           echo "Testing Docker installation script..."
@@ -240,8 +241,8 @@ jobs:
           echo "- **Script**: \`agent/bin/install-docker.sh\`" >> $GITHUB_STEP_SUMMARY
           echo "## Published Image" >> $GITHUB_STEP_SUMMARY
           echo "- **Image**: \`iotistic/agent:${{ needs.version.outputs.package_version }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Mode**: Standalone container" >> $GITHUB_STEP_SUMMARY
-          echo "- **Provisioning**: Local mode" >> $GITHUB_STEP_SUMMARY
+          echo "- **Mode**: Standalone container (local mode)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Cloud API**: Not configured (local testing)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "## Tests Performed" >> $GITHUB_STEP_SUMMARY
           echo "1. Pull published Docker image from registry" >> $GITHUB_STEP_SUMMARY
@@ -274,6 +275,7 @@ jobs:
           CI: true
           IOTISTIC_AGENT_VERSION: ${{ needs.version.outputs.package_version }}
           IOTISTIC_DEVICE_PORT: 48484
+          IOTISTIC_CLOUD_API_ENDPOINT: ''
           IOTISTIC_REQUIRE_PROVISIONING: false
         run: |
           echo "Testing systemd installation script..."
@@ -659,6 +661,22 @@ jobs:
           echo "### Systemd Installation (Versioned)" >> $GITHUB_STEP_SUMMARY
           echo '```bash' >> $GITHUB_STEP_SUMMARY
           echo "curl -sSL https://install.iotistic.com/agent/versions/install-systemd-${{ needs.version.outputs.package_version }}.sh | sudo bash" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Environment Variables" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Both scripts support non-interactive installation via environment variables:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- \`IOTISTIC_CLOUD_API_ENDPOINT\`: Cloud API URL (e.g., https://api.iotistic.com)" >> $GITHUB_STEP_SUMMARY
+          echo "- \`IOTISTIC_PROVISIONING_KEY\`: Provisioning API key (leave empty for local mode)" >> $GITHUB_STEP_SUMMARY
+          echo "- \`IOTISTIC_DEVICE_PORT\`: Device API port (default: 48484)" >> $GITHUB_STEP_SUMMARY
+          echo "- \`IOTISTIC_AGENT_VERSION\`: Specific version to install (default: latest)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Example with cloud connection:**" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo "export IOTISTIC_CLOUD_API_ENDPOINT=https://api.iotistic.com" >> $GITHUB_STEP_SUMMARY
+          echo "export IOTISTIC_PROVISIONING_KEY=your-api-key-here" >> $GITHUB_STEP_SUMMARY
+          echo "curl -sSL https://install.iotistic.com/agent/install-docker.sh | sudo -E bash" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "---" >> $GITHUB_STEP_SUMMARY
