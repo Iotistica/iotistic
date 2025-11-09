@@ -716,7 +716,7 @@ jobs:
             
             echo "✓ Uploaded install.sh"
           else
-            echo "⚠ install.sh not found, skipping"
+            echo " install.sh not found, skipping"
           fi
 
       - name: Generate upload summary
