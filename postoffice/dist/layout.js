@@ -1,5 +1,8 @@
-export function defaultLayout(htmlContent: string): string {
-  return `
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.defaultLayout = defaultLayout;
+function defaultLayout(htmlContent) {
+    return `
 <div lang="en" style="background-color:#eff6ff; height: 100%;" bgcolor="#eff6ff">
 <style>
     html, body {
@@ -122,3 +125,4 @@ export function defaultLayout(htmlContent: string): string {
 </div>
 `;
 }
+//# sourceMappingURL=layout.js.map

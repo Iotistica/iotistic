@@ -107,9 +107,9 @@ export class PostOffice {
         };
       }
 
-      this.mailTransport = nodemailer.createTransporter({
+      this.mailTransport = nodemailer.createTransport({
         SES: { ses, aws: { SES } }
-      }, mailDefaults);
+      } as any, mailDefaults);
 
       this.exportableSettings = {
         region: sesConfig.region
