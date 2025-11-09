@@ -15,7 +15,7 @@ WorkingDirectory=/opt/iotistic/agent
 EnvironmentFile=/etc/iotistic/agent.env
 
 # Start command
-ExecStart=/usr/bin/node dist/index.js
+ExecStart=/usr/bin/node /opt/iotistic/agent/dist/index.js
 
 # Restart behavior
 Restart=always
