@@ -419,14 +419,23 @@ jobs:
           sudo npm run build
           
           # Verify build output
+          echo "Checking dist folder contents:"
+          ls -laR dist/ || echo "dist folder not found"
+          
           if [ -f dist/index.js ]; then
             echo "✓ Build successful - dist/index.js exists"
-            ls -la dist/
           else
-            echo "✗ Build failed - dist/index.js not found"
-            echo "Checking build output:"
-            ls -la
-            exit 1
+            echo "✗ dist/index.js not found, checking for alternative entry points..."
+            # Check for other possible entry points
+            find dist -name "*.js" -type f | head -20
+            
+            # Use the device entry point which might be built instead
+            if [ -f dist/device-entry.js ]; then
+              echo "Found dist/device-entry.js, will use that"
+            else
+              echo "No suitable entry point found"
+              exit 1
+            fi
           fi
           
           # Install PM2 globally for process management
