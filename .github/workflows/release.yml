@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'v*.*.*'  # e.g., v1.2.3, v2.0.0
+      - 'v*.*'    # e.g., v1.0, v2.1
 
 jobs:
   detect-changes:
