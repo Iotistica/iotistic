@@ -426,9 +426,17 @@ export default class DeviceAgent {
         process.exit(1);
       }
     } else if (!deviceInfo.provisioned && !this.CLOUD_API_ENDPOINT) {
-      // Local mode - mark as provisioned since no cloud connection is needed
+      // Local mode - device never provisioned and no cloud endpoint
       this.agentLogger.infoSync("Running in local mode (no cloud connection)", {
         component: "Agent",
+      });
+      await this.deviceManager.markAsLocalMode();
+      deviceInfo = this.deviceManager.getDeviceInfo();
+    } else if (deviceInfo.provisioned && !this.CLOUD_API_ENDPOINT) {
+      // Device was previously provisioned but now running in local mode
+      this.agentLogger.infoSync("Switching to local mode (no cloud connection)", {
+        component: "Agent",
+        note: "Device was previously provisioned but CLOUD_API_ENDPOINT is not set",
       });
       await this.deviceManager.markAsLocalMode();
       deviceInfo = this.deviceManager.getDeviceInfo();

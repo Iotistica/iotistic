@@ -202,9 +202,23 @@ export class DeviceManager {
 			throw new Error('Device manager not initialized');
 		}
 
+		// Get version from environment or package.json
+		const getPackageVersion = (): string => {
+			try {
+				const fs = require('fs');
+				const path = require('path');
+				const packageJsonPath = path.join(process.cwd(), "package.json");
+				const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8"));
+				return packageJson.version || "unknown";
+			} catch (error) {
+				return "unknown";
+			}
+		};
+
 		this.deviceInfo.provisioned = false; // Explicitly mark as NOT cloud-provisioned
 		this.deviceInfo.deviceName = this.deviceInfo.deviceName || `device-${this.deviceInfo.uuid.slice(0, 8)}`;
 		this.deviceInfo.deviceType = this.deviceInfo.deviceType || 'standalone';
+		this.deviceInfo.agentVersion = process.env.AGENT_VERSION || getPackageVersion(); // Update agent version
 		
 		await this.saveDeviceInfo();
 
@@ -213,6 +227,7 @@ export class DeviceManager {
 			operation: 'markAsLocalMode',
 			uuid: this.deviceInfo.uuid,
 			deviceName: this.deviceInfo.deviceName,
+			agentVersion: this.deviceInfo.agentVersion,
 		});
 	}
 
