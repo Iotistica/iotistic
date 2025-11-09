@@ -249,6 +249,9 @@ jobs:
     name: Trigger Integration Tests
     needs: [version, buildx]
     runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+      contents: read
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     
     steps:
@@ -268,5 +271,4 @@ jobs:
             });
             
             console.log('Integration tests triggered with API version: ${{ needs.version.outputs.package_version }}');
-          echo "All jobs completed successfully! 🎉" >> $GITHUB_STEP_SUMMARY
 

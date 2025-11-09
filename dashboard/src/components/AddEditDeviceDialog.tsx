@@ -66,7 +66,7 @@ export function AddEditDeviceDialog({
   });
 
   // Install command
-  const installCommand = `bash <(curl -H 'Cache-Control: no-cache' -sL --proto '=https' https://apps.iotistic.ca/install-agent)`;
+  const installCommand = `bash <(curl -H 'Cache-Control: no-cache' -sL --proto '=https' https://apps.iotistic.ca/agent/install-docker`;
 
   // Load tag definitions
   const loadTagDefinitions = async () => {
