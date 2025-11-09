@@ -180,7 +180,7 @@ jobs:
           IOTISTIC_AGENT_VERSION: ${{ needs.version.outputs.package_version }}
           IOTISTIC_DEVICE_PORT: 48484
           IOTISTIC_CLOUD_API_ENDPOINT: ''
-          IOTISTIC_REQUIRE_PROVISIONING: false
+          IOTISTIC_PROVISIONING_KEY: ''
         run: |
           echo "Testing Docker installation script..."
           sudo -E bash agent/bin/install-docker.sh
@@ -282,7 +282,7 @@ jobs:
           IOTISTIC_AGENT_VERSION: ${{ needs.version.outputs.package_version }}
           IOTISTIC_DEVICE_PORT: 48484
           IOTISTIC_CLOUD_API_ENDPOINT: ''
-          IOTISTIC_REQUIRE_PROVISIONING: false
+          IOTISTIC_PROVISIONING_KEY: ''
         run: |
           echo "Testing systemd installation script..."
           sudo -E bash agent/bin/install-systemd.sh

@@ -10,8 +10,7 @@ set -e
 #   IOTISTIC_AGENT_VERSION        - Agent version to install (default: latest)
 #   IOTISTIC_DEVICE_PORT          - Device API port (default: 48484)
 #   IOTISTIC_CLOUD_API_ENDPOINT   - Cloud API endpoint (e.g., https://api.iotistic.ca)
-#   IOTISTIC_PROVISIONING_KEY     - Provisioning API key (optional, default: local_mode)
-#   IOTISTIC_REQUIRE_PROVISIONING - Set to "false" to skip provisioning requirement
+#   IOTISTIC_PROVISIONING_KEY     - Provisioning API key (leave empty for local mode)
 
 SCRIPT_VERSION="AGENT_VERSION_PLACEHOLDER"
 
@@ -69,19 +68,10 @@ echo "-------------"
 # Check if running in non-interactive mode (CI)
 if [ -n "$CI" ] || [ ! -t 0 ]; then
     echo "Running in non-interactive mode (CI)"
-    PROVISIONING_KEY="${IOTISTIC_PROVISIONING_KEY:-local_mode}"
+    PROVISIONING_KEY="${IOTISTIC_PROVISIONING_KEY:-}"
     DEVICE_API_PORT="${IOTISTIC_DEVICE_PORT:-48484}"
     AGENT_VERSION="${IOTISTIC_AGENT_VERSION:-latest}"
     CLOUD_API_ENDPOINT="${IOTISTIC_CLOUD_API_ENDPOINT:-}"
-    
-    # Check REQUIRE_PROVISIONING env var, default based on provisioning key
-    if [ -n "$IOTISTIC_REQUIRE_PROVISIONING" ]; then
-        REQUIRE_PROVISIONING="$IOTISTIC_REQUIRE_PROVISIONING"
-    elif [ "$PROVISIONING_KEY" != "local_mode" ] && [ -n "$PROVISIONING_KEY" ]; then
-        REQUIRE_PROVISIONING="true"
-    else
-        REQUIRE_PROVISIONING="false"
-    fi
 else
     # Interactive mode - prompt user
     # Cloud API endpoint
@@ -89,14 +79,6 @@ else
     
     # Provisioning key (optional)
     read -p "Enter provisioning API key (leave empty for local mode): " PROVISIONING_KEY
-    if [ -z "$PROVISIONING_KEY" ]; then
-        REQUIRE_PROVISIONING="false"
-        PROVISIONING_KEY="local_mode"
-        echo "Running in local mode (no cloud connection)"
-    else
-        REQUIRE_PROVISIONING="true"
-        echo "Cloud provisioning enabled"
-    fi
 
     # Agent port
     read -p "Enter device API port [48484]: " DEVICE_API_PORT
@@ -135,9 +117,12 @@ ENV_VARS="-e DEVICE_API_PORT=48484 \
     -e NODE_ENV=production \
     -e LOG_LEVEL=info \
     -e ORCHESTRATOR_TYPE=docker-compose \
-    -e ORCHESTRATOR_INTERVAL=30000 \
-    -e REQUIRE_PROVISIONING=${REQUIRE_PROVISIONING} \
-    -e PROVISIONING_API_KEY=${PROVISIONING_KEY}"
+    -e ORCHESTRATOR_INTERVAL=30000"
+
+# Add PROVISIONING_API_KEY if provided
+if [ -n "$PROVISIONING_KEY" ]; then
+    ENV_VARS="$ENV_VARS -e PROVISIONING_API_KEY=${PROVISIONING_KEY}"
+fi
 
 # Add CLOUD_API_ENDPOINT if provided
 if [ -n "$CLOUD_API_ENDPOINT" ]; then
