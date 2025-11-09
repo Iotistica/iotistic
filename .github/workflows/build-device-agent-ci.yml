@@ -304,9 +304,20 @@ jobs:
       - name: Verify agent logs for startup
         run: |
           echo "Checking agent logs for successful startup..."
+          
+          # Check for reconciliation started (REQUIRED)
+          if docker logs agent-test 2>&1 | grep -q "Auto-reconciliation started"; then
+            echo "Auto-reconciliation started"
+          else
+            echo "Auto-reconciliation did not start - agent failed to initialize properly"
+            echo "Full logs:"
+            docker logs agent-test
+            exit 1
+          fi
+          
+          # Optional checks for additional startup indicators
           docker logs agent-test | grep -i "server" || true
           docker logs agent-test | grep -i "listening" || true
-          docker logs agent-test | grep -i "started" || true
 
       - name: Show full agent logs
         if: always()
