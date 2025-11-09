@@ -75,3 +75,5 @@ modbus-adapter/
 # Deprecated folders
 .github/sensors/
 agent/src/features/protocol-adapters/
+
+/.github/workflows/azure_creds.json

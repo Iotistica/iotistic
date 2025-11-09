@@ -5,6 +5,12 @@ set -e
 # Version: AGENT_VERSION_PLACEHOLDER
 # This script installs the Iotistic agent as a native systemd service with PM2
 # Usage: curl -sSL https://install.iotistic.com/install-systemd.sh | bash
+#
+# Environment Variables (CI/Non-interactive mode):
+#   IOTISTIC_AGENT_VERSION        - Agent version to install (default: dev)
+#   IOTISTIC_DEVICE_PORT          - Device API port (default: 48484)
+#   IOTISTIC_PROVISIONING_KEY     - Provisioning API key (optional, default: local_mode)
+#   IOTISTIC_REQUIRE_PROVISIONING - Set to "false" to skip provisioning requirement
 
 SCRIPT_VERSION="AGENT_VERSION_PLACEHOLDER"
 
@@ -131,10 +137,14 @@ if [ -n "$CI" ] || [ ! -t 0 ]; then
     PROVISIONING_KEY="${IOTISTIC_PROVISIONING_KEY:-local_mode}"
     DEVICE_API_PORT="${IOTISTIC_DEVICE_PORT:-48484}"
     AGENT_VERSION="${IOTISTIC_AGENT_VERSION:-dev}"
-    REQUIRE_PROVISIONING="false"
     
-    if [ "$PROVISIONING_KEY" != "local_mode" ]; then
+    # Check REQUIRE_PROVISIONING env var, default based on provisioning key
+    if [ -n "$IOTISTIC_REQUIRE_PROVISIONING" ]; then
+        REQUIRE_PROVISIONING="$IOTISTIC_REQUIRE_PROVISIONING"
+    elif [ "$PROVISIONING_KEY" != "local_mode" ] && [ -n "$PROVISIONING_KEY" ]; then
         REQUIRE_PROVISIONING="true"
+    else
+        REQUIRE_PROVISIONING="false"
     fi
     
     # In CI mode, skip downloading - use the current repository

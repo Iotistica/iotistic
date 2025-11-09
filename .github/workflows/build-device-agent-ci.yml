@@ -260,8 +260,8 @@ jobs:
         env:
           CI: true
           IOTISTIC_AGENT_VERSION: ${{ needs.version.outputs.package_version }}
-          IOTISTIC_PROVISIONING_KEY: test_provisioning_key_for_ci
           IOTISTIC_DEVICE_PORT: 48484
+          IOTISTIC_REQUIRE_PROVISIONING: false
         run: |
           echo "Testing Docker installation script..."
           sudo -E bash agent/bin/install-docker.sh
@@ -361,8 +361,8 @@ jobs:
         env:
           CI: true
           IOTISTIC_AGENT_VERSION: ${{ needs.version.outputs.package_version }}
-          IOTISTIC_PROVISIONING_KEY: test_provisioning_key_for_ci
           IOTISTIC_DEVICE_PORT: 48484
+          IOTISTIC_REQUIRE_PROVISIONING: false
         run: |
           echo "Testing systemd installation script..."
           sudo -E bash agent/bin/install-systemd.sh
