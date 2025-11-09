@@ -251,6 +251,27 @@ jobs:
           
           echo "All dependencies are ready!"
 
+      - name: Check Mosquitto status and logs
+        run: |
+          echo "=== Mosquitto Container Status ==="
+          docker compose -f $COMPOSE_FILE ps mosquitto
+          
+          echo ""
+          echo "=== Mosquitto Health Status ==="
+          docker inspect iotistic-mosquitto-e2e --format='{{.State.Health.Status}}' || echo "No health status"
+          
+          echo ""
+          echo "=== Mosquitto Container State ==="
+          docker inspect iotistic-mosquitto-e2e --format='{{json .State}}' | jq '.' || echo "Container state check failed"
+          
+          echo ""
+          echo "=== Mosquitto Logs (last 50 lines) ==="
+          docker compose -f $COMPOSE_FILE logs mosquitto --tail=50
+          
+          echo ""
+          echo "=== Test Mosquitto Port 1883 ==="
+          docker compose -f $COMPOSE_FILE exec -T mosquitto sh -c "netstat -tlnp | grep 1883" || echo "netstat not available"
+
       - name: Wait for API to be ready
         run: |
           echo "Waiting for API to be ready..."
