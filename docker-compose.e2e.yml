@@ -132,11 +132,11 @@ services:
         ports:
             - "${API_PORT_EXT:-4002}:3002"
         healthcheck:
-            test: ["CMD", "curl", "-f", "http://localhost:3002/health"]
-            interval: 10s
-            timeout: 5s
+            test: ["CMD-SHELL", "curl -f http://localhost:3002/health || exit 1"]
+            interval: 15s
+            timeout: 10s
             retries: 10
-            start_period: 60s
+            start_period: 90s
         depends_on:
             postgres:
                 condition: service_healthy
@@ -144,6 +144,8 @@ services:
                 condition: service_healthy
             neo4j:
                 condition: service_healthy
+            mosquitto:
+                condition: service_started
         networks:
            - iotistic-net
     mosquitto:
