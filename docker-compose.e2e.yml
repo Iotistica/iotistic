@@ -1,333 +1,335 @@
-# Docker Compose configuration for Cloud API and PostgreSQL backend
-# 
+# Docker Compose configuration for E2E Integration Testing
+#
+# This stack provides a complete testing environment with:
+#   - PostgreSQL 16 for device state and MQTT ACLs
+#   - Redis for real-time metrics and caching
+#   - Neo4j for Digital Twin graph database
+#   - Mosquitto MQTT broker with PostgreSQL auth
+#   - API server with health checks
+#   - Dashboard UI
+#   - Multiple agent instances for testing
+#   - VPN server for device connectivity
+#   - Protocol simulators (Modbus, CANbus, OPC-UA)
+#
 # Usage:
-#   docker-compose -f docker-compose.cloud.yml up -d
-#
-# This stack provides:
-#   - PostgreSQL 16 database for persistent device state storage
-#   - Iotistic API server with Balena-style endpoints
-#
-# Environment variables (configure in .env):
-#   - DB_PASSWORD=<password>    # PostgreSQL password
-#   - DB_PORT_EXT=5432          # External PostgreSQL port
-#   - API_PORT_EXT=3002         # External API port
-#   - GRAFANA_API_TOKEN=<token> # For Grafana integration
+#   docker-compose -f docker-compose.e2e.yml up -d
+#   docker-compose -f docker-compose.e2e.yml down -v
 
 services:
-    agent-1:
-            container_name: agent-1
-            build:
-                context: ./agent
-                dockerfile: Dockerfile
-            restart: always
-            volumes:
-                - /var/run/docker.sock:/var/run/docker.sock
-                - agent-1-data:/app/data
-            environment:
-                - AGENT_VERSION=1.0.0
-                - DEVICE_API_PORT=48481
-                - CLOUD_API_ENDPOINT=http://api:3002
-                - NODE_ENV=development
-                - FORCE_COLOR=1
-                - MQTT_DB_SYNC_INTERVAL=70000
-                - REPORT_INTERVAL_MS=7000
-                - METRICS_INTERVAL_MS=20000
-                - LOG_COMPRESSION=true
-                - PROVISIONING_API_KEY=708b51cbc9b5b515151fbb943ba9788ab6885d037455424b290f97d2077ae8c0
-            depends_on:
-                api:
-                    condition: service_started
-            networks:
-                - iotistic-net
+  # Database Services
+  postgres:
+    image: postgres:16-alpine
+    container_name: iotistic-postgres-e2e
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-iotistic}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+      - ./postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+    command: >
+      postgres
+      -c config_file=/etc/postgresql/postgresql.conf
+      -c hba_file=/etc/postgresql/pg_hba.conf
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - iotistic-net
 
-    postgres:
-        image: postgres:16-alpine
-        container_name: iotistic-postgres
-        restart: unless-stopped
-        environment:
-            - POSTGRES_DB=${POSTGRES_DB:-iotistic}
-            - POSTGRES_USER=${POSTGRES_USER:-postgres}
-            - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
-        ports:
-            - "5432:5432"
-        volumes:
-            - iotistic-pg-data:/var/lib/postgresql/data
-            - ./postgres/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
-            - ./postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
-        command: >
-            postgres
-            -c config_file=/etc/postgresql/postgresql.conf
-            -c hba_file=/etc/postgresql/pg_hba.conf
-        healthcheck:
-            test: ["CMD-SHELL", "pg_isready -U postgres"]
-            interval: 10s
-            timeout: 5s
-            retries: 5
-        networks:
-           - iotistic-net
+  redis:
+    image: redis:7-alpine
+    container_name: iotistic-redis-e2e
+    restart: unless-stopped
+    command: >
+      redis-server
+      --maxmemory 256mb
+      --maxmemory-policy volatile-lru
+      --save 60 1000
+      --appendonly yes
+    ports:
+      - "${REDIS_PORT_EXT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - iotistic-net
 
-    redis:
-        image: redis:7-alpine
-        container_name: iotistic-redis
-        restart: unless-stopped
-        command: >
-            redis-server
-            --maxmemory 256mb
-            --maxmemory-policy volatile-lru
-            --save 60 1000
-            --appendonly yes
-        ports:
-            - "${REDIS_PORT_EXT:-6379}:6379"
-        volumes:
-            - iotistic-redis-data:/data
-        healthcheck:
-            test: ["CMD", "redis-cli", "ping"]
-            interval: 10s
-            timeout: 3s
-            retries: 5
-        networks:
-           - iotistic-net
+  neo4j:
+    image: neo4j:5.15-community
+    container_name: iotistic-neo4j-e2e
+    restart: unless-stopped
+    environment:
+      - NEO4J_AUTH=neo4j/iotistic123
+      - NEO4J_PLUGINS=["apoc"]
+      - NEO4J_dbms_security_procedures_unrestricted=apoc.*
+      - NEO4J_dbms_memory_heap_initial__size=512m
+      - NEO4J_dbms_memory_heap_max__size=2G
+    ports:
+      - "7474:7474"  # HTTP
+      - "7687:7687"  # Bolt
+    volumes:
+      - neo4j-data:/data
+      - neo4j-logs:/logs
+      - neo4j-import:/var/lib/neo4j/import
+      - neo4j-plugins:/plugins
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p iotistic123 'RETURN 1'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - iotistic-net
 
-    api:
-        build:
-            context: ./api
-            dockerfile: Dockerfile
-        container_name: iotistic-api
-        restart: always
-        tty: true
-        stdin_open: true
-        logging:
-            driver: "json-file"
-            options:
-                max-size: "10m"
-                max-file: "3"
-        environment:
-            - PORT=${PORT:-3002}
-            - NODE_ENV=${NODE_ENV:-development}
-            - DB_HOST=${DB_HOST:-postgres}
-            - DB_PORT=${DB_PORT:-5432}
-            - DB_NAME=${DB_NAME:-iotistic}
-            - DB_USER=${DB_USER:-postgres}
-            - DB_PASSWORD=${DB_PASSWORD:-postgres}
-            - DB_POOL_SIZE=${DB_POOL_SIZE:-20}
-            - FORCE_COLOR=${FORCE_COLOR:-1}
-            - MQTT_BROKER_URL=${MQTT_BROKER_URL:-mqtt://mosquitto:1883}
-            - MQTT_USERNAME=${MQTT_USERNAME:-admin}
-            - MQTT_PASSWORD=${MQTT_PASSWORD:-iotistic42!}
-            - MQTT_PERSIST_TO_DB=${MQTT_PERSIST_TO_DB:-true}
-            - MQTT_DB_SYNC_INTERVAL=${MQTT_DB_SYNC_INTERVAL:-10000}
-            - MQTT_MONITOR_ENABLED=${MQTT_MONITOR_ENABLED:-true}
-            - LOG_COMPRESSION=${LOG_COMPRESSION:-true}
-            - LICENSE_PUBLIC_KEY=${LICENSE_PUBLIC_KEY}
-            - IOTISTIC_LICENSE_KEY=${IOTISTIC_LICENSE_KEY}
-            - REDIS_HOST=${REDIS_HOST:-redis}
-            - REDIS_PORT=${REDIS_PORT:-6379}
-            - NEO4J_URI=${NEO4J_URI:-bolt://neo4j:7687}
-            - NEO4J_USERNAME=${NEO4J_USERNAME:-neo4j}
-            - NEO4J_PASSWORD=${NEO4J_PASSWORD:-iotistic123}
-            - VPN_ENABLED=false
-            - VPN_SERVER_HOST=vpn-server
-            - VPN_SERVER_PORT=1194
-            - VPN_CA_URL=http://vpn-server:8080
-        ports:
-            - "${API_PORT_EXT:-4002}:3002"
-        # Healthcheck disabled for E2E - integration tests wait manually
-        # healthcheck:
-        #     test: ["CMD-SHELL", "curl -f http://localhost:3002/health || exit 1"]
-        #     interval: 30s
-        #     timeout: 10s
-        #     retries: 5
-        #     start_period: 120s
-        depends_on:
-            postgres:
-                condition: service_started
-            redis:
-                condition: service_started
-            neo4j:
-                condition: service_started
-            mosquitto:
-                condition: service_started
-        networks:
-           - iotistic-net
-    mosquitto:
-        image: iegomez/mosquitto-go-auth
-        restart: always
-        container_name: iotistic-mosquitto
-        ports:
-          - "${MOSQUITTO_PORT_EXT:-5883}:1883"
-          - "${MOSQUITTO_WS_PORT_EXT:-59002}:9001"
-        volumes:
-          - ./mosquitto/mosquitto.conf:/etc/mosquitto/mosquitto.conf
-        depends_on:
-            postgres:
-                condition: service_started
-        networks:
-           - iotistic-net
-    
-    dashboard:
-        build:
-            context: ./dashboard
-            dockerfile: Dockerfile
-            args:
-                - VITE_API_URL=http://api:3002
-        container_name: iotistic-dashboard
-        restart: unless-stopped
-        ports:
-            - "${DASHBOARD_PORT_EXT:-3000}:80"
-        depends_on:
-            api:
-                condition: service_started
-        networks:
-            - iotistic-net
-        healthcheck:
-            test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
-            interval: 30s
-            timeout: 3s
-            retries: 3
-            start_period: 5s
-        logging:
-            driver: "json-file"
-            options:
-                max-size: "5m"
-                max-file: "2"
-    
+  # MQTT Broker
+  mosquitto:
+    image: iegomez/mosquitto-go-auth
+    container_name: iotistic-mosquitto-e2e
+    restart: unless-stopped
+    ports:
+      - "${MOSQUITTO_PORT_EXT:-5883}:1883"
+      - "${MOSQUITTO_WS_PORT_EXT:-59002}:9001"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/etc/mosquitto/mosquitto.conf
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "nc -zv localhost 1883"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - iotistic-net
 
-    # VPN Services - Commented out until TypeScript code is complete
-    # Missing: vpn-server/src/vpn-server.ts implementation
-    # TODO: Complete VPN server implementation before enabling
-    vpn-server:
-        build:
-            context: ./vpn-server
-            dockerfile: Dockerfile
-        container_name: iotistic-vpn-server
-        privileged: true
-        cap_add:
-            - NET_ADMIN
-            - SYS_MODULE
-        restart: unless-stopped
-        ports:
-            - "${VPN_SERVER_PORT:-1194}:1194/udp"  # OpenVPN
-            - "${VPN_API_PORT:-3200}:3200/tcp"      # API Server
-            - "${VPN_MGMT_PORT:-7505}:7505/tcp"     # Management interface
-            - "${VPN_CA_PORT:-8080}:8080/tcp"       # CA Certificate Server
-        volumes:
-            - vpn-config:/etc/openvpn
-            - vpn-logs:/var/log/openvpn
-            - ./vpn-server/config:/etc/openvpn/config:ro
-            - ./vpn-server/scripts:/etc/openvpn/scripts:ro
-        environment:
-            - VPN_SERVER_HOST=${VPN_SERVER_HOST:-localhost}
-            - VPN_SERVER_PORT=${VPN_SERVER_PORT:-1194}
-            - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${VPN_DB_NAME:-iotistic_vpn}
-            - REDIS_URL=redis://redis:6379
-            - API_PORT=${VPN_API_PORT:-3200}
-            - LOG_LEVEL=${VPN_LOG_LEVEL:-info}
-            - NODE_ENV=${NODE_ENV:-development}
-        depends_on:
-            postgres:
-                condition: service_healthy
-            redis:
-                condition: service_healthy
-        networks:
-            - iotistic-net
-        healthcheck:
-            test: ["CMD", "curl", "-f", "http://localhost:3200/health"]
-            interval: 30s
-            timeout: 10s
-            retries: 3
-            start_period: 60s
-    
-    # Protocol Simulators for Testing
-    modbus-simulator:
-        build:
-            context: ./sensors/modbus-simulator
-            dockerfile: Dockerfile
-        container_name: iotistic-modbus-sim
-        restart: unless-stopped
-        ports:
-            - "502:502"
-        networks:
-            - iotistic-net
-        logging:
-            driver: "json-file"
-            options:
-                max-size: "5m"
-                max-file: "2"
-    
-    canbus-simulator:
-        build:
-            context: ./sensors/canbus-simulator
-            dockerfile: Dockerfile
-        container_name: iotistic-canbus-sim
-        restart: unless-stopped
-        ports:
-            - "11898:11898"
-        networks:
-            - iotistic-net
-        logging:
-            driver: "json-file"
-            options:
-                max-size: "5m"
-                max-file: "2"
-    
-    opcua-simulator:
-        build:
-            context: ./sensors/opcua-simulator
-            dockerfile: Dockerfile
-        container_name: iotistic-opcua-sim
-        restart: unless-stopped
-        ports:
-            - "4840:4840"
-        networks:
-            - iotistic-net
-        logging:
-            driver: "json-file"
-            options:
-                max-size: "5m"
-                max-file: "2"
+  # API Server
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: iotistic-api-e2e
+    restart: unless-stopped
+    tty: true
+    stdin_open: true
+    environment:
+      - PORT=${PORT:-3002}
+      - NODE_ENV=${NODE_ENV:-development}
+      - DB_HOST=${DB_HOST:-postgres}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME:-iotistic}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+      - DB_POOL_SIZE=${DB_POOL_SIZE:-20}
+      - FORCE_COLOR=${FORCE_COLOR:-1}
+      - MQTT_BROKER_URL=${MQTT_BROKER_URL:-mqtt://mosquitto:1883}
+      - MQTT_USERNAME=${MQTT_USERNAME:-admin}
+      - MQTT_PASSWORD=${MQTT_PASSWORD:-iotistic42!}
+      - MQTT_PERSIST_TO_DB=${MQTT_PERSIST_TO_DB:-true}
+      - MQTT_DB_SYNC_INTERVAL=${MQTT_DB_SYNC_INTERVAL:-10000}
+      - MQTT_MONITOR_ENABLED=${MQTT_MONITOR_ENABLED:-true}
+      - LOG_COMPRESSION=${LOG_COMPRESSION:-true}
+      - LICENSE_PUBLIC_KEY=${LICENSE_PUBLIC_KEY}
+      - IOTISTIC_LICENSE_KEY=${IOTISTIC_LICENSE_KEY}
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - NEO4J_URI=${NEO4J_URI:-bolt://neo4j:7687}
+      - NEO4J_USERNAME=${NEO4J_USERNAME:-neo4j}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-iotistic123}
+      - VPN_ENABLED=true
+      - VPN_SERVER_HOST=vpn-server
+      - VPN_SERVER_PORT=1194
+      - VPN_CA_URL=http://vpn-server:8080
+    ports:
+      - "${API_PORT_EXT:-4002}:3002"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3002/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+      mosquitto:
+        condition: service_healthy
+    networks:
+      - iotistic-net
 
-    neo4j:
-        image: neo4j:5.15-community
-        container_name: neo4j
-        restart: always
-        environment:
-            - NEO4J_AUTH=neo4j/iotistic123
-            - NEO4J_PLUGINS=["apoc"]
-            - NEO4J_dbms_security_procedures_unrestricted=apoc.*
-            - NEO4J_dbms_memory_heap_initial__size=512m
-            - NEO4J_dbms_memory_heap_max__size=2G
-        ports:
-            - "7474:7474"  # HTTP
-            - "7687:7687"  # Bolt
-        volumes:
-            - neo4j-data:/data
-            - neo4j-logs:/logs
-            - neo4j-import:/var/lib/neo4j/import
-            - neo4j-plugins:/plugins
-        networks:
-            - iotistic-net
-        healthcheck:
-            test: ["CMD-SHELL", "cypher-shell -u neo4j -p iotistic123 'RETURN 1'"]
-            interval: 10s
-            timeout: 5s
-            retries: 5
-            start_period: 30s
-        logging:
-            driver: "json-file"
-            options:
-                max-size: "5m"
-                max-file: "2"
+  # Dashboard UI
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    container_name: iotistic-dashboard-e2e
+    restart: unless-stopped
+    ports:
+      - "${DASHBOARD_PORT_EXT:-3000}:3000"
+    environment:
+      - VITE_API_URL=http://localhost:${API_PORT_EXT:-4002}
+      - NODE_ENV=development
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - iotistic-net
+
+  # Test Agents
+  agent-12:
+    build:
+      context: ./agent
+      dockerfile: Dockerfile
+    container_name: agent-12-e2e
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - agent-12-data:/app/data
+    environment:
+      - AGENT_VERSION=1.0.0
+      - DEVICE_API_PORT=48492
+      - CLOUD_API_ENDPOINT=http://api:3002
+      - NODE_ENV=development
+      - MQTT_PERSIST_TO_DB=true
+      - MQTT_DB_SYNC_INTERVAL=70000
+      - REPORT_INTERVAL_MS=20000
+      - METRICS_INTERVAL_MS=30000
+      - LOG_COMPRESSION=true
+      - REQUIRE_PROVISIONING=false
+      - PROVISIONING_API_KEY=1a222448bbd41b39dd2b41bd43e17727bbd1407f90a92fd26c9f10523daf8805
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - iotistic-net
+
+  agent-13:
+    build:
+      context: ./agent
+      dockerfile: Dockerfile
+    container_name: agent-13-e2e
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - agent-13-data:/app/data
+    environment:
+      - AGENT_VERSION=1.0.0
+      - DEVICE_API_PORT=48493
+      - CLOUD_API_ENDPOINT=http://api:3002
+      - NODE_ENV=development
+      - MQTT_PERSIST_TO_DB=true
+      - MQTT_DB_SYNC_INTERVAL=70000
+      - REPORT_INTERVAL_MS=20000
+      - METRICS_INTERVAL_MS=30000
+      - LOG_COMPRESSION=true
+      - REQUIRE_PROVISIONING=false
+      - PROVISIONING_API_KEY=2b333559ccd52c40ee3c52ce54f28838cce2518g01b03ge37d0g21634ebg9916
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - iotistic-net
+
+  # VPN Server (optional for VPN testing)
+  vpn-server:
+    build:
+      context: ./vpn-server
+      dockerfile: Dockerfile
+    container_name: iotistic-vpn-server-e2e
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    restart: unless-stopped
+    ports:
+      - "${VPN_SERVER_PORT:-1194}:1194/udp"
+      - "${VPN_API_PORT:-3200}:3200/tcp"
+      - "${VPN_MGMT_PORT:-7505}:7505/tcp"
+      - "${VPN_CA_PORT:-8080}:8080/tcp"
+    volumes:
+      - vpn-config:/etc/openvpn
+      - vpn-logs:/var/log/openvpn
+      - ./vpn-server/config:/etc/openvpn/config:ro
+      - ./vpn-server/scripts:/etc/openvpn/scripts:ro
+    environment:
+      - VPN_SERVER_HOST=${VPN_SERVER_HOST:-localhost}
+      - VPN_SERVER_PORT=${VPN_SERVER_PORT:-1194}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${VPN_DB_NAME:-iotistic_vpn}
+      - REDIS_URL=redis://redis:6379
+      - API_PORT=${VPN_API_PORT:-3200}
+      - LOG_LEVEL=${VPN_LOG_LEVEL:-info}
+      - NODE_ENV=${NODE_ENV:-development}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3200/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - iotistic-net
+
+  # Protocol Simulators for Testing
+  modbus-simulator:
+    build:
+      context: ./sensors/modbus-simulator
+      dockerfile: Dockerfile
+    container_name: iotistic-modbus-sim-e2e
+    restart: unless-stopped
+    ports:
+      - "502:502"
+    networks:
+      - iotistic-net
+
+  canbus-simulator:
+    build:
+      context: ./sensors/canbus-simulator
+      dockerfile: Dockerfile
+    container_name: iotistic-canbus-sim-e2e
+    restart: unless-stopped
+    ports:
+      - "11898:11898"
+    networks:
+      - iotistic-net
+
+  opcua-simulator:
+    build:
+      context: ./sensors/opcua-simulator
+      dockerfile: Dockerfile
+    container_name: iotistic-opcua-sim-e2e
+    restart: unless-stopped
+    ports:
+      - "4840:4840"
+    networks:
+      - iotistic-net
 
 volumes:
-  agent-1-data:
+  postgres-data:
     driver: local
-  iotistic-pg-data:
-    driver: local
-  iotistic-redis-data:
-    driver: local
-  vpn-config:
-    driver: local
-  vpn-logs:
+  redis-data:
     driver: local
   neo4j-data:
     driver: local
@@ -337,7 +339,15 @@ volumes:
     driver: local
   neo4j-plugins:
     driver: local
- 
+  agent-12-data:
+    driver: local
+  agent-13-data:
+    driver: local
+  vpn-config:
+    driver: local
+  vpn-logs:
+    driver: local
+
 networks:
   iotistic-net:
     driver: bridge
