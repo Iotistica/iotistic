@@ -3,6 +3,11 @@ name: Integration Tests
 env:
   COMPOSE_FILE: docker-compose.e2e.yml
 
+# Concurrency control: Cancel in-progress runs when new commit is pushed
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches:
@@ -10,12 +15,17 @@ on:
     paths:
       - 'agent/**'
       - 'api/**'
+      - 'dashboard/**'
       - 'docker-compose.e2e.yml'
       - '.github/workflows/integration-tests.yml'
+      - '.github/scripts/setup-env.sh'
   pull_request:
     branches:
       - master
   workflow_dispatch:  # Manual trigger
+  schedule:
+    # Run daily at 2 AM UTC (optional - for regular testing)
+    - cron: '0 2 * * *'
 
 jobs:
   setup:
@@ -446,25 +456,45 @@ jobs:
       - name: Collect service metrics
         if: always()
         run: |
-          echo "## Integration Test Report" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Integration Test Report"
+          echo ""
           
-          echo "### Service Status" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          docker compose -f $COMPOSE_FILE ps >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Service Status"
+          echo '```'
+          docker compose -f $COMPOSE_FILE ps | tee -a $GITHUB_STEP_SUMMARY
+          echo '```'
+          echo ""
           
-          echo "### Container Resource Usage" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          docker stats --no-stream --format "table {{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Container Resource Usage"
+          echo '```'
+          docker stats --no-stream --format "table {{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}" | tee -a $GITHUB_STEP_SUMMARY
+          echo '```'
+          echo ""
           
-          echo "### Network Information" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          docker network inspect iotistic_iotistic-net --format='{{range .Containers}}{{.Name}}: {{.IPv4Address}}{{"\n"}}{{end}}' >> $GITHUB_STEP_SUMMARY || true
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "### Network Information"
+          echo '```'
+          docker network inspect iotistic_iotistic-net --format='{{range .Containers}}{{.Name}}: {{.IPv4Address}}{{"\n"}}{{end}}' | tee -a $GITHUB_STEP_SUMMARY || true
+          echo '```'
+          
+          # Also write to summary with proper formatting
+          {
+            echo "## Integration Test Report"
+            echo ""
+            echo "### Service Status"
+            echo '```'
+            docker compose -f $COMPOSE_FILE ps
+            echo '```'
+            echo ""
+            echo "### Container Resource Usage"
+            echo '```'
+            docker stats --no-stream --format "table {{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}"
+            echo '```'
+            echo ""
+            echo "### Network Information"
+            echo '```'
+            docker network inspect iotistic_iotistic-net --format='{{range .Containers}}{{.Name}}: {{.IPv4Address}}{{"\n"}}{{end}}' || true
+            echo '```'
+          } >> $GITHUB_STEP_SUMMARY
 
       - name: Cleanup
         if: always()
