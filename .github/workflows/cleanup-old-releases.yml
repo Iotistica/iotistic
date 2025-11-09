@@ -183,9 +183,18 @@ jobs:
           }
           EOF
           
+          echo "Getting resource group for storage account..."
+          RESOURCE_GROUP=$(az storage account show \
+            --name ${{ secrets.AZURE_STORAGE_ACCOUNT }} \
+            --query resourceGroup \
+            --output tsv)
+          
+          echo "Resource Group: $RESOURCE_GROUP"
+          
           echo "Applying lifecycle policy to storage account..."
           az storage account management-policy create \
             --account-name ${{ secrets.AZURE_STORAGE_ACCOUNT }} \
+            --resource-group "$RESOURCE_GROUP" \
             --policy @/tmp/lifecycle-policy.json
           
           echo "✓ Lifecycle policy configured:"
