@@ -510,11 +510,25 @@ jobs:
           
           echo ""
           echo "Agent Process Info:"
-          sudo pm2 info iotistic-agent
+          sudo pm2 info iotistic-agent || echo "Process not found"
+          
+          echo ""
+          echo "PM2 describe output:"
+          sudo pm2 describe iotistic-agent || echo "Cannot describe process"
           
           # Check if process is online
           if sudo pm2 list | grep -q "online"; then
             echo "✓ Agent is running (online)"
+          elif sudo pm2 list | grep -q "errored"; then
+            echo "✗ Agent is in errored state"
+            echo "Checking PM2 logs for errors..."
+            sudo pm2 logs iotistic-agent --nostream --lines 100 --err
+            exit 1
+          elif sudo pm2 list | grep -q "stopped"; then
+            echo "✗ Agent is stopped"
+            echo "Checking PM2 logs..."
+            sudo pm2 logs iotistic-agent --nostream --lines 100
+            exit 1
           else
             echo "✗ Agent is not running"
             sudo pm2 logs iotistic-agent --nostream --lines 100
