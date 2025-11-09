@@ -455,17 +455,39 @@ jobs:
         run: |
           cd /opt/iotistic/agent
           
-          # Load environment variables from file and export them
-          set -a
-          source /etc/iotistic/agent.env
-          set +a
+          # Create PM2 ecosystem config file with environment variables
+          cat > ecosystem.config.js << 'EOFCONFIG'
+          module.exports = {
+            apps: [{
+              name: 'iotistic-agent',
+              script: 'dist/index.js',
+              cwd: '/opt/iotistic/agent',
+              instances: 1,
+              autorestart: true,
+              watch: false,
+              max_memory_restart: '1G',
+              env: {
+                AGENT_VERSION: '${{ needs.version.outputs.package_version }}',
+                DEVICE_API_PORT: '48484',
+                NODE_ENV: 'production',
+                LOG_LEVEL: 'info',
+                ORCHESTRATOR_TYPE: 'docker-compose',
+                ORCHESTRATOR_INTERVAL: '30000',
+                REQUIRE_PROVISIONING: 'false',
+                PROVISIONING_API_KEY: 'test_provisioning_key_for_ci',
+                STATE_FILE: '/var/lib/iotistic/agent/target-state.json'
+              },
+              output: '/var/log/iotistic/agent-out.log',
+              error: '/var/log/iotistic/agent-error.log',
+              log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+              uid: 'iotistic',
+              gid: 'iotistic'
+            }]
+          };
+          EOFCONFIG
           
-          # Start with PM2 as iotistic user
-          sudo -E -u iotistic pm2 start dist/index.js \
-            --name iotistic-agent \
-            --cwd /opt/iotistic/agent \
-            --log /var/log/iotistic/agent.log \
-            --time
+          # Start with PM2 using ecosystem file
+          pm2 start ecosystem.config.js
           
           echo "✓ Agent started with PM2"
           
@@ -475,18 +497,18 @@ jobs:
       - name: Check PM2 status
         run: |
           echo "PM2 Process List:"
-          sudo -u iotistic pm2 list
+          pm2 list
           
           echo ""
           echo "Agent Process Info:"
-          sudo -u iotistic pm2 info iotistic-agent
+          pm2 info iotistic-agent
           
           # Check if process is online
-          if sudo -u iotistic pm2 list | grep -q "online"; then
+          if pm2 list | grep -q "online"; then
             echo "✓ Agent is running (online)"
           else
             echo "✗ Agent is not running"
-            sudo -u iotistic pm2 logs iotistic-agent --nostream --lines 100
+            pm2 logs iotistic-agent --nostream --lines 100
             exit 1
           fi
 
@@ -499,19 +521,19 @@ jobs:
             echo "✓ Agent API is responding"
           else
             echo "⚠ Agent API not responding"
-            sudo -u iotistic pm2 logs iotistic-agent --nostream --lines 50
+            pm2 logs iotistic-agent --nostream --lines 50
           fi
 
       - name: Verify auto-reconciliation started
         run: |
           echo "Checking for auto-reconciliation in logs..."
           
-          if sudo -u iotistic pm2 logs iotistic-agent --nostream --lines 500 | grep -q "Auto-reconciliation started"; then
+          if pm2 logs iotistic-agent --nostream --lines 500 | grep -q "Auto-reconciliation started"; then
             echo "✓ Auto-reconciliation started"
           else
             echo "✗ Auto-reconciliation did not start"
             echo "Full logs:"
-            sudo -u iotistic pm2 logs iotistic-agent --nostream --lines 500
+            pm2 logs iotistic-agent --nostream --lines 500
             exit 1
           fi
 
@@ -521,13 +543,13 @@ jobs:
           echo "========================================="
           echo "Agent Logs (PM2):"
           echo "========================================="
-          sudo -u iotistic pm2 logs iotistic-agent --nostream --lines 200
+          pm2 logs iotistic-agent --nostream --lines 200
 
       - name: Cleanup
         if: always()
         run: |
-          sudo -u iotistic pm2 stop iotistic-agent || true
-          sudo -u iotistic pm2 delete iotistic-agent || true
+          pm2 stop iotistic-agent || true
+          pm2 delete iotistic-agent || true
 
       - name: Generate systemd test summary
         if: always()
