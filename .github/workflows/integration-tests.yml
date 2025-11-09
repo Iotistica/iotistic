@@ -223,6 +223,34 @@ jobs:
       - name: Start dependencies and API
         run: docker compose -f $COMPOSE_FILE up -d postgres redis neo4j mosquitto api
 
+      - name: Wait for dependencies to be healthy
+        run: |
+          echo "Waiting for PostgreSQL..."
+          timeout 60 bash -c '
+            until docker compose -f $COMPOSE_FILE exec -T postgres pg_isready -U postgres > /dev/null 2>&1; do
+              sleep 2
+            done
+          '
+          
+          echo "Waiting for Redis..."
+          timeout 30 bash -c '
+            until docker compose -f $COMPOSE_FILE exec -T redis redis-cli ping > /dev/null 2>&1; do
+              sleep 2
+            done
+          '
+          
+          echo "Waiting for Neo4j..."
+          timeout 60 bash -c '
+            until docker compose -f $COMPOSE_FILE exec -T neo4j cypher-shell -u neo4j -p iotistic123 "RETURN 1" > /dev/null 2>&1; do
+              sleep 3
+            done
+          '
+          
+          echo "Waiting for Mosquitto (additional time)..."
+          sleep 15
+          
+          echo "All dependencies are ready!"
+
       - name: Wait for API to be ready
         run: |
           echo "Waiting for API to be ready..."
@@ -360,8 +388,6 @@ jobs:
           echo "Testing Dashboard home page..."
           curl -f http://localhost:3000
           
-          echo "Testing Dashboard static assets..."
-          curl -f http://localhost:3000/assets/ || echo "Assets directory check skipped"
 
       - name: Check Dashboard logs
         if: always()
