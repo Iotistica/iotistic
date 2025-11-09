@@ -121,42 +121,59 @@ echo ""
 echo "Configuration:"
 echo "-------------"
 
-# Provisioning key (optional)
-read -p "Enter provisioning API key (leave empty for local mode): " PROVISIONING_KEY
-if [ -z "$PROVISIONING_KEY" ]; then
+# Check if running in non-interactive mode (CI)
+if [ -n "$CI" ] || [ ! -t 0 ]; then
+    echo "Running in non-interactive mode (CI)"
+    PROVISIONING_KEY="${IOTISTIC_PROVISIONING_KEY:-local_mode}"
+    DEVICE_API_PORT="${IOTISTIC_DEVICE_PORT:-48484}"
+    AGENT_VERSION="${IOTISTIC_AGENT_VERSION:-dev}"
     REQUIRE_PROVISIONING="false"
-    PROVISIONING_KEY="local_mode"
-    echo "Running in local mode (no cloud connection)"
+    
+    if [ "$PROVISIONING_KEY" != "local_mode" ]; then
+        REQUIRE_PROVISIONING="true"
+    fi
+    
+    # In CI mode, skip downloading - use the current repository
+    echo "Using current repository code (CI mode)"
 else
-    REQUIRE_PROVISIONING="true"
-    echo "Cloud provisioning enabled"
-fi
+    # Interactive mode - prompt user
+    # Provisioning key (optional)
+    read -p "Enter provisioning API key (leave empty for local mode): " PROVISIONING_KEY
+    if [ -z "$PROVISIONING_KEY" ]; then
+        REQUIRE_PROVISIONING="false"
+        PROVISIONING_KEY="local_mode"
+        echo "Running in local mode (no cloud connection)"
+    else
+        REQUIRE_PROVISIONING="true"
+        echo "Cloud provisioning enabled"
+    fi
 
-# Agent port
-read -p "Enter device API port [48484]: " DEVICE_API_PORT
-DEVICE_API_PORT=${DEVICE_API_PORT:-48484}
+    # Agent port
+    read -p "Enter device API port [48484]: " DEVICE_API_PORT
+    DEVICE_API_PORT=${DEVICE_API_PORT:-48484}
 
-# Get latest agent release
-echo ""
-echo "Downloading latest agent release..."
-LATEST_TAG=$(curl -s https://api.github.com/repos/Iotistica/iotistic/releases/latest | jq -r '.tag_name')
-if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ]; then
-    echo "Warning: Could not fetch latest release, cloning master branch..."
-    cd /tmp
-    rm -rf iotistic-agent-temp
-    git clone --depth 1 https://github.com/Iotistica/iotistic.git iotistic-agent-temp
-    cp -r iotistic-agent-temp/agent/* /opt/iotistic/agent/
-    rm -rf iotistic-agent-temp
-    AGENT_VERSION="dev"
-else
-    echo "Latest release: $LATEST_TAG"
-    cd /tmp
-    rm -rf iotistic-agent-temp
-    wget -q https://github.com/Iotistica/iotistic/archive/refs/tags/${LATEST_TAG}.tar.gz
-    tar -xzf ${LATEST_TAG}.tar.gz
-    cp -r iotistic-${LATEST_TAG#v}/agent/* /opt/iotistic/agent/
-    rm -rf iotistic-${LATEST_TAG#v} ${LATEST_TAG}.tar.gz
-    AGENT_VERSION="${LATEST_TAG#v}"
+    # Get latest agent release
+    echo ""
+    echo "Downloading latest agent release..."
+    LATEST_TAG=$(curl -s https://api.github.com/repos/Iotistica/iotistic/releases/latest | jq -r '.tag_name')
+    if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ]; then
+        echo "Warning: Could not fetch latest release, cloning master branch..."
+        cd /tmp
+        rm -rf iotistic-agent-temp
+        git clone --depth 1 https://github.com/Iotistica/iotistic.git iotistic-agent-temp
+        cp -r iotistic-agent-temp/agent/* /opt/iotistic/agent/
+        rm -rf iotistic-agent-temp
+        AGENT_VERSION="dev"
+    else
+        echo "Latest release: $LATEST_TAG"
+        cd /tmp
+        rm -rf iotistic-agent-temp
+        wget -q https://github.com/Iotistica/iotistic/archive/refs/tags/${LATEST_TAG}.tar.gz
+        tar -xzf ${LATEST_TAG}.tar.gz
+        cp -r iotistic-${LATEST_TAG#v}/agent/* /opt/iotistic/agent/
+        rm -rf iotistic-${LATEST_TAG#v} ${LATEST_TAG}.tar.gz
+        AGENT_VERSION="${LATEST_TAG#v}"
+    fi
 fi
 
 # Install dependencies and build

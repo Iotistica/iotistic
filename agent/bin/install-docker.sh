@@ -55,34 +55,49 @@ echo ""
 echo "Configuration:"
 echo "-------------"
 
-# Provisioning key (optional)
-read -p "Enter provisioning API key (leave empty for local mode): " PROVISIONING_KEY
-if [ -z "$PROVISIONING_KEY" ]; then
+# Check if running in non-interactive mode (CI)
+if [ -n "$CI" ] || [ ! -t 0 ]; then
+    echo "Running in non-interactive mode (CI)"
+    PROVISIONING_KEY="${IOTISTIC_PROVISIONING_KEY:-local_mode}"
+    DEVICE_API_PORT="${IOTISTIC_DEVICE_PORT:-48484}"
+    AGENT_VERSION="${IOTISTIC_AGENT_VERSION:-latest}"
     REQUIRE_PROVISIONING="false"
-    PROVISIONING_KEY="local_mode"
-    echo "Running in local mode (no cloud connection)"
+    
+    if [ "$PROVISIONING_KEY" != "local_mode" ]; then
+        REQUIRE_PROVISIONING="true"
+    fi
 else
-    REQUIRE_PROVISIONING="true"
-    echo "Cloud provisioning enabled"
-fi
+    # Interactive mode - prompt user
+    # Provisioning key (optional)
+    read -p "Enter provisioning API key (leave empty for local mode): " PROVISIONING_KEY
+    if [ -z "$PROVISIONING_KEY" ]; then
+        REQUIRE_PROVISIONING="false"
+        PROVISIONING_KEY="local_mode"
+        echo "Running in local mode (no cloud connection)"
+    else
+        REQUIRE_PROVISIONING="true"
+        echo "Cloud provisioning enabled"
+    fi
 
-# Agent port
-read -p "Enter device API port [48484]: " DEVICE_API_PORT
-DEVICE_API_PORT=${DEVICE_API_PORT:-48484}
-
-# Get latest version
-echo ""
-echo "Fetching latest agent version..."
-LATEST_VERSION=$(curl -s https://registry.hub.docker.com/v2/repositories/iotistic/agent/tags | jq -r '.results[].name' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
-if [ -z "$LATEST_VERSION" ]; then
-    LATEST_VERSION="latest"
+    # Agent port
+    read -p "Enter device API port [48484]: " DEVICE_API_PORT
+    DEVICE_API_PORT=${DEVICE_API_PORT:-48484}
+    
+    # Get latest version
+    echo ""
+    echo "Fetching latest agent version..."
+    LATEST_VERSION=$(curl -s https://registry.hub.docker.com/v2/repositories/iotistic/agent/tags | jq -r '.results[].name' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
+    if [ -z "$LATEST_VERSION" ]; then
+        LATEST_VERSION="latest"
+    fi
+    AGENT_VERSION="$LATEST_VERSION"
+    echo "Using version: $AGENT_VERSION"
 fi
-echo "Using version: $LATEST_VERSION"
 
 # Pull the image
 echo ""
 echo "Pulling Docker image..."
-docker pull iotistic/agent:$LATEST_VERSION
+docker pull iotistic/agent:$AGENT_VERSION
 
 # Stop and remove existing container if it exists
 if docker ps -a | grep -q iotistic-agent; then
@@ -107,7 +122,7 @@ docker run -d \
     -e ORCHESTRATOR_INTERVAL=30000 \
     -e REQUIRE_PROVISIONING=${REQUIRE_PROVISIONING} \
     -e PROVISIONING_API_KEY=${PROVISIONING_KEY} \
-    iotistic/agent:$LATEST_VERSION
+    iotistic/agent:$AGENT_VERSION
 
 # Wait for container to start
 echo "Waiting for agent to start..."

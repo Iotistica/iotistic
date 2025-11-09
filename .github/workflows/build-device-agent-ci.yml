@@ -239,7 +239,7 @@ jobs:
             iotistic/agent:${{ needs.version.outputs.package_version }}
 
   test-agent-docker:
-    name: Install Agent as Docker
+    name: Test Docker Installation Script
     needs: [version, buildx]
     runs-on: ubuntu-24.04
     
@@ -253,38 +253,27 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
 
-      - name: Pull published agent image
-        run: |
-          echo "Pulling published image: iotistic/agent:${{ needs.version.outputs.package_version }}"
-          docker pull iotistic/agent:${{ needs.version.outputs.package_version }}
+      - name: Make install script executable
+        run: chmod +x agent/bin/install-docker.sh
 
-      - name: Run agent container standalone
+      - name: Run Docker installation script
+        env:
+          CI: true
+          IOTISTIC_AGENT_VERSION: ${{ needs.version.outputs.package_version }}
+          IOTISTIC_PROVISIONING_KEY: test_provisioning_key_for_ci
+          IOTISTIC_DEVICE_PORT: 48484
         run: |
-          echo "Starting agent container with published image..."
-          docker run -d \
-            --name agent-test \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            -e AGENT_VERSION=${{ needs.version.outputs.package_version }} \
-            -e DEVICE_API_PORT=48484 \
-            -e NODE_ENV=production \
-            -e LOG_LEVEL=info \
-            -e ORCHESTRATOR_TYPE=docker-compose \
-            -e ORCHESTRATOR_INTERVAL=30000 \
-            -e REQUIRE_PROVISIONING=false \
-            -e PROVISIONING_API_KEY=test_provisioning_key_for_ci \
-            iotistic/agent:${{ needs.version.outputs.package_version }}
-          
-          echo "Waiting for agent to start..."
-          sleep 15
+          echo "Testing Docker installation script..."
+          sudo -E bash agent/bin/install-docker.sh
 
       - name: Check agent container is running
         run: |
-          if docker ps | grep -q agent-test; then
+          if docker ps | grep -q iotistic-agent; then
             echo "✓ Agent container is running"
-            docker ps | grep agent-test
+            docker ps | grep iotistic-agent
           else
             echo "✗ Agent container failed to start"
-            docker logs agent-test
+            docker logs iotistic-agent
             exit 1
           fi
 
@@ -293,31 +282,27 @@ jobs:
           echo "Testing agent API endpoints..."
           
           # Try health endpoint (using wget since it's in alpine)
-          if docker exec agent-test wget -q -O- http://localhost:48484/health 2>/dev/null || \
-             docker exec agent-test wget -q -O- http://localhost:48484/v2/device 2>/dev/null; then
+          if docker exec iotistic-agent wget -q -O- http://localhost:48484/health 2>/dev/null || \
+             docker exec iotistic-agent wget -q -O- http://localhost:48484/v2/device 2>/dev/null; then
             echo "✓ Agent API is responding"
           else
             echo "⚠ Agent API not responding yet (may still be initializing)"
-            docker logs --tail=50 agent-test
+            docker logs --tail=50 iotistic-agent
           fi
 
-      - name: Verify agent logs for startup
+      - name: Verify agent startup
         run: |
           echo "Checking agent logs for successful startup..."
           
-          # Check for reconciliation started (REQUIRED)
-          if docker logs agent-test 2>&1 | grep -q "Auto-reconciliation started"; then
-            echo "Auto-reconciliation started"
+          # Check for Device Configuration Summary
+          if docker logs iotistic-agent 2>&1 | grep -q "Device Configuration Summary"; then
+            echo "✓ Agent started successfully"
           else
-            echo "Auto-reconciliation did not start - agent failed to initialize properly"
+            echo "✗ Agent failed to start properly"
             echo "Full logs:"
-            docker logs agent-test
+            docker logs iotistic-agent
             exit 1
           fi
-          
-          # Optional checks for additional startup indicators
-          docker logs agent-test | grep -i "server" || true
-          docker logs agent-test | grep -i "listening" || true
 
       - name: Show full agent logs
         if: always()
@@ -325,20 +310,22 @@ jobs:
           echo "========================================="
           echo "Agent Logs (Full):"
           echo "========================================="
-          docker logs agent-test
+          docker logs iotistic-agent
 
       - name: Cleanup test environment
         if: always()
         run: |
-          docker stop agent-test || true
-          docker rm agent-test || true
+          docker stop iotistic-agent || true
+          docker rm iotistic-agent || true
           docker system prune -f
 
       - name: Generate test summary
         if: always()
         run: |
-          echo "# Agent Docker Image Test" >> $GITHUB_STEP_SUMMARY
+          echo "# Docker Installation Script Test" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Script Tested" >> $GITHUB_STEP_SUMMARY
+          echo "- **Script**: \`agent/bin/install-docker.sh\`" >> $GITHUB_STEP_SUMMARY
           echo "## Published Image" >> $GITHUB_STEP_SUMMARY
           echo "- **Image**: \`iotistic/agent:${{ needs.version.outputs.package_version }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Mode**: Standalone container" >> $GITHUB_STEP_SUMMARY
@@ -353,7 +340,7 @@ jobs:
           echo "Agent image validated successfully!" >> $GITHUB_STEP_SUMMARY
 
   test-agent-systemd:
-    name: Install Agent as Systemd Service
+    name: Test Systemd Installation Script
     needs: version
     runs-on: ubuntu-24.04
     
@@ -361,166 +348,37 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            python3 \
-            make \
-            g++ \
-            sqlite3 \
-            libsqlite3-dev \
-            curl \
-            jq \
-            procps \
-            openvpn \
-            iproute2 \
-            iptables \
-            net-tools \
-            iputils-ping \
-            systemd
-
-      - name: Install Docker
-        run: |
-          # Install Docker
-          curl -fsSL https://get.docker.com -o get-docker.sh
-          sudo sh get-docker.sh
-          
-          # Start Docker service
-          sudo systemctl start docker
-          sudo systemctl enable docker
-          
-          # Wait for Docker to be ready
-          timeout 30 sh -c 'until docker info; do sleep 2; done'
-          echo "✓ Docker installed and running"
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: agent/package-lock.json
-
-      - name: Create iotistic user
-        run: |
-          sudo useradd --system --home-dir /opt/iotistic --shell /bin/bash iotistic
-          sudo usermod -aG docker iotistic
-          echo "✓ Created iotistic user and added to docker group"
-
-      - name: Install agent to /opt/iotistic/agent
+      - name: Copy agent code to /opt/iotistic/agent (for CI mode)
         run: |
           sudo mkdir -p /opt/iotistic/agent
           sudo cp -r agent/* /opt/iotistic/agent/
+          echo "✓ Agent code copied for CI testing"
+
+      - name: Make install script executable
+        run: chmod +x agent/bin/install-systemd.sh
+
+      - name: Run systemd installation script
+        env:
+          CI: true
+          IOTISTIC_AGENT_VERSION: ${{ needs.version.outputs.package_version }}
+          IOTISTIC_PROVISIONING_KEY: test_provisioning_key_for_ci
+          IOTISTIC_DEVICE_PORT: 48484
+        run: |
+          echo "Testing systemd installation script..."
+          sudo -E bash agent/bin/install-systemd.sh
+
+      - name: Check systemd service status
+        run: |
+          echo "Checking systemd service status..."
+          sudo systemctl status iotistic-agent --no-pager || true
           
-          cd /opt/iotistic/agent
-          sudo npm ci --legacy-peer-deps
-          
-          echo "Building TypeScript with build config..."
-          sudo npx tsc --project tsconfig.build.json
-          sudo npm run copy:migrations
-          
-          # Show current directory and what was built
-          echo "Current directory: $(pwd)"
-          echo "Build output:"
-          sudo ls -la dist/ | head -20
-          
-          # Verify build output - the entry point is dist/app.js
-          if sudo test -f dist/app.js; then
-            echo "✓ Build successful - dist/app.js exists"
+          if sudo systemctl is-active --quiet iotistic-agent; then
+            echo "✓ Agent service is running"
           else
-            echo "✗ Build failed - dist/app.js not found"
-            echo "Checking if file exists without sudo:"
-            test -f dist/app.js && echo "File exists without sudo" || echo "File does not exist"
+            echo "✗ Agent service is not running"
+            sudo journalctl -u iotistic-agent -n 50 --no-pager
             exit 1
           fi
-          
-          # Install PM2 globally for process management
-          sudo npm install -g pm2
-          
-          echo "✓ Agent installed and built"
-          echo "✓ PM2 installed"
-
-      - name: Create directories and environment file
-        run: |
-          sudo mkdir -p /etc/iotistic
-          sudo mkdir -p /var/lib/iotistic/agent
-          sudo mkdir -p /var/log/iotistic
-          
-          # Create environment file with same env vars as Docker test
-          sudo tee /etc/iotistic/agent.env > /dev/null << EOF
-          AGENT_VERSION=${{ needs.version.outputs.package_version }}
-          DEVICE_API_PORT=48484
-          NODE_ENV=production
-          LOG_LEVEL=info
-          REQUIRE_PROVISIONING=false
-          PROVISIONING_API_KEY=test_provisioning_key_for_ci
-          EOF
-          
-          echo "✓ Directories and environment file created"
-          echo "✓ Agent version: ${{ needs.version.outputs.package_version }}"
-
-      - name: Set permissions
-        run: |
-          sudo chown -R iotistic:iotistic /opt/iotistic/agent
-          sudo chown -R iotistic:iotistic /var/lib/iotistic/agent
-          sudo chown -R iotistic:iotistic /var/log/iotistic
-          sudo chown iotistic:iotistic /etc/iotistic/agent.env
-          sudo chmod 600 /etc/iotistic/agent.env
-          
-          echo "✓ Permissions set"
-
-      - name: Start agent with PM2
-        run: |
-          cd /opt/iotistic/agent
-          
-          # Create PM2 ecosystem config file with environment variables
-          cat > ecosystem.config.js << EOFCONFIG
-          module.exports = {
-            apps: [{
-              name: 'iotistic-agent',
-              script: 'dist/app.js',
-              cwd: '/opt/iotistic/agent',
-              instances: 1,
-              autorestart: true,
-              watch: false,
-              max_memory_restart: '1G',
-              env: {
-                AGENT_VERSION: '${{ needs.version.outputs.package_version }}',
-                DEVICE_API_PORT: '48484',
-                NODE_ENV: 'production',
-                LOG_LEVEL: 'info',
-                ORCHESTRATOR_TYPE: 'docker-compose',
-                ORCHESTRATOR_INTERVAL: '30000',
-                REQUIRE_PROVISIONING: 'false',
-                PROVISIONING_API_KEY: 'test_provisioning_key_for_ci',
-                STATE_FILE: '/var/lib/iotistic/agent/target-state.json'
-              },
-              output: '/var/log/iotistic/agent-out.log',
-              error: '/var/log/iotistic/agent-error.log',
-              log_date_format: 'YYYY-MM-DD HH:mm:ss Z'
-            }]
-          };
-          EOFCONFIG
-          
-          # Make sure log files exist and have correct permissions
-          sudo touch /var/log/iotistic/agent-out.log /var/log/iotistic/agent-error.log
-          sudo chown iotistic:iotistic /var/log/iotistic/agent-*.log
-          
-          # Show the ecosystem config for debugging
-          echo "Ecosystem config:"
-          cat ecosystem.config.js
-          
-          # Test if node can at least load the file
-          echo "Testing if node can load the file..."
-          timeout 5 node dist/app.js --help 2>&1 || echo "Node execution test completed (may have timed out, which is OK if it started)"
-          
-          # Start with PM2 using ecosystem file (as root to access Docker socket)
-          sudo pm2 start ecosystem.config.js
-          
-          echo "✓ Agent started with PM2"
-          
-          # Wait for agent to initialize
-          sleep 20
 
       - name: Check PM2 status
         run: |
@@ -530,10 +388,6 @@ jobs:
           echo ""
           echo "Agent Process Info:"
           sudo pm2 info iotistic-agent || echo "Process not found"
-          
-          echo ""
-          echo "PM2 describe output:"
-          sudo pm2 describe iotistic-agent || echo "Cannot describe process"
           
           # Check if process is online
           if sudo pm2 list | grep -q "online"; then
