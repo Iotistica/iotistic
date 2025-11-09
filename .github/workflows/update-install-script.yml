@@ -56,6 +56,16 @@ jobs:
           
           echo "✓ Prepared scripts with version ${{ steps.version.outputs.package_version }}"
 
+      - name: Generate checksums
+        run: |
+          cd /tmp/iotistic-scripts
+          sha256sum install-docker.sh > install-docker.sh.sha256
+          sha256sum install-systemd.sh > install-systemd.sh.sha256
+          
+          echo "✓ Generated SHA256 checksums:"
+          cat install-docker.sh.sha256
+          cat install-systemd.sh.sha256
+
       - name: Upload install-docker.sh (latest)
         run: |
           az storage blob upload \
@@ -68,6 +78,19 @@ jobs:
             --content-disposition "attachment; filename=install-docker.sh"
           
           echo "✓ Uploaded agent/install-docker.sh (latest)"
+
+      - name: Upload install-docker.sh checksum (latest)
+        run: |
+          az storage blob upload \
+            --account-name ${{ secrets.AZURE_STORAGE_ACCOUNT }} \
+            --container-name scripts \
+            --name agent/install-docker.sh.sha256 \
+            --file /tmp/iotistic-scripts/install-docker.sh.sha256 \
+            --overwrite true \
+            --content-type text/plain \
+            --content-disposition "inline; filename=install-docker.sh.sha256"
+          
+          echo "✓ Uploaded agent/install-docker.sh.sha256"
 
       - name: Upload install-docker.sh (versioned)
         run: |
@@ -82,6 +105,19 @@ jobs:
           
           echo "✓ Uploaded agent/versions/install-docker-${{ steps.version.outputs.package_version }}.sh"
 
+      - name: Upload install-docker.sh checksum (versioned)
+        run: |
+          az storage blob upload \
+            --account-name ${{ secrets.AZURE_STORAGE_ACCOUNT }} \
+            --container-name scripts \
+            --name agent/versions/install-docker-${{ steps.version.outputs.package_version }}.sh.sha256 \
+            --file /tmp/iotistic-scripts/install-docker.sh.sha256 \
+            --overwrite true \
+            --content-type text/plain \
+            --content-disposition "inline; filename=install-docker-${{ steps.version.outputs.package_version }}.sh.sha256"
+          
+          echo "✓ Uploaded agent/versions/install-docker-${{ steps.version.outputs.package_version }}.sh.sha256"
+
       - name: Upload install-systemd.sh (latest)
         run: |
           az storage blob upload \
@@ -95,6 +131,19 @@ jobs:
           
           echo "✓ Uploaded agent/install-systemd.sh (latest)"
 
+      - name: Upload install-systemd.sh checksum (latest)
+        run: |
+          az storage blob upload \
+            --account-name ${{ secrets.AZURE_STORAGE_ACCOUNT }} \
+            --container-name scripts \
+            --name agent/install-systemd.sh.sha256 \
+            --file /tmp/iotistic-scripts/install-systemd.sh.sha256 \
+            --overwrite true \
+            --content-type text/plain \
+            --content-disposition "inline; filename=install-systemd.sh.sha256"
+          
+          echo "✓ Uploaded agent/install-systemd.sh.sha256"
+
       - name: Upload install-systemd.sh (versioned)
         run: |
           az storage blob upload \
@@ -107,6 +156,19 @@ jobs:
             --content-disposition "attachment; filename=install-systemd-${{ steps.version.outputs.package_version }}.sh"
           
           echo "✓ Uploaded agent/versions/install-systemd-${{ steps.version.outputs.package_version }}.sh"
+
+      - name: Upload install-systemd.sh checksum (versioned)
+        run: |
+          az storage blob upload \
+            --account-name ${{ secrets.AZURE_STORAGE_ACCOUNT }} \
+            --container-name scripts \
+            --name agent/versions/install-systemd-${{ steps.version.outputs.package_version }}.sh.sha256 \
+            --file /tmp/iotistic-scripts/install-systemd.sh.sha256 \
+            --overwrite true \
+            --content-type text/plain \
+            --content-disposition "inline; filename=install-systemd-${{ steps.version.outputs.package_version }}.sh.sha256"
+          
+          echo "✓ Uploaded agent/versions/install-systemd-${{ steps.version.outputs.package_version }}.sh.sha256"
 
       - name: Upload legacy install.sh (if exists)
         run: |

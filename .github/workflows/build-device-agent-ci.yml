@@ -562,6 +562,16 @@ jobs:
           
           echo "✓ Prepared scripts with version ${{ needs.version.outputs.package_version }}"
 
+      - name: Generate checksums
+        run: |
+          cd /tmp/iotistic-scripts
+          sha256sum install-docker.sh > install-docker.sh.sha256
+          sha256sum install-systemd.sh > install-systemd.sh.sha256
+          
+          echo "✓ Generated SHA256 checksums:"
+          cat install-docker.sh.sha256
+          cat install-systemd.sh.sha256
+
       - name: Upload install-docker.sh (latest)
         run: |
           az storage blob upload \
@@ -574,6 +584,19 @@ jobs:
             --content-disposition "attachment; filename=install-docker.sh"
           
           echo "✓ Uploaded agent/install-docker.sh (latest)"
+
+      - name: Upload install-docker.sh checksum (latest)
+        run: |
+          az storage blob upload \
+            --account-name ${{ secrets.AZURE_STORAGE_ACCOUNT }} \
+            --container-name scripts \
+            --name agent/install-docker.sh.sha256 \
+            --file /tmp/iotistic-scripts/install-docker.sh.sha256 \
+            --overwrite true \
+            --content-type text/plain \
+            --content-disposition "inline; filename=install-docker.sh.sha256"
+          
+          echo "✓ Uploaded agent/install-docker.sh.sha256"
 
       - name: Upload install-docker.sh (versioned)
         run: |
@@ -588,6 +611,19 @@ jobs:
           
           echo "✓ Uploaded agent/versions/install-docker-${{ needs.version.outputs.package_version }}.sh"
 
+      - name: Upload install-docker.sh checksum (versioned)
+        run: |
+          az storage blob upload \
+            --account-name ${{ secrets.AZURE_STORAGE_ACCOUNT }} \
+            --container-name scripts \
+            --name agent/versions/install-docker-${{ needs.version.outputs.package_version }}.sh.sha256 \
+            --file /tmp/iotistic-scripts/install-docker.sh.sha256 \
+            --overwrite true \
+            --content-type text/plain \
+            --content-disposition "inline; filename=install-docker-${{ needs.version.outputs.package_version }}.sh.sha256"
+          
+          echo "✓ Uploaded agent/versions/install-docker-${{ needs.version.outputs.package_version }}.sh.sha256"
+
       - name: Upload install-systemd.sh (latest)
         run: |
           az storage blob upload \
@@ -601,6 +637,19 @@ jobs:
           
           echo "✓ Uploaded agent/install-systemd.sh (latest)"
 
+      - name: Upload install-systemd.sh checksum (latest)
+        run: |
+          az storage blob upload \
+            --account-name ${{ secrets.AZURE_STORAGE_ACCOUNT }} \
+            --container-name scripts \
+            --name agent/install-systemd.sh.sha256 \
+            --file /tmp/iotistic-scripts/install-systemd.sh.sha256 \
+            --overwrite true \
+            --content-type text/plain \
+            --content-disposition "inline; filename=install-systemd.sh.sha256"
+          
+          echo "✓ Uploaded agent/install-systemd.sh.sha256"
+
       - name: Upload install-systemd.sh (versioned)
         run: |
           az storage blob upload \
@@ -613,6 +662,19 @@ jobs:
             --content-disposition "attachment; filename=install-systemd-${{ needs.version.outputs.package_version }}.sh"
           
           echo "✓ Uploaded agent/versions/install-systemd-${{ needs.version.outputs.package_version }}.sh"
+
+      - name: Upload install-systemd.sh checksum (versioned)
+        run: |
+          az storage blob upload \
+            --account-name ${{ secrets.AZURE_STORAGE_ACCOUNT }} \
+            --container-name scripts \
+            --name agent/versions/install-systemd-${{ needs.version.outputs.package_version }}.sh.sha256 \
+            --file /tmp/iotistic-scripts/install-systemd.sh.sha256 \
+            --overwrite true \
+            --content-type text/plain \
+            --content-disposition "inline; filename=install-systemd-${{ needs.version.outputs.package_version }}.sh.sha256"
+          
+          echo "✓ Uploaded agent/versions/install-systemd-${{ needs.version.outputs.package_version }}.sh.sha256"
 
       - name: Upload legacy install.sh (if exists)
         run: |
@@ -635,7 +697,7 @@ jobs:
         run: |
           echo "# Installation Scripts Uploaded" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## Latest Scripts" >> $GITHUB_STEP_SUMMARY
+          echo "## Quick Install (Latest)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Docker Installation" >> $GITHUB_STEP_SUMMARY
           echo '```bash' >> $GITHUB_STEP_SUMMARY
@@ -645,6 +707,34 @@ jobs:
           echo "### Systemd Installation (with PM2)" >> $GITHUB_STEP_SUMMARY
           echo '```bash' >> $GITHUB_STEP_SUMMARY
           echo "curl -sSL https://install.iotistic.com/agent/install-systemd.sh | sudo bash" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Verified Install (with SHA256 checksum)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Docker Installation (Verified)" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo "# Download script and checksum" >> $GITHUB_STEP_SUMMARY
+          echo "curl -sSL https://install.iotistic.com/agent/install-docker.sh -o install-docker.sh" >> $GITHUB_STEP_SUMMARY
+          echo "curl -sSL https://install.iotistic.com/agent/install-docker.sh.sha256 -o install-docker.sh.sha256" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "# Verify checksum" >> $GITHUB_STEP_SUMMARY
+          echo "sha256sum -c install-docker.sh.sha256" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "# Run if verification passes" >> $GITHUB_STEP_SUMMARY
+          echo "sudo bash install-docker.sh" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Systemd Installation (Verified)" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo "# Download script and checksum" >> $GITHUB_STEP_SUMMARY
+          echo "curl -sSL https://install.iotistic.com/agent/install-systemd.sh -o install-systemd.sh" >> $GITHUB_STEP_SUMMARY
+          echo "curl -sSL https://install.iotistic.com/agent/install-systemd.sh.sha256 -o install-systemd.sh.sha256" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "# Verify checksum" >> $GITHUB_STEP_SUMMARY
+          echo "sha256sum -c install-systemd.sh.sha256" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "# Run if verification passes" >> $GITHUB_STEP_SUMMARY
+          echo "sudo bash install-systemd.sh" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "## Version ${{ needs.version.outputs.package_version }} Scripts" >> $GITHUB_STEP_SUMMARY
@@ -659,7 +749,9 @@ jobs:
           echo "curl -sSL https://install.iotistic.com/agent/versions/install-systemd-${{ needs.version.outputs.package_version }}.sh | sudo bash" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "✓ Scripts uploaded to Azure Blob Storage" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✓ Scripts uploaded to Azure Blob Storage with SHA256 checksums" >> $GITHUB_STEP_SUMMARY
 
   report:
     name: Generate Reports
