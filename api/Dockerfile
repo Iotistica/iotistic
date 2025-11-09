@@ -24,7 +24,7 @@ COPY --from=builder /usr/src/app/package*.json ./
 RUN npm install --production
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y libnotify-bin
+RUN apt-get update && apt-get install -y libnotify-bin curl && rm -rf /var/lib/apt/lists/*
 
 EXPOSE 3002
 CMD ["node", "dist/index.js"]
