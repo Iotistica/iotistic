@@ -85,13 +85,6 @@ jobs:
           git commit -m "chore: bump agent version to ${{ steps.bump.outputs.package_version }} [skip ci]"
           git push origin HEAD
 
-      - name: Display version info
-        run: |
-          echo "## Version" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**New Version:** \`${{ steps.bump.outputs.package_version }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Git SHA:** \`${{ steps.bump.outputs.sha_short }}\`" >> $GITHUB_STEP_SUMMARY
-
   buildx:
     name: Build & Push to Docker
     needs: version
