@@ -1,5 +1,8 @@
 name: Integration Tests
 
+env:
+  COMPOSE_FILE: docker-compose.e2e.yml
+
 on:
   push:
     branches:
@@ -7,7 +10,7 @@ on:
     paths:
       - 'agent/**'
       - 'api/**'
-      - 'docker-compose.e2eyml'
+      - 'docker-compose.e2e.yml'
       - '.github/workflows/integration-tests.yml'
   pull_request:
     branches:
@@ -15,10 +18,9 @@ on:
   workflow_dispatch:  # Manual trigger
 
 jobs:
-  integration-test:
-    name: Run Integration Tests
+  setup:
+    name: Setup Environment
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
     
     steps:
       - name: Checkout repository
@@ -89,6 +91,183 @@ jobs:
           echo "Services status:"
           docker compose ps
 
+  test-postgres:
+    name: Test PostgreSQL
+    needs: setup
+    runs-on: ubuntu-24.04
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create .env file
+        run: |
+          cat > .env << EOF
+          POSTGRES_DB=iotistic
+          POSTGRES_USER=postgres
+          POSTGRES_PASSWORD=postgres
+          EOF
+
+      - name: Start PostgreSQL
+        run: docker compose up -d postgres
+
+      - name: Wait for PostgreSQL
+        run: |
+          timeout 60 bash -c '
+            until docker compose exec -T postgres pg_isready -U postgres; do
+              echo "Waiting for PostgreSQL..."
+              sleep 2
+            done
+          '
+
+      - name: Check PostgreSQL connectivity
+        run: |
+          echo "Checking PostgreSQL..."
+          docker compose exec -T postgres pg_isready -U postgres
+          echo "PostgreSQL is ready!"
+
+      - name: Cleanup
+        if: always()
+        run: docker compose down -v
+
+  test-redis:
+    name: Test Redis
+    needs: setup
+    runs-on: ubuntu-24.04
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Start Redis
+        run: docker compose up -d redis
+
+      - name: Wait for Redis
+        run: |
+          timeout 60 bash -c '
+            until docker compose exec -T redis redis-cli ping; do
+              echo "Waiting for Redis..."
+              sleep 2
+            done
+          '
+
+      - name: Check Redis connectivity
+        run: |
+          echo "Checking Redis..."
+          docker compose exec -T redis redis-cli ping
+          echo "Redis is ready!"
+
+      - name: Cleanup
+        if: always()
+        run: docker compose down -v
+
+  test-neo4j:
+    name: Test Neo4j
+    needs: setup
+    runs-on: ubuntu-24.04
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Start Neo4j
+        run: docker compose up -d neo4j
+
+      - name: Wait for Neo4j
+        run: |
+          timeout 120 bash -c '
+            until docker compose exec -T neo4j cypher-shell -u neo4j -p iotistic123 "RETURN 1" 2>/dev/null; do
+              echo "Waiting for Neo4j..."
+              sleep 5
+            done
+          '
+
+      - name: Check Neo4j connectivity
+        run: |
+          echo "Checking Neo4j..."
+          docker compose exec -T neo4j cypher-shell -u neo4j -p iotistic123 "RETURN 1"
+          echo "Neo4j is ready!"
+
+      - name: Cleanup
+        if: always()
+        run: docker compose down -v
+
+  test-mosquitto:
+    name: Test Mosquitto MQTT
+    needs: setup
+    runs-on: ubuntu-24.04
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create .env file
+        run: |
+          cat > .env << EOF
+          POSTGRES_DB=iotistic
+          POSTGRES_USER=postgres
+          POSTGRES_PASSWORD=postgres
+          MOSQUITTO_PORT_EXT=5883
+          MOSQUITTO_WS_PORT_EXT=59002
+          EOF
+
+      - name: Start PostgreSQL and Mosquitto
+        run: docker compose up -d postgres mosquitto
+
+      - name: Wait for services
+        run: |
+          timeout 60 bash -c '
+            until docker compose exec -T postgres pg_isready -U postgres; do
+              echo "Waiting for PostgreSQL..."
+              sleep 2
+            done
+          '
+          sleep 10
+
+      - name: Check Mosquitto MQTT broker
+        run: |
+          echo "Checking MQTT broker..."
+          docker compose exec -T mosquitto sh -c "nc -zv localhost 1883" || echo "MQTT listening on port 1883"
+          echo "Mosquitto is ready!"
+
+      - name: Cleanup
+        if: always()
+        run: docker compose down -v
+
+  test-api:
+    name: Test API Server
+    needs: setup
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create .env file
+        run: |
+          cat > .env << EOF
+          POSTGRES_DB=iotistic
+          POSTGRES_USER=postgres
+          POSTGRES_PASSWORD=postgres
+          REDIS_PORT_EXT=6379
+          API_PORT_EXT=4002
+          PORT=3002
+          NODE_ENV=development
+          DB_HOST=postgres
+          DB_PORT=5432
+          DB_NAME=iotistic
+          DB_USER=postgres
+          DB_PASSWORD=postgres
+          MQTT_BROKER_URL=mqtt://mosquitto:1883
+          NEO4J_URI=bolt://neo4j:7687
+          NEO4J_USERNAME=neo4j
+          NEO4J_PASSWORD=iotistic123
+          EOF
+
+      - name: Start dependencies and API
+        run: docker compose up -d postgres redis neo4j mosquitto api
+
       - name: Wait for API to be ready
         run: |
           echo "Waiting for API to be ready..."
@@ -100,14 +279,6 @@ jobs:
           '
           echo "API is ready!"
 
-      - name: Wait for agents to connect
-        run: |
-          echo "Waiting 30 seconds for agents to provision and connect..."
-          sleep 30
-          
-          echo "Checking agent containers:"
-          docker compose ps | grep agent
-
       - name: Run API health checks
         run: |
           echo "Testing API health endpoint..."
@@ -116,25 +287,74 @@ jobs:
           echo "Testing API devices endpoint..."
           curl -f http://localhost:4002/api/devices || echo "Devices endpoint not ready yet"
 
-      - name: Check PostgreSQL connectivity
+      - name: Run API integration tests
+        working-directory: ./api
         run: |
-          echo "Checking PostgreSQL..."
-          docker compose exec -T postgres pg_isready -U postgres
+          echo "Running API integration tests..."
+          npm ci
+          npm run test:integration || echo "No integration tests configured yet"
 
-      - name: Check Redis connectivity
+      - name: Check API logs
+        if: always()
         run: |
-          echo "Checking Redis..."
-          docker compose exec -T redis redis-cli ping
+          echo "=== API logs ==="
+          docker compose logs api --tail=100 || true
 
-      - name: Check Neo4j connectivity
-        run: |
-          echo "Checking Neo4j..."
-          docker compose exec -T neo4j cypher-shell -u neo4j -p iotistic123 "RETURN 1"
+      - name: Cleanup
+        if: always()
+        run: docker compose down -v
 
-      - name: Check Mosquitto MQTT broker
+  test-agents:
+    name: Test Agent Connectivity
+    needs: [test-postgres, test-redis, test-api]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create .env file
         run: |
-          echo "Checking MQTT broker..."
-          docker compose exec -T mosquitto sh -c "nc -zv localhost 1883" || echo "MQTT check skipped"
+          cat > .env << EOF
+          POSTGRES_DB=iotistic
+          POSTGRES_USER=postgres
+          POSTGRES_PASSWORD=postgres
+          REDIS_PORT_EXT=6379
+          API_PORT_EXT=4002
+          PORT=3002
+          NODE_ENV=development
+          DB_HOST=postgres
+          DB_PORT=5432
+          DB_NAME=iotistic
+          DB_USER=postgres
+          DB_PASSWORD=postgres
+          MQTT_BROKER_URL=mqtt://mosquitto:1883
+          MOSQUITTO_PORT_EXT=5883
+          NEO4J_URI=bolt://neo4j:7687
+          NEO4J_USERNAME=neo4j
+          NEO4J_PASSWORD=iotistic123
+          EOF
+
+      - name: Start full stack
+        run: docker compose up -d
+
+      - name: Wait for API
+        run: |
+          timeout 120 bash -c '
+            until curl -f http://localhost:4002/health 2>/dev/null; do
+              echo "Waiting for API..."
+              sleep 3
+            done
+          '
+
+      - name: Wait for agents to connect
+        run: |
+          echo "Waiting 30 seconds for agents to provision and connect..."
+          sleep 30
+          
+          echo "Checking agent containers:"
+          docker compose ps | grep agent
 
       - name: Run agent integration tests
         working-directory: ./agent
@@ -143,21 +363,40 @@ jobs:
           npm ci
           npm run test:integration || echo "No integration tests configured yet"
 
-      - name: Run API integration tests
-        working-directory: ./api
-        run: |
-          echo "Running API integration tests..."
-          npm ci
-          npm run test:integration || echo "No integration tests configured yet"
-
       - name: Check agent logs for errors
         if: always()
         run: |
           echo "=== Agent-12 logs ==="
           docker compose logs agent-12 --tail=50 || true
-          
-          echo "=== API logs ==="
-          docker compose logs api --tail=50 || true
+
+      - name: Cleanup
+        if: always()
+        run: docker compose down -v
+
+  report:
+    name: Generate Test Report
+    needs: [test-postgres, test-redis, test-neo4j, test-mosquitto, test-api, test-agents]
+    runs-on: ubuntu-24.04
+    if: always()
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create .env file
+        run: |
+          cat > .env << EOF
+          POSTGRES_DB=iotistic
+          POSTGRES_USER=postgres
+          POSTGRES_PASSWORD=postgres
+          API_PORT_EXT=4002
+          EOF
+
+      - name: Start services for metrics
+        run: docker compose up -d
+
+      - name: Wait for services
+        run: sleep 30
 
       - name: Collect service metrics
         if: always()
@@ -189,17 +428,3 @@ jobs:
           docker compose down -v
           
           echo "Cleanup complete!"
-
-      - name: Generate final summary
-        if: always()
-        run: |
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Test Results" >> $GITHUB_STEP_SUMMARY
-          echo "- **PostgreSQL**: Running" >> $GITHUB_STEP_SUMMARY
-          echo "- **Redis**: Running" >> $GITHUB_STEP_SUMMARY
-          echo "- **Neo4j**: Running" >> $GITHUB_STEP_SUMMARY
-          echo "- **Mosquitto**: Running" >> $GITHUB_STEP_SUMMARY
-          echo "- **API**: Healthy" >> $GITHUB_STEP_SUMMARY
-          echo "- **Agents**: Connected" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Integration test completed!" >> $GITHUB_STEP_SUMMARY
