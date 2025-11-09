@@ -353,7 +353,7 @@ jobs:
           echo "Agent image validated successfully!" >> $GITHUB_STEP_SUMMARY
 
   test-agent-systemd:
-    name: Test Agent as Systemd Service
+    name: Install Agent as Systemd Service
     needs: version
     runs-on: ubuntu-24.04
     
@@ -566,14 +566,41 @@ jobs:
             sudo pm2 logs iotistic-agent --nostream --lines 50
           fi
 
-      - name: Verify auto-reconciliation started
+      - name: Verify agent startup and extract device info
         run: |
-          echo "Checking for auto-reconciliation in logs..."
+          echo "Checking for device configuration in logs..."
           
-          if sudo pm2 logs iotistic-agent --nostream --lines 500 | grep -q "Auto-reconciliation started"; then
-            echo "✓ Auto-reconciliation started"
+          # Look for Device Configuration Summary in logs
+          if sudo pm2 logs iotistic-agent --nostream --lines 500 | grep -q "Device Configuration Summary"; then
+            echo "✓ Agent started successfully - Device configuration found"
+            
+            # Extract and parse the device configuration JSON
+            DEVICE_CONFIG=$(sudo pm2 logs iotistic-agent --nostream --lines 500 | grep "Device Configuration Summary" | tail -1 | sed 's/.*Device Configuration Summary //')
+            
+            # Pretty print the JSON
+            echo ""
+            echo "Device Configuration:"
+            echo "$DEVICE_CONFIG" | jq '.' || echo "$DEVICE_CONFIG"
+            
+            # Extract key information for summary
+            DEVICE_UUID=$(echo "$DEVICE_CONFIG" | jq -r '.device.uuid' 2>/dev/null || echo "unknown")
+            DEVICE_NAME=$(echo "$DEVICE_CONFIG" | jq -r '.device.deviceName' 2>/dev/null || echo "unknown")
+            DEVICE_TYPE=$(echo "$DEVICE_CONFIG" | jq -r '.device.deviceType' 2>/dev/null || echo "unknown")
+            AGENT_VERSION=$(echo "$DEVICE_CONFIG" | jq -r '.device.agentVersion' 2>/dev/null || echo "unknown")
+            PROVISIONED=$(echo "$DEVICE_CONFIG" | jq -r '.device.provisioned' 2>/dev/null || echo "unknown")
+            
+            # Save to environment for summary step
+            echo "DEVICE_UUID=$DEVICE_UUID" >> $GITHUB_ENV
+            echo "DEVICE_NAME=$DEVICE_NAME" >> $GITHUB_ENV
+            echo "DEVICE_TYPE=$DEVICE_TYPE" >> $GITHUB_ENV
+            echo "AGENT_VERSION=$AGENT_VERSION" >> $GITHUB_ENV
+            echo "PROVISIONED=$PROVISIONED" >> $GITHUB_ENV
+            echo "DEVICE_CONFIG<<EOF" >> $GITHUB_ENV
+            echo "$DEVICE_CONFIG" >> $GITHUB_ENV
+            echo "EOF" >> $GITHUB_ENV
+            
           else
-            echo "✗ Auto-reconciliation did not start"
+            echo "✗ Agent failed to start - Device configuration not found"
             echo "Full logs:"
             sudo pm2 logs iotistic-agent --nostream --lines 500
             exit 1
@@ -603,6 +630,27 @@ jobs:
           echo "- **User**: \`iotistic\` (non-root)" >> $GITHUB_STEP_SUMMARY
           echo "- **Process Manager**: PM2" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Add device configuration if available
+          if [ -n "${{ env.DEVICE_UUID }}" ]; then
+            echo "## Device Configuration" >> $GITHUB_STEP_SUMMARY
+            echo "- **Device UUID**: \`${{ env.DEVICE_UUID }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "- **Device Name**: \`${{ env.DEVICE_NAME }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "- **Device Type**: \`${{ env.DEVICE_TYPE }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "- **Agent Version**: \`${{ env.AGENT_VERSION }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "- **Provisioned**: \`${{ env.PROVISIONED }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "<details>" >> $GITHUB_STEP_SUMMARY
+            echo "<summary>Full Device Configuration (JSON)</summary>" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo '```json' >> $GITHUB_STEP_SUMMARY
+            echo '${{ env.DEVICE_CONFIG }}' | jq '.' >> $GITHUB_STEP_SUMMARY || echo '${{ env.DEVICE_CONFIG }}' >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "</details>" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+          
           echo "## Tests Performed" >> $GITHUB_STEP_SUMMARY
           echo "1. System dependencies installation (SQLite, Docker, etc.)" >> $GITHUB_STEP_SUMMARY
           echo "2. Agent build and installation" >> $GITHUB_STEP_SUMMARY
