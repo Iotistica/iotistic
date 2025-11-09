@@ -373,7 +373,7 @@ jobs:
         run: docker compose -f $COMPOSE_FILE down -v
 
   test-sensors:
-    name: Test Sensor Simulators
+    name: Test Simulators
     needs: [test-mosquitto, test-api]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
