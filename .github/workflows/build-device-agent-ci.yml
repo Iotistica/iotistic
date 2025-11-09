@@ -418,11 +418,11 @@ jobs:
           echo "Building TypeScript..."
           sudo npm run build
           
-          # Verify build output - the entry point is dist/src/index.js
-          if [ -f dist/src/index.js ]; then
-            echo "✓ Build successful - dist/src/index.js exists"
+          # Verify build output - the entry point is dist/app.js
+          if [ -f dist/app.js ]; then
+            echo "✓ Build successful - dist/app.js exists"
           else
-            echo "✗ Build failed - dist/src/index.js not found"
+            echo "✗ Build failed - dist/app.js not found"
             ls -la dist/src/ || echo "dist/src not found"
             exit 1
           fi
@@ -467,11 +467,11 @@ jobs:
           cd /opt/iotistic/agent
           
           # Create PM2 ecosystem config file with environment variables
-          cat > ecosystem.config.js << 'EOFCONFIG'
+          cat > ecosystem.config.js << EOFCONFIG
           module.exports = {
             apps: [{
               name: 'iotistic-agent',
-              script: 'dist/src/index.js',
+              script: 'dist/app.js',
               cwd: '/opt/iotistic/agent',
               instances: 1,
               autorestart: true,
@@ -494,6 +494,18 @@ jobs:
             }]
           };
           EOFCONFIG
+          
+          # Make sure log files exist and have correct permissions
+          sudo touch /var/log/iotistic/agent-out.log /var/log/iotistic/agent-error.log
+          sudo chown iotistic:iotistic /var/log/iotistic/agent-*.log
+          
+          # Show the ecosystem config for debugging
+          echo "Ecosystem config:"
+          cat ecosystem.config.js
+          
+          # Test if node can at least load the file
+          echo "Testing if node can load the file..."
+          timeout 5 node dist/app.js --help 2>&1 || echo "Node execution test completed (may have timed out, which is OK if it started)"
           
           # Start with PM2 using ecosystem file (as root to access Docker socket)
           sudo pm2 start ecosystem.config.js
