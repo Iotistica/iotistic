@@ -455,13 +455,17 @@ jobs:
         run: |
           cd /opt/iotistic/agent
           
-          # Start with PM2 as iotistic user, loading env file
-          sudo -u iotistic pm2 start dist/index.js \
+          # Load environment variables from file and export them
+          set -a
+          source /etc/iotistic/agent.env
+          set +a
+          
+          # Start with PM2 as iotistic user
+          sudo -E -u iotistic pm2 start dist/index.js \
             --name iotistic-agent \
             --cwd /opt/iotistic/agent \
             --log /var/log/iotistic/agent.log \
-            --time \
-            --env-file /etc/iotistic/agent.env
+            --time
           
           echo "✓ Agent started with PM2"
           
