@@ -9,13 +9,100 @@ concurrency:
   cancel-in-progress: true
 
 on:
+  workflow_call:
+    inputs:
+      agent_version:
+        description: 'Agent version to test'
+        required: false
+        type: string
+      api_version:
+        description: 'API version to test'
+        required: false
+        type: string
+      dashboard_version:
+        description: 'Dashboard version to test'
+        required: false
+        type: string
+  workflow_dispatch:
+    inputs:
+      agent_version:
+        description: 'Agent version to test (default: latest)'
+        required: false
+        type: string
+      api_version:
+        description: 'API version to test (default: latest)'
+        required: false
+        type: string
+      dashboard_version:
+        description: 'Dashboard version to test (default: latest)'
+        required: false
+        type: string
   release:
     types: [published]
-  workflow_dispatch:
 
 jobs:
+  determine-versions:
+    name: Determine Versions to Test
+    runs-on: ubuntu-24.04
+    outputs:
+      agent_version: ${{ steps.versions.outputs.agent_version }}
+      api_version: ${{ steps.versions.outputs.api_version }}
+      dashboard_version: ${{ steps.versions.outputs.dashboard_version }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Determine versions
+        id: versions
+        run: |
+          # Use input versions if provided, otherwise get from package.json
+          if [ -n "${{ inputs.agent_version }}" ]; then
+            AGENT_VERSION="${{ inputs.agent_version }}"
+          else
+            AGENT_VERSION=$(jq -r '.version' agent/package.json)
+          fi
+          
+          if [ -n "${{ inputs.api_version }}" ]; then
+            API_VERSION="${{ inputs.api_version }}"
+          else
+            API_VERSION=$(jq -r '.version' api/package.json)
+          fi
+          
+          if [ -n "${{ inputs.dashboard_version }}" ]; then
+            DASHBOARD_VERSION="${{ inputs.dashboard_version }}"
+          else
+            DASHBOARD_VERSION=$(jq -r '.version' dashboard/package.json)
+          fi
+          
+          echo "agent_version=$AGENT_VERSION" >> $GITHUB_OUTPUT
+          echo "api_version=$API_VERSION" >> $GITHUB_OUTPUT
+          echo "dashboard_version=$DASHBOARD_VERSION" >> $GITHUB_OUTPUT
+          
+          echo "Testing versions:"
+          echo "  - Agent: $AGENT_VERSION"
+          echo "  - API: $API_VERSION"
+          echo "  - Dashboard: $DASHBOARD_VERSION"
+
+      - name: Display test configuration
+        run: |
+          {
+            echo "## Integration Test Configuration"
+            echo ""
+            echo "### Versions Under Test"
+            echo "- **Agent**: \`${{ steps.versions.outputs.agent_version }}\`"
+            echo "- **API**: \`${{ steps.versions.outputs.api_version }}\`"
+            echo "- **Dashboard**: \`${{ steps.versions.outputs.dashboard_version }}\`"
+            echo ""
+            echo "### Docker Images"
+            echo "- [\`iotistic/agent:${{ steps.versions.outputs.agent_version }}\`](https://hub.docker.com/r/iotistic/agent/tags?name=${{ steps.versions.outputs.agent_version }})"
+            echo "- [\`iotistic/api:${{ steps.versions.outputs.api_version }}\`](https://hub.docker.com/r/iotistic/api/tags?name=${{ steps.versions.outputs.api_version }})"
+            echo "- [\`iotistic/dashboard:${{ steps.versions.outputs.dashboard_version }}\`](https://hub.docker.com/r/iotistic/dashboard/tags?name=${{ steps.versions.outputs.dashboard_version }})"
+          } >> $GITHUB_STEP_SUMMARY
+
   setup:
     name: Setup Environment
+    needs: determine-versions
     runs-on: ubuntu-24.04
     
     steps:
@@ -24,14 +111,19 @@ jobs:
           echo "E2E Integration Test Suite"
           echo "=========================="
           echo ""
+          echo "Versions:"
+          echo "  - Agent: ${{ needs.determine-versions.outputs.agent_version }}"
+          echo "  - API: ${{ needs.determine-versions.outputs.api_version }}"
+          echo "  - Dashboard: ${{ needs.determine-versions.outputs.dashboard_version }}"
+          echo ""
           echo "Test Stack (docker-compose.e2e.yml):"
           echo "  - PostgreSQL 16"
           echo "  - Redis 7"
           echo "  - Neo4j 5.15"
           echo "  - Mosquitto MQTT Broker"
-          echo "  - API Server"
-          echo "  - Dashboard UI"
-          echo "  - Agent-12 & Agent-13"
+          echo "  - API Server (v${{ needs.determine-versions.outputs.api_version }})"
+          echo "  - Dashboard UI (v${{ needs.determine-versions.outputs.dashboard_version }})"
+          echo "  - Agent-12 & Agent-13 (v${{ needs.determine-versions.outputs.agent_version }})"
           echo "  - VPN Server"
           echo "  - Protocol Simulators (Modbus, CANbus, OPC-UA)"
           echo ""
@@ -46,10 +138,23 @@ jobs:
           echo ""
           echo "=========================="
 
+      - name: Pull Docker images
+        run: |
+          echo "Pulling versioned Docker images..."
+          docker pull iotistic/agent:${{ needs.determine-versions.outputs.agent_version }}
+          docker pull iotistic/api:${{ needs.determine-versions.outputs.api_version }}
+          docker pull iotistic/dashboard:${{ needs.determine-versions.outputs.dashboard_version }}
+          echo "Images pulled successfully!"
+
   test-postgres:
     name: Test PostgreSQL
-    needs: setup
+    needs: [determine-versions, setup]
     runs-on: ubuntu-24.04
+    
+    env:
+      AGENT_VERSION: ${{ needs.determine-versions.outputs.agent_version }}
+      API_VERSION: ${{ needs.determine-versions.outputs.api_version }}
+      DASHBOARD_VERSION: ${{ needs.determine-versions.outputs.dashboard_version }}
     
     steps:
       - name: Checkout repository
@@ -86,8 +191,13 @@ jobs:
 
   test-redis:
     name: Test Redis
-    needs: setup
+    needs: [determine-versions, setup]
     runs-on: ubuntu-24.04
+    
+    env:
+      AGENT_VERSION: ${{ needs.determine-versions.outputs.agent_version }}
+      API_VERSION: ${{ needs.determine-versions.outputs.api_version }}
+      DASHBOARD_VERSION: ${{ needs.determine-versions.outputs.dashboard_version }}
     
     steps:
       - name: Checkout repository
@@ -124,8 +234,13 @@ jobs:
 
   test-neo4j:
     name: Test Neo4j
-    needs: setup
+    needs: [determine-versions, setup]
     runs-on: ubuntu-24.04
+    
+    env:
+      AGENT_VERSION: ${{ needs.determine-versions.outputs.agent_version }}
+      API_VERSION: ${{ needs.determine-versions.outputs.api_version }}
+      DASHBOARD_VERSION: ${{ needs.determine-versions.outputs.dashboard_version }}
     
     steps:
       - name: Checkout repository
@@ -162,8 +277,13 @@ jobs:
 
   test-mosquitto:
     name: Test Mosquitto MQTT
-    needs: setup
+    needs: [determine-versions, setup]
     runs-on: ubuntu-24.04
+    
+    env:
+      AGENT_VERSION: ${{ needs.determine-versions.outputs.agent_version }}
+      API_VERSION: ${{ needs.determine-versions.outputs.api_version }}
+      DASHBOARD_VERSION: ${{ needs.determine-versions.outputs.dashboard_version }}
     
     steps:
       - name: Checkout repository
@@ -201,9 +321,14 @@ jobs:
 
   test-api:
     name: Test API Server
-    needs: setup
+    needs: [determine-versions, setup]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    
+    env:
+      AGENT_VERSION: ${{ needs.determine-versions.outputs.agent_version }}
+      API_VERSION: ${{ needs.determine-versions.outputs.api_version }}
+      DASHBOARD_VERSION: ${{ needs.determine-versions.outputs.dashboard_version }}
     
     steps:
       - name: Checkout repository
@@ -306,9 +431,14 @@ jobs:
 
   test-agents:
     name: Test Agent 
-    needs: [test-postgres, test-redis, test-api]
+    needs: [determine-versions, test-postgres, test-redis, test-api]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    
+    env:
+      AGENT_VERSION: ${{ needs.determine-versions.outputs.agent_version }}
+      API_VERSION: ${{ needs.determine-versions.outputs.api_version }}
+      DASHBOARD_VERSION: ${{ needs.determine-versions.outputs.dashboard_version }}
     
     steps:
       - name: Checkout repository
@@ -360,9 +490,14 @@ jobs:
 
   test-sensors:
     name: Test Simulators
-    needs: [test-mosquitto, test-api]
+    needs: [determine-versions, test-mosquitto, test-api]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    
+    env:
+      AGENT_VERSION: ${{ needs.determine-versions.outputs.agent_version }}
+      API_VERSION: ${{ needs.determine-versions.outputs.api_version }}
+      DASHBOARD_VERSION: ${{ needs.determine-versions.outputs.dashboard_version }}
     
     steps:
       - name: Checkout repository
@@ -423,9 +558,14 @@ jobs:
 
   test-dashboard:
     name: Test Dashboard
-    needs: [test-agents]
+    needs: [determine-versions, test-agents]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    
+    env:
+      AGENT_VERSION: ${{ needs.determine-versions.outputs.agent_version }}
+      API_VERSION: ${{ needs.determine-versions.outputs.api_version }}
+      DASHBOARD_VERSION: ${{ needs.determine-versions.outputs.dashboard_version }}
     
     steps:
       - name: Checkout repository
@@ -481,9 +621,14 @@ jobs:
 
   report:
     name: Generate Test Report
-    needs: [test-postgres, test-redis, test-neo4j, test-mosquitto, test-api, test-sensors, test-dashboard, test-agents]
+    needs: [determine-versions, test-postgres, test-redis, test-neo4j, test-mosquitto, test-api, test-sensors, test-dashboard, test-agents]
     runs-on: ubuntu-24.04
     if: always()
+    
+    env:
+      AGENT_VERSION: ${{ needs.determine-versions.outputs.agent_version }}
+      API_VERSION: ${{ needs.determine-versions.outputs.api_version }}
+      DASHBOARD_VERSION: ${{ needs.determine-versions.outputs.dashboard_version }}
     
     steps:
       - name: Checkout repository

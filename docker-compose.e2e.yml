@@ -116,9 +116,7 @@ services:
 
   # API Server
   api:
-    build:
-      context: ./api
-      dockerfile: Dockerfile
+    image: iotistic/api:${API_VERSION:-latest}
     container_name: iotistic-api-e2e
     restart: unless-stopped
     tty: true
@@ -173,9 +171,7 @@ services:
 
   # Dashboard UI
   dashboard:
-    build:
-      context: ./dashboard
-      dockerfile: Dockerfile
+    image: iotistic/dashboard:${DASHBOARD_VERSION:-latest}
     container_name: iotistic-dashboard-e2e
     restart: unless-stopped
     ports:
@@ -197,16 +193,14 @@ services:
 
   # Test Agents
   agent-12:
-    build:
-      context: ./agent
-      dockerfile: Dockerfile
+    image: iotistic/agent:${AGENT_VERSION:-latest}
     container_name: agent-12-e2e
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - agent-12-data:/app/data
     environment:
-      - AGENT_VERSION=1.0.0
+      - AGENT_VERSION=${AGENT_VERSION:-1.0.0}
       - DEVICE_API_PORT=48492
       - CLOUD_API_ENDPOINT=http://api:3002
       - NODE_ENV=development
@@ -224,16 +218,14 @@ services:
       - iotistic-net
 
   agent-13:
-    build:
-      context: ./agent
-      dockerfile: Dockerfile
+    image: iotistic/agent:${AGENT_VERSION:-latest}
     container_name: agent-13-e2e
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - agent-13-data:/app/data
     environment:
-      - AGENT_VERSION=1.0.0
+      - AGENT_VERSION=${AGENT_VERSION:-1.0.0}
       - DEVICE_API_PORT=48493
       - CLOUD_API_ENDPOINT=http://api:3002
       - NODE_ENV=development
