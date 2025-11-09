@@ -25,10 +25,32 @@ on:
         required: false
 
 jobs:
+  check-config:
+    name: Check Configuration
+    runs-on: ubuntu-24.04
+    outputs:
+      has_kubeconfig: ${{ steps.check.outputs.has_kubeconfig }}
+    
+    steps:
+      - name: Check if kubeconfig is configured
+        id: check
+        run: |
+          if [ -n "${{ secrets.KUBECONFIG }}" ]; then
+            echo "has_kubeconfig=true" >> $GITHUB_OUTPUT
+            echo "✅ Kubernetes cluster configured"
+          else
+            echo "has_kubeconfig=false" >> $GITHUB_OUTPUT
+            echo "⚠️ No Kubernetes cluster configured (KUBECONFIG secret missing)"
+            echo "Workflow will skip deployment jobs. Add KUBECONFIG secret to enable deployments."
+          fi
+
   deploy-billing:
     name: Deploy Billing Service
+    needs: check-config
     runs-on: ubuntu-24.04
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[deploy-billing]')
+    if: |
+      needs.check-config.outputs.has_kubeconfig == 'true' &&
+      (github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[deploy-billing]'))
     
     steps:
       - name: Checkout repository
@@ -68,8 +90,11 @@ jobs:
 
   deploy-vpn-server:
     name: Deploy VPN Server
+    needs: check-config
     runs-on: ubuntu-24.04
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[deploy-vpn]')
+    if: |
+      needs.check-config.outputs.has_kubeconfig == 'true' &&
+      (github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[deploy-vpn]'))
     
     steps:
       - name: Checkout repository
@@ -102,8 +127,9 @@ jobs:
 
   deploy-customer-instance:
     name: Deploy Customer Instance
+    needs: check-config
     runs-on: ubuntu-24.04
-    if: github.event_name == 'workflow_dispatch'
+    if: needs.check-config.outputs.has_kubeconfig == 'true' && github.event_name == 'workflow_dispatch'
     
     steps:
       - name: Checkout repository
@@ -165,8 +191,11 @@ jobs:
 
   deploy-monitoring:
     name: Deploy Monitoring Stack
+    needs: check-config
     runs-on: ubuntu-24.04
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[deploy-monitoring]')
+    if: |
+      needs.check-config.outputs.has_kubeconfig == 'true' &&
+      (github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[deploy-monitoring]'))
     
     steps:
       - name: Checkout repository
@@ -200,9 +229,12 @@ jobs:
 
   rollback:
     name: Rollback Deployment
+    needs: [check-config, deploy-billing, deploy-vpn-server, deploy-customer-instance]
     runs-on: ubuntu-24.04
-    if: failure() && github.event_name == 'workflow_dispatch'
-    needs: [deploy-billing, deploy-vpn-server, deploy-customer-instance]
+    if: |
+      failure() && 
+      needs.check-config.outputs.has_kubeconfig == 'true' && 
+      github.event_name == 'workflow_dispatch'
     
     steps:
       - name: Set up kubectl
@@ -226,20 +258,33 @@ jobs:
 
   report:
     name: Deployment Report
-    needs: [deploy-billing, deploy-vpn-server, deploy-customer-instance, deploy-monitoring]
+    needs: [check-config, deploy-billing, deploy-vpn-server, deploy-customer-instance, deploy-monitoring]
     runs-on: ubuntu-24.04
     if: always()
     
     steps:
+      - name: Check if cluster is available
+        id: cluster_check
+        run: |
+          if [ "${{ needs.check-config.outputs.has_kubeconfig }}" != "true" ]; then
+            echo "cluster_available=false" >> $GITHUB_OUTPUT
+            echo "⚠️ No Kubernetes cluster configured"
+          else
+            echo "cluster_available=true" >> $GITHUB_OUTPUT
+          fi
+
       - name: Set up kubectl
+        if: steps.cluster_check.outputs.cluster_available == 'true'
         uses: azure/setup-kubectl@v3
 
       - name: Configure kubectl context
+        if: steps.cluster_check.outputs.cluster_available == 'true'
         run: |
           mkdir -p ~/.kube
           echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
 
       - name: Generate deployment report
+        if: steps.cluster_check.outputs.cluster_available == 'true'
         run: |
           echo "## Kubernetes Deployment Report" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -265,3 +310,25 @@ jobs:
           echo '```' >> $GITHUB_STEP_SUMMARY
           kubectl get svc --all-namespaces -l managed-by=iotistic >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Generate skipped report
+        if: steps.cluster_check.outputs.cluster_available == 'false'
+        run: |
+          echo "## Kubernetes Deployment Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### ⚠️ No Cluster Configured" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Kubernetes deployment was skipped because no cluster is configured." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**To enable Kubernetes deployments:**" >> $GITHUB_STEP_SUMMARY
+          echo "1. Create a Kubernetes cluster (EKS, GKE, AKS, or self-hosted)" >> $GITHUB_STEP_SUMMARY
+          echo "2. Get your kubeconfig: \`kubectl config view --raw\`" >> $GITHUB_STEP_SUMMARY
+          echo "3. Base64 encode it: \`cat kubeconfig.yaml | base64 -w 0\`" >> $GITHUB_STEP_SUMMARY
+          echo "4. Add as GitHub secret: \`KUBECONFIG\`" >> $GITHUB_STEP_SUMMARY
+          echo "5. Add other required secrets (see docs/K8S-DEPLOYMENT-WORKFLOW.md)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Workflow Status:**" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Workflow syntax valid" >> $GITHUB_STEP_SUMMARY
+          echo "- ⏭️ Deployment jobs skipped (no cluster)" >> $GITHUB_STEP_SUMMARY
+          echo "- 📄 Charts validated" >> $GITHUB_STEP_SUMMARY
+
