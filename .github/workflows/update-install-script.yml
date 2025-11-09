@@ -1,22 +1,12 @@
 name: Upload Installation Scripts to Azure
 
 on:
-  # Run after agent CI workflow completes successfully
-  workflow_run:
-    workflows: ["CI Build, Test & Push Device Agent"]
-    types:
-      - completed
-    branches:
-      - master
-  
-  # Also allow manual trigger
+  # Manual trigger only
   workflow_dispatch:
 
 jobs:
   upload-install-scripts:
     runs-on: ubuntu-latest
-    # Only run if the test workflow succeeded (or if manually triggered)
-    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     
     steps:
       - name: Checkout repository
@@ -71,52 +61,52 @@ jobs:
           az storage blob upload \
             --account-name ${{ secrets.AZURE_STORAGE_ACCOUNT }} \
             --container-name scripts \
-            --name install-docker.sh \
+            --name agent/install-docker.sh \
             --file /tmp/iotistic-scripts/install-docker.sh \
             --overwrite true \
             --content-type application/x-sh \
             --content-disposition "attachment; filename=install-docker.sh"
           
-          echo "✓ Uploaded install-docker.sh (latest)"
+          echo "✓ Uploaded agent/install-docker.sh (latest)"
 
       - name: Upload install-docker.sh (versioned)
         run: |
           az storage blob upload \
             --account-name ${{ secrets.AZURE_STORAGE_ACCOUNT }} \
             --container-name scripts \
-            --name install-docker-${{ steps.version.outputs.package_version }}.sh \
+            --name agent/versions/install-docker-${{ steps.version.outputs.package_version }}.sh \
             --file /tmp/iotistic-scripts/install-docker.sh \
             --overwrite true \
             --content-type application/x-sh \
             --content-disposition "attachment; filename=install-docker-${{ steps.version.outputs.package_version }}.sh"
           
-          echo "✓ Uploaded install-docker-${{ steps.version.outputs.package_version }}.sh"
+          echo "✓ Uploaded agent/versions/install-docker-${{ steps.version.outputs.package_version }}.sh"
 
       - name: Upload install-systemd.sh (latest)
         run: |
           az storage blob upload \
             --account-name ${{ secrets.AZURE_STORAGE_ACCOUNT }} \
             --container-name scripts \
-            --name install-systemd.sh \
+            --name agent/install-systemd.sh \
             --file /tmp/iotistic-scripts/install-systemd.sh \
             --overwrite true \
             --content-type application/x-sh \
             --content-disposition "attachment; filename=install-systemd.sh"
           
-          echo "✓ Uploaded install-systemd.sh (latest)"
+          echo "✓ Uploaded agent/install-systemd.sh (latest)"
 
       - name: Upload install-systemd.sh (versioned)
         run: |
           az storage blob upload \
             --account-name ${{ secrets.AZURE_STORAGE_ACCOUNT }} \
             --container-name scripts \
-            --name install-systemd-${{ steps.version.outputs.package_version }}.sh \
+            --name agent/versions/install-systemd-${{ steps.version.outputs.package_version }}.sh \
             --file /tmp/iotistic-scripts/install-systemd.sh \
             --overwrite true \
             --content-type application/x-sh \
             --content-disposition "attachment; filename=install-systemd-${{ steps.version.outputs.package_version }}.sh"
           
-          echo "✓ Uploaded install-systemd-${{ steps.version.outputs.package_version }}.sh"
+          echo "✓ Uploaded agent/versions/install-systemd-${{ steps.version.outputs.package_version }}.sh"
 
       - name: Upload legacy install.sh (if exists)
         run: |
@@ -143,24 +133,24 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Docker Installation" >> $GITHUB_STEP_SUMMARY
           echo '```bash' >> $GITHUB_STEP_SUMMARY
-          echo "curl -sSL https://install.iotistic.com/install-docker.sh | sudo bash" >> $GITHUB_STEP_SUMMARY
+          echo "curl -sSL https://install.iotistic.com/agent/install-docker.sh | sudo bash" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Systemd Installation (with PM2)" >> $GITHUB_STEP_SUMMARY
           echo '```bash' >> $GITHUB_STEP_SUMMARY
-          echo "curl -sSL https://install.iotistic.com/install-systemd.sh | sudo bash" >> $GITHUB_STEP_SUMMARY
+          echo "curl -sSL https://install.iotistic.com/agent/install-systemd.sh | sudo bash" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "## Version ${{ steps.version.outputs.package_version }} Scripts" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Docker Installation (Versioned)" >> $GITHUB_STEP_SUMMARY
           echo '```bash' >> $GITHUB_STEP_SUMMARY
-          echo "curl -sSL https://install.iotistic.com/install-docker-${{ steps.version.outputs.package_version }}.sh | sudo bash" >> $GITHUB_STEP_SUMMARY
+          echo "curl -sSL https://install.iotistic.com/agent/versions/install-docker-${{ steps.version.outputs.package_version }}.sh | sudo bash" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Systemd Installation (Versioned)" >> $GITHUB_STEP_SUMMARY
           echo '```bash' >> $GITHUB_STEP_SUMMARY
-          echo "curl -sSL https://install.iotistic.com/install-systemd-${{ steps.version.outputs.package_version }}.sh | sudo bash" >> $GITHUB_STEP_SUMMARY
+          echo "curl -sSL https://install.iotistic.com/agent/versions/install-systemd-${{ steps.version.outputs.package_version }}.sh | sudo bash" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "## Features" >> $GITHUB_STEP_SUMMARY
