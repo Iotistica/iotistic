@@ -418,15 +418,18 @@ jobs:
           echo "Building TypeScript..."
           sudo npm run build
           
-          # Show what was built
+          # Show current directory and what was built
+          echo "Current directory: $(pwd)"
           echo "Build output:"
-          ls -la dist/ | head -20
+          sudo ls -la dist/ | head -20
           
           # Verify build output - the entry point is dist/app.js
-          if [ -f dist/app.js ]; then
+          if sudo test -f dist/app.js; then
             echo "✓ Build successful - dist/app.js exists"
           else
             echo "✗ Build failed - dist/app.js not found"
+            echo "Checking if file exists without sudo:"
+            test -f dist/app.js && echo "File exists without sudo" || echo "File does not exist"
             exit 1
           fi
           
