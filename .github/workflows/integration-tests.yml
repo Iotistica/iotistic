@@ -62,18 +62,71 @@ jobs:
       - name: Create .env file
         run: |
           cat > .env << EOF
+          # PostgreSQL
           POSTGRES_DB=iotistic
           POSTGRES_USER=postgres
           POSTGRES_PASSWORD=postgres
+          
+          # Redis
+          REDIS_PORT_EXT=6379
+          REDIS_HOST=redis
+          REDIS_PORT=6379
+          
+          # API
+          API_PORT_EXT=4002
+          PORT=3002
+          NODE_ENV=development
+          
+          # Database Connection
+          DB_HOST=postgres
+          DB_PORT=5432
+          DB_NAME=iotistic
+          DB_USER=postgres
+          DB_PASSWORD=postgres
+          DB_POOL_SIZE=20
+          
+          # MQTT
+          MOSQUITTO_PORT_EXT=5883
+          MOSQUITTO_WS_PORT_EXT=59002
+          MQTT_BROKER_URL=mqtt://mosquitto:1883
+          MQTT_USERNAME=admin
+          MQTT_PASSWORD=iotistic42!
+          MQTT_PERSIST_TO_DB=true
+          MQTT_DB_SYNC_INTERVAL=10000
+          MQTT_MONITOR_ENABLED=true
+          
+          # Neo4j
+          NEO4J_URI=bolt://neo4j:7687
+          NEO4J_USERNAME=neo4j
+          NEO4J_PASSWORD=iotistic123
+          
+          # Dashboard
+          DASHBOARD_PORT_EXT=3000
+          
+          # VPN
+          VPN_SERVER_PORT=1194
+          VPN_API_PORT=3200
+          VPN_MGMT_PORT=7505
+          VPN_CA_PORT=8080
+          VPN_SERVER_HOST=localhost
+          VPN_DB_NAME=iotistic_vpn
+          
+          # License Keys
+          LICENSE_PUBLIC_KEY=${{ secrets.LICENSE_PUBLIC_KEY }}
+          IOTISTIC_LICENSE_KEY=${{ secrets.IOTISTIC_LICENSE_KEY }}
+          
+          # Logging
+          FORCE_COLOR=1
+          LOG_COMPRESSION=true
           EOF
 
       - name: Start PostgreSQL
-        run: docker compose up -d postgres
+        run: docker compose -f $COMPOSE_FILE up -d postgres
 
       - name: Wait for PostgreSQL
         run: |
           timeout 60 bash -c '
-            until docker compose exec -T postgres pg_isready -U postgres; do
+            until docker compose -f $COMPOSE_FILE exec -T postgres pg_isready -U postgres; do
               echo "Waiting for PostgreSQL..."
               sleep 2
             done
@@ -82,12 +135,12 @@ jobs:
       - name: Check PostgreSQL connectivity
         run: |
           echo "Checking PostgreSQL..."
-          docker compose exec -T postgres pg_isready -U postgres
+          docker compose -f $COMPOSE_FILE exec -T postgres pg_isready -U postgres
           echo "PostgreSQL is ready!"
 
       - name: Cleanup
         if: always()
-        run: docker compose down -v
+        run: docker compose -f $COMPOSE_FILE down -v
 
   test-redis:
     name: Test Redis
@@ -98,13 +151,74 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Create .env file
+        run: |
+          cat > .env << EOF
+          # PostgreSQL
+          POSTGRES_DB=iotistic
+          POSTGRES_USER=postgres
+          POSTGRES_PASSWORD=postgres
+          
+          # Redis
+          REDIS_PORT_EXT=6379
+          REDIS_HOST=redis
+          REDIS_PORT=6379
+          
+          # API
+          API_PORT_EXT=4002
+          PORT=3002
+          NODE_ENV=development
+          
+          # Database Connection
+          DB_HOST=postgres
+          DB_PORT=5432
+          DB_NAME=iotistic
+          DB_USER=postgres
+          DB_PASSWORD=postgres
+          DB_POOL_SIZE=20
+          
+          # MQTT
+          MOSQUITTO_PORT_EXT=5883
+          MOSQUITTO_WS_PORT_EXT=59002
+          MQTT_BROKER_URL=mqtt://mosquitto:1883
+          MQTT_USERNAME=admin
+          MQTT_PASSWORD=iotistic42!
+          MQTT_PERSIST_TO_DB=true
+          MQTT_DB_SYNC_INTERVAL=10000
+          MQTT_MONITOR_ENABLED=true
+          
+          # Neo4j
+          NEO4J_URI=bolt://neo4j:7687
+          NEO4J_USERNAME=neo4j
+          NEO4J_PASSWORD=iotistic123
+          
+          # Dashboard
+          DASHBOARD_PORT_EXT=3000
+          
+          # VPN
+          VPN_SERVER_PORT=1194
+          VPN_API_PORT=3200
+          VPN_MGMT_PORT=7505
+          VPN_CA_PORT=8080
+          VPN_SERVER_HOST=localhost
+          VPN_DB_NAME=iotistic_vpn
+          
+          # License Keys
+          LICENSE_PUBLIC_KEY=${{ secrets.LICENSE_PUBLIC_KEY }}
+          IOTISTIC_LICENSE_KEY=${{ secrets.IOTISTIC_LICENSE_KEY }}
+          
+          # Logging
+          FORCE_COLOR=1
+          LOG_COMPRESSION=true
+          EOF
+
       - name: Start Redis
-        run: docker compose up -d redis
+        run: docker compose -f $COMPOSE_FILE up -d redis
 
       - name: Wait for Redis
         run: |
           timeout 60 bash -c '
-            until docker compose exec -T redis redis-cli ping; do
+            until docker compose -f $COMPOSE_FILE exec -T redis redis-cli ping; do
               echo "Waiting for Redis..."
               sleep 2
             done
@@ -113,12 +227,12 @@ jobs:
       - name: Check Redis connectivity
         run: |
           echo "Checking Redis..."
-          docker compose exec -T redis redis-cli ping
+          docker compose -f $COMPOSE_FILE exec -T redis redis-cli ping
           echo "Redis is ready!"
 
       - name: Cleanup
         if: always()
-        run: docker compose down -v
+        run: docker compose -f $COMPOSE_FILE down -v
 
   test-neo4j:
     name: Test Neo4j
@@ -129,13 +243,74 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Create .env file
+        run: |
+          cat > .env << EOF
+          # PostgreSQL
+          POSTGRES_DB=iotistic
+          POSTGRES_USER=postgres
+          POSTGRES_PASSWORD=postgres
+          
+          # Redis
+          REDIS_PORT_EXT=6379
+          REDIS_HOST=redis
+          REDIS_PORT=6379
+          
+          # API
+          API_PORT_EXT=4002
+          PORT=3002
+          NODE_ENV=development
+          
+          # Database Connection
+          DB_HOST=postgres
+          DB_PORT=5432
+          DB_NAME=iotistic
+          DB_USER=postgres
+          DB_PASSWORD=postgres
+          DB_POOL_SIZE=20
+          
+          # MQTT
+          MOSQUITTO_PORT_EXT=5883
+          MOSQUITTO_WS_PORT_EXT=59002
+          MQTT_BROKER_URL=mqtt://mosquitto:1883
+          MQTT_USERNAME=admin
+          MQTT_PASSWORD=iotistic42!
+          MQTT_PERSIST_TO_DB=true
+          MQTT_DB_SYNC_INTERVAL=10000
+          MQTT_MONITOR_ENABLED=true
+          
+          # Neo4j
+          NEO4J_URI=bolt://neo4j:7687
+          NEO4J_USERNAME=neo4j
+          NEO4J_PASSWORD=iotistic123
+          
+          # Dashboard
+          DASHBOARD_PORT_EXT=3000
+          
+          # VPN
+          VPN_SERVER_PORT=1194
+          VPN_API_PORT=3200
+          VPN_MGMT_PORT=7505
+          VPN_CA_PORT=8080
+          VPN_SERVER_HOST=localhost
+          VPN_DB_NAME=iotistic_vpn
+          
+          # License Keys
+          LICENSE_PUBLIC_KEY=${{ secrets.LICENSE_PUBLIC_KEY }}
+          IOTISTIC_LICENSE_KEY=${{ secrets.IOTISTIC_LICENSE_KEY }}
+          
+          # Logging
+          FORCE_COLOR=1
+          LOG_COMPRESSION=true
+          EOF
+
       - name: Start Neo4j
-        run: docker compose up -d neo4j
+        run: docker compose -f $COMPOSE_FILE up -d neo4j
 
       - name: Wait for Neo4j
         run: |
           timeout 120 bash -c '
-            until docker compose exec -T neo4j cypher-shell -u neo4j -p iotistic123 "RETURN 1" 2>/dev/null; do
+            until docker compose -f $COMPOSE_FILE exec -T neo4j cypher-shell -u neo4j -p iotistic123 "RETURN 1" 2>/dev/null; do
               echo "Waiting for Neo4j..."
               sleep 5
             done
@@ -144,12 +319,12 @@ jobs:
       - name: Check Neo4j connectivity
         run: |
           echo "Checking Neo4j..."
-          docker compose exec -T neo4j cypher-shell -u neo4j -p iotistic123 "RETURN 1"
+          docker compose -f $COMPOSE_FILE exec -T neo4j cypher-shell -u neo4j -p iotistic123 "RETURN 1"
           echo "Neo4j is ready!"
 
       - name: Cleanup
         if: always()
-        run: docker compose down -v
+        run: docker compose -f $COMPOSE_FILE down -v
 
   test-mosquitto:
     name: Test Mosquitto MQTT
@@ -163,20 +338,71 @@ jobs:
       - name: Create .env file
         run: |
           cat > .env << EOF
+          # PostgreSQL
           POSTGRES_DB=iotistic
           POSTGRES_USER=postgres
           POSTGRES_PASSWORD=postgres
+          
+          # Redis
+          REDIS_PORT_EXT=6379
+          REDIS_HOST=redis
+          REDIS_PORT=6379
+          
+          # API
+          API_PORT_EXT=4002
+          PORT=3002
+          NODE_ENV=development
+          
+          # Database Connection
+          DB_HOST=postgres
+          DB_PORT=5432
+          DB_NAME=iotistic
+          DB_USER=postgres
+          DB_PASSWORD=postgres
+          DB_POOL_SIZE=20
+          
+          # MQTT
           MOSQUITTO_PORT_EXT=5883
           MOSQUITTO_WS_PORT_EXT=59002
+          MQTT_BROKER_URL=mqtt://mosquitto:1883
+          MQTT_USERNAME=admin
+          MQTT_PASSWORD=iotistic42!
+          MQTT_PERSIST_TO_DB=true
+          MQTT_DB_SYNC_INTERVAL=10000
+          MQTT_MONITOR_ENABLED=true
+          
+          # Neo4j
+          NEO4J_URI=bolt://neo4j:7687
+          NEO4J_USERNAME=neo4j
+          NEO4J_PASSWORD=iotistic123
+          
+          # Dashboard
+          DASHBOARD_PORT_EXT=3000
+          
+          # VPN
+          VPN_SERVER_PORT=1194
+          VPN_API_PORT=3200
+          VPN_MGMT_PORT=7505
+          VPN_CA_PORT=8080
+          VPN_SERVER_HOST=localhost
+          VPN_DB_NAME=iotistic_vpn
+          
+          # License Keys
+          LICENSE_PUBLIC_KEY=${{ secrets.LICENSE_PUBLIC_KEY }}
+          IOTISTIC_LICENSE_KEY=${{ secrets.IOTISTIC_LICENSE_KEY }}
+          
+          # Logging
+          FORCE_COLOR=1
+          LOG_COMPRESSION=true
           EOF
 
       - name: Start PostgreSQL and Mosquitto
-        run: docker compose up -d postgres mosquitto
+        run: docker compose -f $COMPOSE_FILE up -d postgres mosquitto
 
       - name: Wait for services
         run: |
           timeout 60 bash -c '
-            until docker compose exec -T postgres pg_isready -U postgres; do
+            until docker compose -f $COMPOSE_FILE exec -T postgres pg_isready -U postgres; do
               echo "Waiting for PostgreSQL..."
               sleep 2
             done
@@ -186,12 +412,12 @@ jobs:
       - name: Check Mosquitto MQTT broker
         run: |
           echo "Checking MQTT broker..."
-          docker compose exec -T mosquitto sh -c "nc -zv localhost 1883" || echo "MQTT listening on port 1883"
+          docker compose -f $COMPOSE_FILE exec -T mosquitto sh -c "nc -zv localhost 1883" || echo "MQTT listening on port 1883"
           echo "Mosquitto is ready!"
 
       - name: Cleanup
         if: always()
-        run: docker compose down -v
+        run: docker compose -f $COMPOSE_FILE down -v
 
   test-api:
     name: Test API Server
@@ -206,28 +432,66 @@ jobs:
       - name: Create .env file
         run: |
           cat > .env << EOF
+          # PostgreSQL
           POSTGRES_DB=iotistic
           POSTGRES_USER=postgres
           POSTGRES_PASSWORD=postgres
+          
+          # Redis
           REDIS_PORT_EXT=6379
+          REDIS_HOST=redis
+          REDIS_PORT=6379
+          
+          # API
           API_PORT_EXT=4002
           PORT=3002
           NODE_ENV=development
+          
+          # Database Connection
           DB_HOST=postgres
           DB_PORT=5432
           DB_NAME=iotistic
           DB_USER=postgres
           DB_PASSWORD=postgres
+          DB_POOL_SIZE=20
+          
+          # MQTT
+          MOSQUITTO_PORT_EXT=5883
+          MOSQUITTO_WS_PORT_EXT=59002
           MQTT_BROKER_URL=mqtt://mosquitto:1883
+          MQTT_USERNAME=admin
+          MQTT_PASSWORD=iotistic42!
+          MQTT_PERSIST_TO_DB=true
+          MQTT_DB_SYNC_INTERVAL=10000
+          MQTT_MONITOR_ENABLED=true
+          
+          # Neo4j
           NEO4J_URI=bolt://neo4j:7687
           NEO4J_USERNAME=neo4j
           NEO4J_PASSWORD=iotistic123
+          
+          # Dashboard
+          DASHBOARD_PORT_EXT=3000
+          
+          # VPN
+          VPN_SERVER_PORT=1194
+          VPN_API_PORT=3200
+          VPN_MGMT_PORT=7505
+          VPN_CA_PORT=8080
+          VPN_SERVER_HOST=localhost
+          VPN_DB_NAME=iotistic_vpn
+          
+          # License Keys
           LICENSE_PUBLIC_KEY=${{ secrets.LICENSE_PUBLIC_KEY }}
           IOTISTIC_LICENSE_KEY=${{ secrets.IOTISTIC_LICENSE_KEY }}
+          
+          # Logging
+          FORCE_COLOR=1
+          LOG_COMPRESSION=true
           EOF
 
       - name: Start dependencies and API
-        run: docker compose up -d postgres redis neo4j mosquitto api
+        run: docker compose -f $COMPOSE_FILE up -d postgres redis neo4j mosquitto api
 
       - name: Wait for API to be ready
         run: |
@@ -259,11 +523,11 @@ jobs:
         if: always()
         run: |
           echo "=== API logs ==="
-          docker compose logs api --tail=100 || true
+          docker compose -f $COMPOSE_FILE logs api --tail=100 || true
 
       - name: Cleanup
         if: always()
-        run: docker compose down -v
+        run: docker compose -f $COMPOSE_FILE down -v
 
   test-agents:
     name: Test Agent Connectivity
@@ -278,29 +542,66 @@ jobs:
       - name: Create .env file
         run: |
           cat > .env << EOF
+          # PostgreSQL
           POSTGRES_DB=iotistic
           POSTGRES_USER=postgres
           POSTGRES_PASSWORD=postgres
+          
+          # Redis
           REDIS_PORT_EXT=6379
+          REDIS_HOST=redis
+          REDIS_PORT=6379
+          
+          # API
           API_PORT_EXT=4002
           PORT=3002
           NODE_ENV=development
+          
+          # Database Connection
           DB_HOST=postgres
           DB_PORT=5432
           DB_NAME=iotistic
           DB_USER=postgres
           DB_PASSWORD=postgres
-          MQTT_BROKER_URL=mqtt://mosquitto:1883
+          DB_POOL_SIZE=20
+          
+          # MQTT
           MOSQUITTO_PORT_EXT=5883
+          MOSQUITTO_WS_PORT_EXT=59002
+          MQTT_BROKER_URL=mqtt://mosquitto:1883
+          MQTT_USERNAME=admin
+          MQTT_PASSWORD=iotistic42!
+          MQTT_PERSIST_TO_DB=true
+          MQTT_DB_SYNC_INTERVAL=10000
+          MQTT_MONITOR_ENABLED=true
+          
+          # Neo4j
           NEO4J_URI=bolt://neo4j:7687
           NEO4J_USERNAME=neo4j
           NEO4J_PASSWORD=iotistic123
+          
+          # Dashboard
+          DASHBOARD_PORT_EXT=3000
+          
+          # VPN
+          VPN_SERVER_PORT=1194
+          VPN_API_PORT=3200
+          VPN_MGMT_PORT=7505
+          VPN_CA_PORT=8080
+          VPN_SERVER_HOST=localhost
+          VPN_DB_NAME=iotistic_vpn
+          
+          # License Keys
           LICENSE_PUBLIC_KEY=${{ secrets.LICENSE_PUBLIC_KEY }}
           IOTISTIC_LICENSE_KEY=${{ secrets.IOTISTIC_LICENSE_KEY }}
+          
+          # Logging
+          FORCE_COLOR=1
+          LOG_COMPRESSION=true
           EOF
 
       - name: Start full stack
-        run: docker compose up -d
+        run: docker compose -f $COMPOSE_FILE up -d
 
       - name: Wait for API
         run: |
@@ -317,7 +618,7 @@ jobs:
           sleep 30
           
           echo "Checking agent containers:"
-          docker compose ps | grep agent
+          docker compose -f $COMPOSE_FILE ps | grep agent
 
       - name: Run agent integration tests
         working-directory: ./agent
@@ -330,11 +631,11 @@ jobs:
         if: always()
         run: |
           echo "=== Agent-12 logs ==="
-          docker compose logs agent-12 --tail=50 || true
+          docker compose -f $COMPOSE_FILE logs agent-12 --tail=50 || true
 
       - name: Cleanup
         if: always()
-        run: docker compose down -v
+        run: docker compose -f $COMPOSE_FILE down -v
 
   test-dashboard:
     name: Test Dashboard
@@ -349,28 +650,66 @@ jobs:
       - name: Create .env file
         run: |
           cat > .env << EOF
+          # PostgreSQL
           POSTGRES_DB=iotistic
           POSTGRES_USER=postgres
           POSTGRES_PASSWORD=postgres
+          
+          # Redis
           REDIS_PORT_EXT=6379
+          REDIS_HOST=redis
+          REDIS_PORT=6379
+          
+          # API
           API_PORT_EXT=4002
           PORT=3002
           NODE_ENV=development
+          
+          # Database Connection
           DB_HOST=postgres
           DB_PORT=5432
           DB_NAME=iotistic
           DB_USER=postgres
           DB_PASSWORD=postgres
+          DB_POOL_SIZE=20
+          
+          # MQTT
+          MOSQUITTO_PORT_EXT=5883
+          MOSQUITTO_WS_PORT_EXT=59002
           MQTT_BROKER_URL=mqtt://mosquitto:1883
+          MQTT_USERNAME=admin
+          MQTT_PASSWORD=iotistic42!
+          MQTT_PERSIST_TO_DB=true
+          MQTT_DB_SYNC_INTERVAL=10000
+          MQTT_MONITOR_ENABLED=true
+          
+          # Neo4j
           NEO4J_URI=bolt://neo4j:7687
           NEO4J_USERNAME=neo4j
           NEO4J_PASSWORD=iotistic123
+          
+          # Dashboard
+          DASHBOARD_PORT_EXT=3000
+          
+          # VPN
+          VPN_SERVER_PORT=1194
+          VPN_API_PORT=3200
+          VPN_MGMT_PORT=7505
+          VPN_CA_PORT=8080
+          VPN_SERVER_HOST=localhost
+          VPN_DB_NAME=iotistic_vpn
+          
+          # License Keys
           LICENSE_PUBLIC_KEY=${{ secrets.LICENSE_PUBLIC_KEY }}
           IOTISTIC_LICENSE_KEY=${{ secrets.IOTISTIC_LICENSE_KEY }}
+          
+          # Logging
+          FORCE_COLOR=1
+          LOG_COMPRESSION=true
           EOF
 
       - name: Start dependencies, API and Dashboard
-        run: docker compose up -d postgres redis neo4j mosquitto api dashboard
+        run: docker compose -f $COMPOSE_FILE up -d postgres redis neo4j mosquitto api dashboard
 
       - name: Wait for API to be ready
         run: |
@@ -406,11 +745,11 @@ jobs:
         if: always()
         run: |
           echo "=== Dashboard logs ==="
-          docker compose logs dashboard --tail=100 || true
+          docker compose -f $COMPOSE_FILE logs dashboard --tail=100 || true
 
       - name: Cleanup
         if: always()
-        run: docker compose down -v
+        run: docker compose -f $COMPOSE_FILE down -v
 
   report:
     name: Generate Test Report
@@ -425,16 +764,66 @@ jobs:
       - name: Create .env file
         run: |
           cat > .env << EOF
+          # PostgreSQL
           POSTGRES_DB=iotistic
           POSTGRES_USER=postgres
           POSTGRES_PASSWORD=postgres
+          
+          # Redis
+          REDIS_PORT_EXT=6379
+          REDIS_HOST=redis
+          REDIS_PORT=6379
+          
+          # API
           API_PORT_EXT=4002
+          PORT=3002
+          NODE_ENV=development
+          
+          # Database Connection
+          DB_HOST=postgres
+          DB_PORT=5432
+          DB_NAME=iotistic
+          DB_USER=postgres
+          DB_PASSWORD=postgres
+          DB_POOL_SIZE=20
+          
+          # MQTT
+          MOSQUITTO_PORT_EXT=5883
+          MOSQUITTO_WS_PORT_EXT=59002
+          MQTT_BROKER_URL=mqtt://mosquitto:1883
+          MQTT_USERNAME=admin
+          MQTT_PASSWORD=iotistic42!
+          MQTT_PERSIST_TO_DB=true
+          MQTT_DB_SYNC_INTERVAL=10000
+          MQTT_MONITOR_ENABLED=true
+          
+          # Neo4j
+          NEO4J_URI=bolt://neo4j:7687
+          NEO4J_USERNAME=neo4j
+          NEO4J_PASSWORD=iotistic123
+          
+          # Dashboard
+          DASHBOARD_PORT_EXT=3000
+          
+          # VPN
+          VPN_SERVER_PORT=1194
+          VPN_API_PORT=3200
+          VPN_MGMT_PORT=7505
+          VPN_CA_PORT=8080
+          VPN_SERVER_HOST=localhost
+          VPN_DB_NAME=iotistic_vpn
+          
+          # License Keys
           LICENSE_PUBLIC_KEY=${{ secrets.LICENSE_PUBLIC_KEY }}
           IOTISTIC_LICENSE_KEY=${{ secrets.IOTISTIC_LICENSE_KEY }}
+          
+          # Logging
+          FORCE_COLOR=1
+          LOG_COMPRESSION=true
           EOF
 
       - name: Start services for metrics
-        run: docker compose up -d
+        run: docker compose -f $COMPOSE_FILE up -d
 
       - name: Wait for services
         run: sleep 30
@@ -447,7 +836,7 @@ jobs:
           
           echo "### Service Status" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-          docker compose ps >> $GITHUB_STEP_SUMMARY
+          docker compose -f $COMPOSE_FILE ps >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
@@ -466,6 +855,6 @@ jobs:
         if: always()
         run: |
           echo "Stopping all services..."
-          docker compose down -v
+          docker compose -f $COMPOSE_FILE down -v
           
           echo "Cleanup complete!"
