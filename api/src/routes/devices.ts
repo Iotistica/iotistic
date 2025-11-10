@@ -1491,16 +1491,16 @@ router.post('/devices/:uuid/update-agent', async (req, res) => {
     });
 
     // Publish event
-    await EventPublisher.publishEvent({
-      type: 'device.agent.update.triggered',
-      aggregateId: uuid,
-      aggregateType: 'device',
-      data: {
+    await eventPublisher.publish(
+      'device.agent.update.triggered',
+      'device',
+      uuid,
+      {
         version: version || 'latest',
         scheduled_time,
         force
       }
-    });
+    );
 
     res.json({
       success: true,

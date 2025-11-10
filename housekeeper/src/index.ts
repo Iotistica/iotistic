@@ -19,7 +19,7 @@ import logger from './utils/logger';
 import housekeeperRoutes, { setHousekeeperInstance } from './routes/housekeeper';
 
 const app = express();
-const PORT = parseInt(process.env.PORT || '3200');
+const PORT = parseInt(process.env.PORT || '3400');
 const HOST = process.env.HOST || '0.0.0.0';
 
 // Middleware

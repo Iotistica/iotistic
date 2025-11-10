@@ -22,7 +22,7 @@ import {
   PaginationPrevious,
 } from '@/components/ui/pagination';
 import { toast } from 'sonner';
-import { buildApiUrl } from '@/config/api';
+import { buildHousekeeperUrl } from '@/config/api';
 
 interface TaskStats {
   total_runs: number;
@@ -84,8 +84,8 @@ export default function HousekeeperPage() {
     setError(null);
     try {
       const [tasksResponse, statusResponse] = await Promise.all([
-        fetch(buildApiUrl('/api/v1/housekeeper/tasks')),
-        fetch(buildApiUrl('/api/v1/housekeeper/status'))
+        fetch(buildHousekeeperUrl('/api/housekeeper/tasks')),
+        fetch(buildHousekeeperUrl('/api/housekeeper/status'))
       ]);
       
       if (!tasksResponse.ok || !statusResponse.ok) {
@@ -102,7 +102,7 @@ export default function HousekeeperPage() {
       const runs: TaskRun[] = [];
       for (const task of tasksData.tasks || []) {
         try {
-          const taskResponse = await fetch(buildApiUrl(`/api/v1/housekeeper/tasks/${encodeURIComponent(task.name)}`));
+          const taskResponse = await fetch(buildHousekeeperUrl(`/api/housekeeper/tasks/${encodeURIComponent(task.name)}`));
           if (taskResponse.ok) {
             const taskData = await taskResponse.json();
             if (taskData.history && Array.isArray(taskData.history)) {
@@ -139,7 +139,7 @@ export default function HousekeeperPage() {
 
   const handleViewRun = async (run: TaskRun) => {
     try {
-      const response = await fetch(buildApiUrl(`/api/v1/housekeeper/tasks/${encodeURIComponent(run.task_name)}/runs/${run.id}`));
+      const response = await fetch(buildHousekeeperUrl(`/api/housekeeper/tasks/${encodeURIComponent(run.task_name)}/runs/${run.id}`));
       if (response.ok) {
         const data = await response.json();
         setSelectedRun(data.run);

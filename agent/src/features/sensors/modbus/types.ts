@@ -112,6 +112,7 @@ export type ModbusDevice = z.infer<typeof ModbusDeviceSchema>;
 
 /**
  * Modbus Adapter Configuration Schema
+ * Note: output config is now optional - managed by SensorsFeature
  */
 export const ModbusAdapterConfigSchema = z.object({
   devices: z.array(ModbusDeviceSchema).min(1),
@@ -121,7 +122,7 @@ export const ModbusAdapterConfigSchema = z.object({
     delimiter: z.string().optional().default('\n'),
     includeTimestamp: z.boolean().optional().default(true),
     includeDeviceName: z.boolean().optional().default(true)
-  }),
+  }).optional(), // Now optional - for backward compatibility with standalone mode
   logging: z.object({
     level: z.enum(['debug', 'info', 'warn', 'error']).optional().default('info'),
     enableConsole: z.boolean().optional().default(true),

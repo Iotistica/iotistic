@@ -1,8 +1,7 @@
 {
 	"extends": "../tsconfig.json",
 	"compilerOptions": {
-		"module": "Node16",
-		"esModuleInterop": true,
-		"types": ["jest", "node"]
+		"types": ["jest", "node"],
+		"isolatedModules": true
 	}
 }

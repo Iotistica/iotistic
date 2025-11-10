@@ -146,7 +146,7 @@ export class WebSocketManager {
         this.flushMetricsBatch(deviceUuid);
       }, this.BATCH_FLUSH_INTERVAL_MS);
       this.flushIntervals.set(deviceUuid, interval);
-      logger.info(` 🔄 Started batch flush interval for device ${deviceUuid.substring(0, 8)}... (every ${this.BATCH_FLUSH_INTERVAL_MS}ms)`);
+      logger.info(` Started batch flush interval for device ${deviceUuid.substring(0, 8)}... (every ${this.BATCH_FLUSH_INTERVAL_MS}ms)`);
     }
     
     // Also update processes if present (send immediately, not batched)

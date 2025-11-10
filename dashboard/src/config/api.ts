@@ -54,12 +54,49 @@ export function buildApiUrl(path: string): string {
   return `${baseUrl}${cleanPath}`;
 }
 
+/**
+ * Get the Housekeeper service URL
+ * 
+ * Priority:
+ * 1. VITE_HOUSEKEEPER_URL environment variable
+ * 2. Fall back to localhost:3400 for local development
+ * 3. In production, use relative path or same host
+ */
+export function getHousekeeperUrl(): string {
+  // Check for explicit environment variable
+  if (import.meta.env.VITE_HOUSEKEEPER_URL) {
+    return import.meta.env.VITE_HOUSEKEEPER_URL;
+  }
+
+  // In production (K8s), use relative path if available
+  if (import.meta.env.PROD) {
+    return window.location.origin;
+  }
+
+  // Local development default - housekeeper runs on port 3400
+  return 'http://localhost:3400';
+}
+
+/**
+ * Build a full Housekeeper API endpoint URL
+ * @param path - API path (e.g., '/api/housekeeper/tasks')
+ * @returns Full URL
+ */
+export function buildHousekeeperUrl(path: string): string {
+  const baseUrl = getHousekeeperUrl();
+  // Remove leading slash if present to avoid double slashes
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  return `${baseUrl}${cleanPath}`;
+}
+
 // Export current configuration for debugging
 export const apiConfig = {
   baseUrl: getApiUrl(),
+  housekeeperUrl: getHousekeeperUrl(),
   isDevelopment: import.meta.env.DEV,
   isProduction: import.meta.env.PROD,
   envApiUrl: import.meta.env.VITE_API_URL,
+  envHousekeeperUrl: import.meta.env.VITE_HOUSEKEEPER_URL,
 };
 
 // Log configuration in development mode

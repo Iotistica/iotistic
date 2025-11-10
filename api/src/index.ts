@@ -30,7 +30,6 @@ import sensorsRoutes from './routes/sensors';
 import { router as protocolDevicesRoutes } from './routes/device-sensors';
 import { router as trafficRoutes } from './routes/traffic';
 import { router as deviceTagsRoutes } from './routes/device-tags';
-import housekeeperRoutes, { setHousekeeperInstance } from './routes/housekeeper';
 import dashboardLayoutsRoutes from './routes/dashboard-layouts';
 import mosquittoAuthRoutes from './routes/mosquitto-auth';
 import { trafficLogger} from "./middleware/traffic-logger";
@@ -166,7 +165,6 @@ app.use(API_BASE, sensorsRoutes);
 app.use(API_BASE, protocolDevicesRoutes);
 app.use(API_BASE, trafficRoutes);
 app.use(API_BASE, deviceTagsRoutes);
-app.use(`${API_BASE}/housekeeper`, housekeeperRoutes);
 app.use(`${API_BASE}/dashboard-layouts`, dashboardLayoutsRoutes);
 app.use(`${API_BASE}/alerts`, alertsRoutes);
 

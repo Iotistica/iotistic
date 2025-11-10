@@ -9,6 +9,9 @@ module.exports = {
   roots: ['<rootDir>/test/unit'],
   testMatch: ['**/*.unit.spec.ts'],
   moduleFileExtensions: ['ts', 'js', 'json'],
+  moduleNameMapper: {
+    '^(\\.{1,2}/.*)\\.js$': '$1',
+  },
   transformIgnorePatterns: [
     'node_modules/(?!(uuid|chai|chai-as-promised|sinon-chai)/)'
   ],

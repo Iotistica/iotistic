@@ -40,255 +40,6 @@ services:
             networks:
                 - iotistic-net
                 
-    agent-2:
-            container_name: agent-2
-            build:
-                context: ./agent
-                dockerfile: Dockerfile
-            restart: always
-            volumes:
-                - /var/run/docker.sock:/var/run/docker.sock
-                - agent-2-data:/app/data
-            environment:
-                - AGENT_VERSION=1.0.0
-                - DEVICE_API_PORT=48482
-                - CLOUD_API_ENDPOINT=http://api:3002
-                - NODE_ENV=development
-                - FORCE_COLOR=1
-                - MQTT_DB_SYNC_INTERVAL=70000
-                - REPORT_INTERVAL_MS=7000
-                - METRICS_INTERVAL_MS=20000
-                - LOG_COMPRESSION=true
-                - PROVISIONING_API_KEY=7a4bfa93fc7094a8359812fc3046f5f03729ce34a76913fb6767a04dbf3a407e
-            depends_on:
-                api:
-                    condition: service_healthy
-            networks:
-                - iotistic-net
-
-    agent-3:
-            container_name: agent-3
-            build:
-                context: ./agent
-                dockerfile: Dockerfile
-            privileged: true
-            pid: "host"
-            restart: always
-            volumes:
-                - /var/run/docker.sock:/var/run/docker.sock
-                - agent-3-data:/app/data
-            environment:
-                - AGENT_VERSION=1.0.0
-                - DEVICE_API_PORT=48483
-                - CLOUD_API_ENDPOINT=http://api:3002
-                - NODE_ENV=development
-                - MQTT_DB_SYNC_INTERVAL=70000
-                - REPORT_INTERVAL_MS=7000
-                - METRICS_INTERVAL_MS=20000
-                - LOG_COMPRESSION=true
-                - PROVISIONING_API_KEY=d29ed8ef80e7753308237bdcb292d4f988eb77732bf907241308355bcd0558dd
-            depends_on:
-                api:
-                    condition: service_healthy
-            networks:
-                - iotistic-net
-    agent-4:
-            container_name: agent-4
-            build:
-                context: ./agent
-                dockerfile: Dockerfile
-            restart: always
-            volumes:
-                - /var/run/docker.sock:/var/run/docker.sock
-                - agent-4-data:/app/data
-            environment:
-                - AGENT_VERSION=1.0.0
-                - DEVICE_API_PORT=48484
-                - CLOUD_API_ENDPOINT=http://api:3002
-                - NODE_ENV=development
-                - MQTT_DB_SYNC_INTERVAL=70000
-                - REPORT_INTERVAL_MS=7000
-                - METRICS_INTERVAL_MS=20000
-                - LOG_COMPRESSION=true
-                - PROVISIONING_API_KEY=d76c2c9ae2410ba579da5d91d1715775c00ab9de7bc78e0fedcabbf925df37a8
-            depends_on:
-                api:
-                    condition: service_healthy
-            networks:
-                - iotistic-net
-                
-    agent-5:
-            container_name: agent-5
-            build:
-                context: ./agent
-                dockerfile: Dockerfile
-            restart: always
-            volumes:
-                - /var/run/docker.sock:/var/run/docker.sock
-                - agent-5-data:/app/data
-            environment:
-                - AGENT_VERSION=1.0.0
-                - DEVICE_API_PORT=48485
-                - CLOUD_API_ENDPOINT=http://api:3002
-                - NODE_ENV=development
-                - MQTT_DB_SYNC_INTERVAL=70000
-                - REPORT_INTERVAL_MS=7000
-                - METRICS_INTERVAL_MS=20000
-                - LOG_COMPRESSION=true
-                - PROVISIONING_API_KEY=f40ead93e892c18753a323772008f4121af34d1b9462a5c5c0bd3a7ed2fa2a9b
-            depends_on:
-                api:
-                    condition: service_healthy
-            networks:
-                - iotistic-net
-    agent-6:
-            container_name: agent-6
-            build:
-                context: ./agent
-                dockerfile: Dockerfile
-            restart: always
-            volumes:
-                - /var/run/docker.sock:/var/run/docker.sock
-                - agent-6-data:/app/data
-            environment:
-                - AGENT_VERSION=1.0.0
-                - DEVICE_API_PORT=48486
-                - CLOUD_API_ENDPOINT=http://host.docker.internal:4002
-                - NODE_ENV=development
-                - MQTT_DB_SYNC_INTERVAL=70000
-                - REPORT_INTERVAL_MS=7000
-                - METRICS_INTERVAL_MS=20000
-                - LOG_COMPRESSION=true
-                - PROVISIONING_API_KEY=dcb0e68defbd56f7ea3331092f59a617921883688dd31d6eee5faaed03a394a6
-            depends_on:
-                api:
-                    condition: service_healthy
-            networks:
-                - iotistic-net
-    agent-7:
-            container_name: agent-7
-            build:
-                context: ./agent
-                dockerfile: Dockerfile
-            restart: always
-            volumes:
-                - /var/run/docker.sock:/var/run/docker.sock
-                - agent-7-data:/app/data
-            environment:
-                - AGENT_VERSION=1.0.0
-                - DEVICE_API_PORT=48487
-                - CLOUD_API_ENDPOINT=http://host.docker.internal:4002
-                - NODE_ENV=development
-                - MQTT_DB_SYNC_INTERVAL=70000
-                - REPORT_INTERVAL_MS=7000
-                - METRICS_INTERVAL_MS=20000
-                - LOG_COMPRESSION=true
-                - PROVISIONING_API_KEY=dcb0e68defbd56f7ea3331092f59a617921883688dd31d6eee5faaed03a394a6
-            depends_on:
-                api:
-                    condition: service_healthy
-            networks:
-                - iotistic-net
-    agent-8:
-            container_name: agent-8
-            build:
-                context: ./agent
-                dockerfile: Dockerfile
-            restart: always
-            volumes:
-                - /var/run/docker.sock:/var/run/docker.sock
-                - agent-8-data:/app/data
-            environment:
-
-                - DEVICE_API_PORT=48488
-                - CLOUD_API_ENDPOINT=http://host.docker.internal:4002
-                - NODE_ENV=development
-                - MQTT_PERSIST_TO_DB=true
-                - MQTT_DB_SYNC_INTERVAL=70000
-                - REPORT_INTERVAL_MS=2000
-                - METRICS_INTERVAL_MS=2000
-                - LOG_COMPRESSION=true
-                - PROVISIONING_API_KEY=29b6efa3eec755ec1fd9680aba54f0b10dc8a6f8028caca03ddfe21c386182b7
-            depends_on:
-                api:
-                    condition: service_healthy
-            networks:
-                - iotistic-net
-    agent-9:
-            container_name: agent-9
-            build:
-                context: ./agent
-                dockerfile: Dockerfile
-            restart: always
-            volumes:
-                - /var/run/docker.sock:/var/run/docker.sock
-                - agent-9-data:/app/data
-            environment:
-                - DEVICE_API_PORT=48489
-                - CLOUD_API_ENDPOINT=http://host.docker.internal:4002
-                - NODE_ENV=development
-                - MQTT_PERSIST_TO_DB=true
-                - MQTT_DB_SYNC_INTERVAL=70000
-                - REPORT_INTERVAL_MS=2000
-                - METRICS_INTERVAL_MS=2000
-                - LOG_COMPRESSION=true
-                - PROVISIONING_API_KEY=29b6efa3eec755ec1fd9680aba54f0b10dc8a6f8028caca03ddfe21c386182b7
-            depends_on:
-                api:
-                    condition: service_healthy
-            networks:
-                - iotistic-net
-    agent-11:
-            container_name: agent-11
-            build:
-                context: ./agent
-                dockerfile: Dockerfile
-            restart: always
-            volumes:
-                - /var/run/docker.sock:/var/run/docker.sock
-                - agent-11-data:/app/data
-            environment:
-                - DEVICE_API_PORT=48492
-                - CLOUD_API_ENDPOINT=http://host.docker.internal:4002
-                - NODE_ENV=development
-                - MQTT_PERSIST_TO_DB=true
-                - MQTT_DB_SYNC_INTERVAL=70000
-                - REPORT_INTERVAL_MS=20000
-                - METRICS_INTERVAL_MS=30000
-                - LOG_COMPRESSION=true
-                - PROVISIONING_API_KEY=1a222448bbd41b39dd2b41bd43e17727bbd1407f90a92fd26c9f10523daf8805
-            depends_on:
-                api:
-                    condition: service_healthy
-            networks:
-                - iotistic-net
-    agent-12:
-            container_name: agent-12
-            build:
-                context: ./agent
-                dockerfile: Dockerfile
-            restart: always
-            volumes:
-                - /var/run/docker.sock:/var/run/docker.sock
-                - agent-12-data:/app/data
-            environment:
-                - AGENT_VERSION=1.0.0
-                - DEVICE_API_PORT=48492
-                - CLOUD_API_ENDPOINT=http://host.docker.internal:4002
-                - NODE_ENV=development
-                - MQTT_PERSIST_TO_DB=true
-                - MQTT_DB_SYNC_INTERVAL=70000
-                - REPORT_INTERVAL_MS=20000
-                - METRICS_INTERVAL_MS=30000
-                - LOG_COMPRESSION=true
-                - REQUIRE_PROVISIONING=false
-                - PROVISIONING_API_KEY=1a222448bbd41b39dd2b41bd43e17727bbd1407f90a92fd26c9f10523daf8805
-                
-            depends_on:
-                api:
-                    condition: service_healthy
-            networks:
-                - iotistic-net
     postgres:
         image: postgres:16-alpine
         container_name: iotistic-postgres
@@ -535,28 +286,86 @@ services:
                 max-size: "5m"
                 max-file: "2"
 
+    housekeeper:
+        build:
+            context: ./housekeeper
+            dockerfile: Dockerfile
+        container_name: iotistic-housekeeper
+        restart: unless-stopped
+        ports:
+            - "${HOUSEKEEPER_PORT_EXT:-3400}:3400"
+        environment:
+            - NODE_ENV=${NODE_ENV:-development}
+            - PORT=3400
+            - DB_HOST=${DB_HOST:-postgres}
+            - DB_PORT=${DB_PORT:-5432}
+            - DB_NAME=${DB_NAME:-iotistic}
+            - DB_USER=${DB_USER:-postgres}
+            - DB_PASSWORD=${DB_PASSWORD:-postgres}
+            - LOG_LEVEL=${HOUSEKEEPER_LOG_LEVEL:-info}
+            - CLEANUP_INTERVAL=${CLEANUP_INTERVAL:-3600000}
+            - RETENTION_DAYS=${RETENTION_DAYS:-30}
+        depends_on:
+            postgres:
+                condition: service_healthy
+        networks:
+            - iotistic-net
+        healthcheck:
+            test: ["CMD", "node", "-e", "require('http').get('http://localhost:3400/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+            start_period: 40s
+        logging:
+            driver: "json-file"
+            options:
+                max-size: "10m"
+                max-file: "3"
+
+    postoffice:
+        build:
+            context: ./postoffice
+            dockerfile: Dockerfile
+        container_name: iotistic-postoffice
+        restart: unless-stopped
+        ports:
+            - "${POSTOFFICE_PORT_EXT:-3300}:3300"
+        environment:
+            - NODE_ENV=${NODE_ENV:-development}
+            - PORT=3300
+            - HOST=0.0.0.0
+            - EMAIL_ENABLED=${EMAIL_ENABLED:-true}
+            - EMAIL_FROM=${EMAIL_FROM:-"Iotistic Platform <noreply@iotistic.cloud>"}
+            - EMAIL_DEBUG=${EMAIL_DEBUG:-false}
+            - BASE_URL=${BASE_URL:-https://iotistic.ca}
+            - SMTP_HOST=${SMTP_HOST}
+            - SMTP_PORT=${SMTP_PORT:-587}
+            - SMTP_SECURE=${SMTP_SECURE:-false}
+            - SMTP_USER=${SMTP_USER}
+            - SMTP_PASS=${SMTP_PASS}
+            - REDIS_HOST=${REDIS_HOST:-redis}
+            - REDIS_PORT=${REDIS_PORT:-6379}
+            - REDIS_PASSWORD=${REDIS_PASSWORD}
+            - LOG_LEVEL=${POSTOFFICE_LOG_LEVEL:-info}
+        depends_on:
+            redis:
+                condition: service_healthy
+        networks:
+            - iotistic-net
+        healthcheck:
+            test: ["CMD", "node", "-e", "require('http').get('http://localhost:3300/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+            start_period: 40s
+        logging:
+            driver: "json-file"
+            options:
+                max-size: "10m"
+                max-file: "3"
+
 volumes:
   agent-1-data:
-    driver: local
-  agent-5-data:
-    driver: local
-  agent-4-data:
-    driver: local
-  agent-2-data:
-    driver: local
-  agent-3-data:
-    driver: local
-  agent-6-data:
-   driver: local
-  agent-7-data:
-      driver: local
-  agent-8-data:
-      driver: local
-  agent-9-data:
-    driver: local
-  agent-11-data:
-    driver: local
-  agent-12-data:
     driver: local
   iotistic-pg-data:
     driver: local

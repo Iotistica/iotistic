@@ -54,7 +54,9 @@ async function main() {
       const config = ConfigLoader.loadFromFile(argv.validateConfig);
       console.log('Configuration is valid');
       console.log(`Devices: ${config.devices.length}`);
-      console.log(`Output socket: ${config.output.socketPath}`);
+      if (config.output) {
+        console.log(`Output socket: ${config.output.socketPath}`);
+      }
       process.exit(0);
     }
 
@@ -73,10 +75,22 @@ async function main() {
       }
     }
 
+    // Validate that output config exists for standalone mode
+    if (!config.output) {
+      console.error('Error: output configuration is required for standalone mode');
+      console.error('Please provide output config in configuration file or database');
+      process.exit(1);
+    }
+
     // Create logger
     const logger = new ConsoleLogger(argv.logLevel, true);
 
-    // Create and start adapter
+    // Create socket server
+    const { SocketServer } = await import('../common/socket-server.js');
+    const socketServer = new SocketServer(config.output, logger);
+    await socketServer.start();
+
+    // Create adapter (socket-agnostic)
     const adapter = new ModbusAdapter(config, logger);
 
     // Setup graceful shutdown
@@ -84,6 +98,7 @@ async function main() {
       logger.info('Shutting down Modbus Adapter...');
       try {
         await adapter.stop();
+        await socketServer.stop();
         process.exit(0);
       } catch (error) {
         logger.error('Error during shutdown:', error);
@@ -98,8 +113,13 @@ async function main() {
     // Setup event listeners
     adapter.on('started', () => {
       logger.info('Modbus Adapter is running');
-      logger.info(`Socket server: ${config.output.socketPath}`);
+      logger.info(`Socket server: ${config.output!.socketPath}`);
       logger.info(`Active devices: ${config.devices.filter((d: any) => d.enabled).length}`);
+    });
+
+    // Wire up data event to socket server
+    adapter.on('data', (dataPoints: any[]) => {
+      socketServer.sendData(dataPoints);
     });
 
     adapter.on('device-connected', (deviceName: string) => {

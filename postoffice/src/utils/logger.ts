@@ -1,6 +1,6 @@
 /**
  * Logger Configuration
- * Winston-based logging for housekeeper service
+ * Winston-based logging for postoffice service
  */
 
 import winston from 'winston';
@@ -30,12 +30,13 @@ const logger = winston.createLogger({
       ? prettyFormat
       : winston.format.json()
   ),
-  defaultMeta: { service: 'housekeeper' },
+  defaultMeta: { service: 'postoffice' },
   transports: [
     // Console output
     new winston.transports.Console({
       format: winston.format.combine(
-        winston.format.colorize(),
+        // Only colorize in pretty mode
+        logFormat === 'pretty' ? winston.format.colorize() : winston.format.uncolorize(),
         logFormat === 'pretty'
           ? prettyFormat
           : winston.format.json()

@@ -63,6 +63,7 @@
     "modbus-serial": "^8.0.17",
     "mqtt": "^5.14.1",
     "network-checker": "^1.0.6",
+    "node-opcua-client": "^2.122.0",
     "sqlite3": "^5.1.6",
     "strict-event-emitter-types": "^2.0.0",
     "systeminformation": "^5.23.5",

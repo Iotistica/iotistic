@@ -7,12 +7,16 @@
  * - Template rendering with Handlebars
  * - Bull queue for reliable delivery
  * - REST API for sending emails
+ * - Bull Board UI for queue monitoring
  */
 
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import Queue from 'bull';
 import Redis from 'ioredis';
+import { createBullBoard } from '@bull-board/api';
+import { BullAdapter } from '@bull-board/api/bullAdapter';
+import { ExpressAdapter } from '@bull-board/express';
 import { PostOffice } from './index';
 import logger from './utils/logger';
 import { EmailConfig, User } from './types';
@@ -52,7 +56,7 @@ if (process.env.SMTP_HOST) {
 }
 
 // Initialize PostOffice
-const baseUrl = process.env.BASE_URL || 'https://app.iotistic.cloud';
+const baseUrl = process.env.BASE_URL || 'https://iotistic.ca';
 const postOffice = new PostOffice(emailConfig, logger, baseUrl);
 
 // Initialize Redis for Bull queue
@@ -71,7 +75,7 @@ const emailQueue = new Queue('email', {
       type: 'exponential',
       delay: 2000,
     },
-    removeOnComplete: true,
+    removeOnComplete: false,
     removeOnFail: false,
   },
 });
@@ -115,6 +119,17 @@ emailQueue.on('failed', (job, err) => {
     attempts: job?.attemptsMade,
   });
 });
+
+// Setup Bull Board UI
+const serverAdapter = new ExpressAdapter();
+serverAdapter.setBasePath('/admin/queues');
+
+createBullBoard({
+  queues: [new BullAdapter(emailQueue)],
+  serverAdapter: serverAdapter,
+});
+
+app.use('/admin/queues', serverAdapter.getRouter());
 
 // Health check endpoint
 app.get('/health', (req: Request, res: Response) => {
@@ -262,6 +277,7 @@ app.get('/', (req: Request, res: Response) => {
       stats: '/api/email/stats',
       failed: '/api/email/failed',
       retry: 'POST /api/email/retry/:jobId',
+      queueUI: '/admin/queues',
     },
   });
 });

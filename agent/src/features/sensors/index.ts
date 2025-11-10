@@ -2,8 +2,15 @@
  * Protocol Adapters Feature
  * 
  * Manages industrial protocol adapters (Modbus, CAN, OPC-UA, etc.)
- * Each adapter reads sensor data and publishes to Unix sockets for consumption
- * by the sensor-publish system.
+ * Each adapter reads sensor data and emits 'data' events.
+ * SensorsFeature manages SocketServers (one per protocol) and routes
+ * data from adapters to their respective sockets for consumption by
+ * the sensor-publish system.
+ * 
+ * Architecture:
+ * - Protocol Adapters: Socket-agnostic, emit data events
+ * - SensorsFeature: Manages SocketServers, routes adapter data to sockets
+ * - Sensor-Publish: Reads from sockets, publishes to MQTT
  */
 
 import { BaseFeature, FeatureConfig } from '../index.js';
@@ -11,6 +18,9 @@ import { AgentLogger } from '../../logging/agent-logger.js';
 import { ModbusAdapter } from './modbus/modbus-adapter.js';
 import { ModbusAdapterConfig } from './modbus/types.js';
 import { ConfigLoader } from './modbus/config-loader.js';
+import { SocketServer } from './common/socket-server.js';
+import { SensorDataPoint, SocketOutput } from './common/types.js';
+import { DeviceSensorModel } from '../../models/sensors.model.js';
 
 export interface SensorConfig extends FeatureConfig {
   modbus?: {
@@ -30,6 +40,7 @@ export interface SensorConfig extends FeatureConfig {
 
 export class SensorsFeature extends BaseFeature {
   private modbusAdapter?: ModbusAdapter;
+  private socketServers: Map<string, SocketServer> = new Map();
 
   constructor(
     config: SensorConfig,
@@ -69,7 +80,7 @@ export class SensorsFeature extends BaseFeature {
   }
 
   /**
-   * Stop all running protocol adapters
+   * Stop all running protocol adapters and socket servers
    */
   protected async onStop(): Promise<void> {
     // Stop Modbus adapter
@@ -77,6 +88,13 @@ export class SensorsFeature extends BaseFeature {
       await this.modbusAdapter.stop();
       this.modbusAdapter = undefined;
     }
+
+    // Stop all socket servers
+    for (const [protocol, server] of this.socketServers) {
+      this.logger.info(`Stopping ${protocol} socket server`);
+      await server.stop();
+    }
+    this.socketServers.clear();
 
     // TODO: Stop other adapters
 
@@ -89,23 +107,52 @@ export class SensorsFeature extends BaseFeature {
   private async startModbusAdapter(): Promise<void> {
     try {
       let modbusConfig: ModbusAdapterConfig;
+      let outputConfig: SocketOutput;
 
-      // Load config from file or use provided config
+      // Load adapter config and output config from database or file
       if (this.config.modbus!.configPath) {
         this.logger.info(`Loading Modbus config from: ${this.config.modbus!.configPath}`);
-        modbusConfig = ConfigLoader.loadFromFile(this.config.modbus!.configPath);
+        const fullConfig = ConfigLoader.loadFromFile(this.config.modbus!.configPath);
+        modbusConfig = { devices: fullConfig.devices, logging: fullConfig.logging };
+        outputConfig = fullConfig.output!; // Standalone mode requires output config
       } else if (this.config.modbus!.config) {
         modbusConfig = this.config.modbus!.config;
+        // Load output config from database when running as agent feature
+        const dbOutput = await DeviceSensorModel.getOutput('modbus');
+        if (!dbOutput) {
+          throw new Error('Modbus output configuration not found in database');
+        }
+        outputConfig = {
+          socketPath: dbOutput.socket_path,
+          dataFormat: dbOutput.data_format as 'json' | 'csv',
+          delimiter: dbOutput.delimiter,
+          includeTimestamp: dbOutput.include_timestamp,
+          includeDeviceName: dbOutput.include_device_name
+        };
       } else {
-        throw new Error('Modbus adapter enabled but no config provided');
+        // Load both adapter and output config from database
+        const fullConfig = await ConfigLoader.loadFromDatabase();
+        modbusConfig = { devices: fullConfig.devices, logging: fullConfig.logging };
+        outputConfig = fullConfig.output!;
       }
 
-      // Create and start adapter
+      // Create socket server for Modbus protocol
+      const modbusSocket = new SocketServer(outputConfig, this.logger);
+      await modbusSocket.start();
+      this.socketServers.set('modbus', modbusSocket);
+      this.logger.info(`Modbus socket server started at: ${outputConfig.socketPath}`);
+
+      // Create Modbus adapter (socket-agnostic)
       this.modbusAdapter = new ModbusAdapter(modbusConfig, this.logger);
 
-      // Setup event listeners
+      // Wire up event handlers
       this.modbusAdapter.on('started', () => {
         this.logger.info('Modbus adapter started');
+      });
+
+      this.modbusAdapter.on('data', (dataPoints: SensorDataPoint[]) => {
+        // Route data from adapter to socket server
+        modbusSocket.sendData(dataPoints);
       });
 
       this.modbusAdapter.on('device-connected', (deviceName: string) => {
@@ -120,6 +167,7 @@ export class SensorsFeature extends BaseFeature {
         this.logger.error(`Modbus device error [${deviceName}]: ${error.message}`);
       });
 
+      // Start adapter
       await this.modbusAdapter.start();
       
     } catch (error) {

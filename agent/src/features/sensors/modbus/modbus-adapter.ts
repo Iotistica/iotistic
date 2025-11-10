@@ -2,16 +2,26 @@ import { EventEmitter } from 'events';
 import { ModbusAdapterConfig, ModbusDevice } from './types';
 import { SensorDataPoint, DeviceStatus, Logger } from '../common/types';
 import { ModbusClient } from './modbus-client';
-import { SocketServer } from '../common/socket-server';
 
 /**
- * Main Modbus Adapter class that coordinates Modbus devices and Unix socket output
+ * Main Modbus Adapter class that coordinates Modbus devices
+ * 
+ * Architecture: This adapter is socket-agnostic. It polls Modbus devices and emits
+ * 'data' events with sensor readings. The parent SensorsFeature manages SocketServer
+ * and routes data to the appropriate socket based on protocol.
+ * 
+ * Events:
+ * - 'started': Adapter started successfully
+ * - 'stopped': Adapter stopped
+ * - 'data': Emitted with SensorDataPoint[] when data is collected
+ * - 'device-connected': Emitted when a device connects
+ * - 'device-disconnected': Emitted when a device disconnects
+ * - 'device-error': Emitted when a device encounters an error
  */
 export class ModbusAdapter extends EventEmitter {
   private config: ModbusAdapterConfig;
   private logger: Logger;
   private clients: Map<string, ModbusClient> = new Map();
-  private socketServer: SocketServer;
   private pollTimers: Map<string, NodeJS.Timeout> = new Map();
   private deviceStatuses: Map<string, DeviceStatus> = new Map();
   private running = false;
@@ -20,7 +30,6 @@ export class ModbusAdapter extends EventEmitter {
     super();
     this.config = config;
     this.logger = logger;
-    this.socketServer = new SocketServer(config.output, logger);
     
     this.initializeDeviceStatuses();
   }
@@ -35,9 +44,6 @@ export class ModbusAdapter extends EventEmitter {
 
     try {
       this.logger.info('Starting Modbus Adapter...');
-
-      // Start socket server
-      await this.socketServer.start();
 
       // Initialize and connect all enabled devices
       for (const deviceConfig of this.config.devices) {
@@ -83,9 +89,6 @@ export class ModbusAdapter extends EventEmitter {
       );
       await Promise.all(disconnectPromises);
       this.clients.clear();
-
-      // Stop socket server
-      await this.socketServer.stop();
 
       this.running = false;
       this.logger.info('Modbus Adapter stopped successfully');
@@ -164,13 +167,6 @@ export class ModbusAdapter extends EventEmitter {
    */
   isRunning(): boolean {
     return this.running;
-  }
-
-  /**
-   * Get number of connected socket clients
-   */
-  getSocketClientCount(): number {
-    return this.socketServer.getClientCount();
   }
 
   /**
@@ -284,7 +280,7 @@ export class ModbusAdapter extends EventEmitter {
           }));
           
           if (badDataPoints.length > 0) {
-            this.socketServer.sendData(badDataPoints);
+            this.emit('data', badDataPoints);
           }
           
           return;
@@ -297,9 +293,9 @@ export class ModbusAdapter extends EventEmitter {
         const status = this.deviceStatuses.get(deviceConfig.name)!;
         status.lastPoll = new Date();
 
-        // Send data to socket server (includes both GOOD and BAD quality points)
+        // Emit data event with sensor readings
         if (dataPoints.length > 0) {
-          this.socketServer.sendData(dataPoints);
+          this.emit('data', dataPoints);
           this.emit('data-received', deviceConfig.name, dataPoints);
         }
 
@@ -315,7 +311,7 @@ export class ModbusAdapter extends EventEmitter {
 
         this.emit('device-error', deviceConfig.name, error);
         
-        // ✅ Send BAD quality data points with error code
+        // Send BAD quality data points with error code
         const timestamp = new Date().toISOString();
         const qualityCode = this.extractQualityCode(errorMessage);
         const badDataPoints = deviceConfig.registers.map(register => ({
@@ -329,7 +325,7 @@ export class ModbusAdapter extends EventEmitter {
         }));
         
         if (badDataPoints.length > 0) {
-          this.socketServer.sendData(badDataPoints);
+          this.emit('data', badDataPoints);
         }
         
         // Try to reconnect
