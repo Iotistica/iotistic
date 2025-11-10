@@ -21,7 +21,7 @@ echo "=================================="
 echo ""
 
 # Check if running as root
-if [ "$EUID" -ne 0 ]; then 
+if [ "$(id -u)" -ne 0 ]; then 
     echo "Error: This script must be run as root (use sudo)"
     exit 1
 fi
@@ -38,22 +38,70 @@ fi
 
 echo "Detected OS: $OS $OS_VERSION"
 
-# Install Docker if not present
+# Check if Docker is installed
 if ! command -v docker &> /dev/null; then
-    echo "Docker not found. Installing Docker..."
-    curl -fsSL https://get.docker.com -o get-docker.sh
-    sh get-docker.sh
-    rm get-docker.sh
+    echo ""
+    echo "⚠️  Docker is not installed on this system."
+    echo ""
     
-    # Start and enable Docker
-    systemctl start docker
-    systemctl enable docker
+    # Check if running in non-interactive mode
+    if [ -n "$CI" ] || [ ! -t 0 ]; then
+        echo "Running in non-interactive mode - Docker will be installed automatically."
+        INSTALL_DOCKER="yes"
+    else
+        # Interactive mode - ask user
+        read -p "Would you like to install Docker now? (yes/no): " INSTALL_DOCKER
+    fi
     
-    echo "✓ Docker installed successfully"
+    if [ "$INSTALL_DOCKER" = "yes" ] || [ "$INSTALL_DOCKER" = "y" ]; then
+        echo "Installing Docker..."
+        curl -fsSL https://get.docker.com -o get-docker.sh
+        sh get-docker.sh
+        rm get-docker.sh
+        
+        # Start and enable Docker
+        systemctl start docker
+        systemctl enable docker
+        
+        echo "✓ Docker installed successfully"
+    else
+        echo ""
+        echo "Error: Docker is required to run the Iotistic agent."
+        echo "Please install Docker manually and run this script again."
+        echo ""
+        echo "To install Docker, run:"
+        echo "  curl -fsSL https://get.docker.com | sh"
+        exit 1
+    fi
 else
-    echo "✓ Docker is already installed"
-    docker --version
+    echo "✓ Docker is already installed ($(docker --version))"
 fi
+
+# Verify Docker daemon is accessible
+if ! docker ps &> /dev/null; then
+    echo ""
+    echo "⚠️  Docker is installed but the daemon is not accessible."
+    
+    # Check if Docker daemon is running
+    if ! systemctl is-active --quiet docker 2>/dev/null; then
+        echo "Starting Docker daemon..."
+        systemctl start docker
+        sleep 3
+    fi
+    
+    # Try again
+    if ! docker ps &> /dev/null; then
+        echo "✗ Error: Cannot connect to Docker daemon"
+        echo ""
+        echo "Possible causes:"
+        echo "  1. Docker daemon is not running: sudo systemctl start docker"
+        echo "  2. Permission denied: Add your user to docker group: sudo usermod -aG docker \$USER"
+        echo "  3. Docker socket not accessible: Check /var/run/docker.sock permissions"
+        exit 1
+    fi
+fi
+
+echo "✓ Docker is ready"
 
 # Create directories
 echo "Creating directories..."
