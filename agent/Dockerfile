@@ -36,6 +36,11 @@ RUN apt-get update \
 # Copy built app
 COPY --from=builder /app/dist ./dist
 
+# Copy update scripts
+COPY bin/update-agent-docker.sh /app/bin/update-agent-docker.sh
+COPY bin/update-agent-systemd.sh /app/bin/update-agent-systemd.sh
+RUN chmod +x /app/bin/update-agent-docker.sh /app/bin/update-agent-systemd.sh
+
 # Data volume for persistent storage
 RUN mkdir -p /app/data/vpn
 VOLUME ["/app/data"]

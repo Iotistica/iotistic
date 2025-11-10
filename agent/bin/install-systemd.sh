@@ -194,6 +194,13 @@ if [ ! -f dist/app.js ]; then
 fi
 echo "✓ Agent built successfully"
 
+# Install update script
+echo ""
+echo "Installing update script..."
+cp /opt/iotistic/agent/bin/update-agent-systemd.sh /usr/local/bin/update-agent-systemd.sh
+chmod +x /usr/local/bin/update-agent-systemd.sh
+echo "✓ Update script installed to /usr/local/bin/update-agent-systemd.sh"
+
 # Create environment file
 echo ""
 echo "Creating environment file..."

@@ -122,14 +122,18 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: |
+            image=moby/buildkit:buildx-stable-1
+            network=host
 
       - name: Cache Docker layers
         uses: actions/cache@v4
         with:
           path: /tmp/.buildx-cache
-          key: buildx-agent-v2-${{ github.sha }}
+          key: ${{ runner.os }}-buildx-agent-${{ hashFiles('agent/package-lock.json', 'agent/Dockerfile') }}
           restore-keys: |
-            buildx-agent-v2-
+            ${{ runner.os }}-buildx-agent-
 
       # Login to Docker Hub (only if tests passed)
       - name: Login to Docker Hub
@@ -149,12 +153,23 @@ jobs:
           file: ./agent/Dockerfile
           push: true
           platforms: linux/amd64,linux/arm64,linux/arm/v7
-          cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache,mode=max
+          cache-from: |
+            type=local,src=/tmp/.buildx-cache
+            type=registry,ref=iotistic/agent:buildcache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
           tags: |
             iotistic/agent:latest
             iotistic/agent:${{ needs.version.outputs.sha_short }}
             iotistic/agent:${{ needs.version.outputs.package_version }}
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
+
+      # Move cache to prevent unlimited growth
+      - name: Move cache
+        if: always()
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache || true
 
   test-agent-docker:
     name: Test Docker Installation Script

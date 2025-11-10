@@ -66,8 +66,21 @@ echo "Configuration:"
 echo "-------------"
 
 # Check if running in non-interactive mode (CI)
-if [ -n "$CI" ] || [ ! -t 0 ]; then
-    echo "Running in non-interactive mode (CI)"
+# Only use non-interactive if CI is explicitly set OR if being piped (e.g., curl | bash)
+if [ -n "$CI" ]; then
+    echo "Running in CI mode (non-interactive)"
+    PROVISIONING_KEY="${IOTISTIC_PROVISIONING_KEY:-}"
+    DEVICE_API_PORT="${IOTISTIC_DEVICE_PORT:-48484}"
+    AGENT_VERSION="${IOTISTIC_AGENT_VERSION:-latest}"
+    CLOUD_API_ENDPOINT="${IOTISTIC_CLOUD_API_ENDPOINT:-}"
+elif [ ! -t 0 ] && [ -z "$FORCE_INTERACTIVE" ]; then
+    echo "Running in non-interactive mode (stdin is not a terminal)"
+    echo "Set FORCE_INTERACTIVE=1 to enable prompts, or set these environment variables:"
+    echo "  - IOTISTIC_CLOUD_API_ENDPOINT"
+    echo "  - IOTISTIC_PROVISIONING_KEY"
+    echo "  - IOTISTIC_DEVICE_PORT (default: 48484)"
+    echo "  - IOTISTIC_AGENT_VERSION (default: latest)"
+    echo ""
     PROVISIONING_KEY="${IOTISTIC_PROVISIONING_KEY:-}"
     DEVICE_API_PORT="${IOTISTIC_DEVICE_PORT:-48484}"
     AGENT_VERSION="${IOTISTIC_AGENT_VERSION:-latest}"

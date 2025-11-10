@@ -1384,4 +1384,161 @@ router.put('/devices/:uuid/broker', async (req, res) => {
   }
 });
 
+/**
+ * Trigger agent update via MQTT
+ * POST /api/v1/devices/:uuid/update-agent
+ * Body: { version, scheduled_time?, force? }
+ */
+router.post('/devices/:uuid/update-agent', async (req, res) => {
+  try {
+    const { uuid } = req.params;
+    const { version, scheduled_time, force = false } = req.body;
+
+    // Validate version format if provided
+    if (version && !/^\d+\.\d+\.\d+$/.test(version) && version !== 'latest') {
+      return res.status(400).json({
+        error: 'Invalid version format',
+        message: 'Version must be in format X.Y.Z or "latest"'
+      });
+    }
+
+    // Check if device exists
+    const device = await DeviceModel.getByUuid(uuid);
+    if (!device) {
+      return res.status(404).json({
+        error: 'Device not found',
+        message: `Device ${uuid} not found`
+      });
+    }
+
+    // Get MQTT connection details from environment
+    const brokerUrl = process.env.MQTT_BROKER_URL || 'mqtt://localhost:1883';
+    const mqttUsername = process.env.MQTT_USERNAME;
+    const mqttPassword = process.env.MQTT_PASSWORD;
+
+    logger.info('Triggering agent update', {
+      deviceUuid: uuid,
+      version: version || 'latest',
+      scheduled: !!scheduled_time,
+      force
+    });
+
+    // Create MQTT client
+    const mqtt = await import('mqtt');
+    const mqttClient = mqtt.connect(brokerUrl, {
+      username: mqttUsername,
+      password: mqttPassword,
+      clientId: `api-agent-update-${Date.now()}`,
+      clean: true,
+    });
+
+    // Wait for connection
+    await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        mqttClient.end();
+        reject(new Error('MQTT connection timeout'));
+      }, 5000);
+
+      mqttClient.on('connect', () => {
+        clearTimeout(timeout);
+        resolve();
+      });
+
+      mqttClient.on('error', (error) => {
+        clearTimeout(timeout);
+        mqttClient.end();
+        reject(error);
+      });
+    });
+
+    // Publish update command
+    const updateTopic = `agent/${uuid}/update`;
+    const updateCommand = {
+      action: 'update',
+      version: version || 'latest',
+      scheduled_time,
+      force,
+      timestamp: Date.now()
+    };
+
+    await new Promise<void>((resolve, reject) => {
+      mqttClient.publish(
+        updateTopic,
+        JSON.stringify(updateCommand),
+        { qos: 1, retain: true }, // Retained so agent gets it even if offline
+        (error) => {
+          mqttClient.end();
+          if (error) {
+            reject(error);
+          } else {
+            resolve();
+          }
+        }
+      );
+    });
+
+    // Log audit event
+    await logAuditEvent({
+      eventType: 'device.agent.update.triggered' as any,
+      deviceUuid: uuid,
+      severity: AuditSeverity.INFO,
+      details: {
+        version: version || 'latest',
+        scheduled_time,
+        force,
+        mqttTopic: updateTopic
+      }
+    });
+
+    // Publish event
+    await EventPublisher.publishEvent({
+      type: 'device.agent.update.triggered',
+      aggregateId: uuid,
+      aggregateType: 'device',
+      data: {
+        version: version || 'latest',
+        scheduled_time,
+        force
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'Agent update command sent via MQTT',
+      device: {
+        uuid: device.uuid,
+        deviceName: device.device_name
+      },
+      update: {
+        version: version || 'latest',
+        scheduled: !!scheduled_time,
+        scheduled_time,
+        force,
+        mqttTopic: updateTopic
+      }
+    });
+
+  } catch (error: any) {
+    logger.error('Error triggering agent update', {
+      error: error.message,
+      stack: error.stack,
+      deviceId: req.params.uuid
+    });
+
+    await logAuditEvent({
+      eventType: 'device.agent.update.failed' as any,
+      deviceUuid: req.params.uuid,
+      severity: AuditSeverity.ERROR,
+      details: {
+        error: error.message
+      }
+    });
+
+    res.status(500).json({
+      error: 'Failed to trigger agent update',
+      message: error.message
+    });
+  }
+});
+
 export default router;
