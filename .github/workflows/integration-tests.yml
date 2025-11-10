@@ -63,6 +63,15 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: master  # Ensure we're on master
+          fetch-depth: 0  # Get full history
+
+      - name: Pull latest changes
+        run: |
+          git pull origin master
+          echo "Latest commit:"
+          git log -1 --oneline
 
       - name: Determine versions
         id: versions
