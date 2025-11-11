@@ -92,4 +92,154 @@ export async function handleDeviceState(payload: any): Promise<void> {
   }
 }
 
+/**
+ * Handle agent update status messages
+ * Tracks agent self-update progress and records in database
+ */
+export async function handleAgentStatus(data: any): Promise<void> {
+  try {
+    const { deviceUuid, subTopic, message } = data;
+    
+    // Only handle 'status' subtopic (iot/device/{uuid}/agent/status)
+    if (subTopic !== 'status') {
+      return;
+    }
+
+    const status = typeof message === 'string' ? JSON.parse(message) : message;
+    
+    logger.info('Received agent update status', {
+      deviceUuid,
+      statusType: status.type,
+      version: status.version || status.target_version
+    });
+
+    // Find the latest pending/in-progress update for this device
+    const result = await query(
+      `SELECT id, status, target_version 
+       FROM agent_updates 
+       WHERE device_uuid = $1 
+       AND status IN ('pending', 'acknowledged', 'scheduled', 'in_progress')
+       ORDER BY created_at DESC 
+       LIMIT 1`,
+      [deviceUuid]
+    );
+
+    if (result.rows.length === 0) {
+      logger.warn('Received status update but no pending update found', {
+        deviceUuid,
+        statusType: status.type
+      });
+      return;
+    }
+
+    const updateId = result.rows[0].id;
+
+    // Update status based on message type
+    switch (status.type) {
+      case 'update_command_received':
+        await query(
+          `UPDATE agent_updates 
+           SET status = 'acknowledged', 
+               current_version = $2,
+               updated_at = NOW()
+           WHERE id = $1`,
+          [updateId, status.current_version]
+        );
+        logger.info('Update acknowledged', { updateId, deviceUuid });
+        break;
+
+      case 'update_scheduled':
+        await query(
+          `UPDATE agent_updates 
+           SET status = 'scheduled', 
+               scheduled_time = $2,
+               current_version = $3,
+               updated_at = NOW()
+           WHERE id = $1`,
+          [updateId, status.scheduled_time, status.current_version]
+        );
+        logger.info('Update scheduled', { 
+          updateId, 
+          deviceUuid, 
+          scheduledTime: status.scheduled_time 
+        });
+        break;
+
+      case 'update_started':
+        await query(
+          `UPDATE agent_updates 
+           SET status = 'in_progress', 
+               started_at = NOW(),
+               current_version = $2,
+               deployment_type = $3,
+               timeout_at = NOW() + INTERVAL '30 minutes',
+               updated_at = NOW()
+           WHERE id = $1`,
+          [updateId, status.current_version, status.deployment_type]
+        );
+        logger.info('Update started', { 
+          updateId, 
+          deviceUuid, 
+          deploymentType: status.deployment_type 
+        });
+        break;
+
+      case 'update_succeeded':
+        await query(
+          `UPDATE agent_updates 
+           SET status = 'succeeded', 
+               completed_at = NOW(),
+               exit_code = 0,
+               updated_at = NOW()
+           WHERE id = $1`,
+          [updateId]
+        );
+        
+        // Update device agent_version in devices table
+        if (status.target_version) {
+          await query(
+            `UPDATE devices 
+             SET agent_version = $1, 
+                 modified_at = NOW() 
+             WHERE uuid = $2`,
+            [status.target_version, deviceUuid]
+          );
+          logger.info('Update succeeded - device version updated', { 
+            updateId, 
+            deviceUuid, 
+            newVersion: status.target_version 
+        });
+        }
+        break;
+
+      case 'update_failed':
+        await query(
+          `UPDATE agent_updates 
+           SET status = 'failed', 
+               completed_at = NOW(),
+               error_message = $2,
+               exit_code = $3,
+               updated_at = NOW()
+           WHERE id = $1`,
+          [updateId, status.error, status.exit_code]
+        );
+        logger.error('Update failed', { 
+          updateId, 
+          deviceUuid, 
+          error: status.error 
+        });
+        break;
+
+      default:
+        logger.warn('Unknown agent status type', { 
+          statusType: status.type, 
+          deviceUuid 
+        });
+    }
+
+  } catch (error) {
+    logger.error('Failed to handle agent status:', error);
+    throw error;
+  }
+}
 

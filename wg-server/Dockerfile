@@ -1,7 +1,7 @@
 FROM node:20-alpine
 
-# Install WireGuard tools
-RUN apk add --no-cache wireguard-tools iptables
+# Install WireGuard tools and dependencies
+RUN apk add --no-cache wireguard-tools iptables iproute2
 
 # Create app directory
 WORKDIR /app
@@ -20,8 +20,12 @@ COPY migrations ./migrations
 # Build TypeScript
 RUN npm run build
 
-# Expose API port
-EXPOSE 8080
+# Copy entrypoint script
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
 
-# Run the server
-CMD ["node", "dist/server.js"]
+# Expose API port (8089) and WireGuard port (51820/udp)
+EXPOSE 8089 51820/udp
+
+# Run the entrypoint script (brings up wg0, then starts Node.js)
+ENTRYPOINT ["/docker-entrypoint.sh"]

@@ -470,15 +470,24 @@ curl -X POST https://api.iotistic.ca/v1/devices/abc-123/update-agent \
 
 ### MQTT ACL
 
-Devices can only subscribe to their own update topic:
+Devices use the standard IoT topic pattern, which is already covered by existing ACLs:
 
 ```sql
--- mqtt_acls table
+-- mqtt_acls table (already set during provisioning)
+-- Devices get full access to their own namespace
 INSERT INTO mqtt_acls (username, topic, rw) VALUES
-  ('device-abc-123', 'agent/abc-123/update', 1),   -- Read only
-  ('device-abc-123', 'agent/abc-123/status', 2),   -- Write only
-  ('cloud-api', 'agent/+/update', 2);               -- Cloud can write to all
+  ('device-abc-123', 'iot/device/abc-123/#', 3);  -- Read/Write to all subtopics
+  
+-- Cloud API can publish to all devices
+INSERT INTO mqtt_acls (username, topic, rw) VALUES
+  ('cloud-api', 'iot/device/+/agent/update', 2);  -- Write only (send commands)
 ```
+
+**Topics used:**
+- **Update Commands** (Cloud → Device): `iot/device/{uuid}/agent/update`
+- **Status Reports** (Device → Cloud): `iot/device/{uuid}/agent/status`
+
+This follows the same pattern as jobs (`iot/device/{uuid}/jobs/...`) and sensors (`iot/device/{uuid}/sensor/...`).
 
 ### TLS Encryption
 

@@ -66,15 +66,20 @@ export interface ProvisionResponse {
 	deviceName: string;
 	deviceType: string;
 	applicationId?: number;
-	  mqtt: {
-        username: string,
-        password: string,
-        broker: string,
-        topics: {
-          publish: string,
-          subscribe: string
-        }
-      }
+	mqtt: {
+		username: string,
+		password: string,
+		broker: string,
+		topics: {
+			publish: string,
+			subscribe: string
+		}
+	}
+	vpnConfig?: {
+		enabled: boolean;
+		ipAddress: string;
+		wgConfig: string;  // Complete WireGuard config file content
+	}
 	createdAt: string;
 }
 

@@ -5,13 +5,17 @@
 .DESCRIPTION
     Automates the process of adding a new agent service by:
     - Finding the next agent number
-    - Prompting for provisioning API key from dashboard
+    - Automatically generating provisioning API key via API
     - Adding the service definition to docker-compose.yml
     - Adding the corresponding volume
 .PARAMETER AgentNumber
     Optional. Specific agent number to add. If not provided, finds next available number.
 .PARAMETER ProvisioningKey
-    Optional. Provisioning API key from dashboard. If not provided, prompts for input.
+    Optional. Provisioning API key. If not provided, generates one via API.
+.PARAMETER ApiUrl
+    Optional. API base URL. Defaults to http://localhost:4002
+.PARAMETER FleetId
+    Optional. Fleet ID for the provisioning key. Defaults to 'default-fleet'.
 #>
 
 [CmdletBinding()]
@@ -20,7 +24,13 @@ param(
     [int]$AgentNumber,
 
     [Parameter(Mandatory=$false)]
-    [string]$ProvisioningKey
+    [string]$ProvisioningKey,
+
+    [Parameter(Mandatory=$false)]
+    [string]$ApiUrl = "http://localhost:4002",
+
+    [Parameter(Mandatory=$false)]
+    [string]$FleetId = "default-fleet"
 )
 
 # Configuration
@@ -58,18 +68,42 @@ if (-not $AgentNumber) {
     }
 }
 
-# Get provisioning key
+# Get or generate provisioning key
 if (-not $ProvisioningKey) {
-    Write-Host ""
-    Write-Host "Generate a provisioning key in the dashboard:" -ForegroundColor Yellow
-    $ProvisioningKey = Read-Host "Paste provisioning key"
-    if ([string]::IsNullOrWhiteSpace($ProvisioningKey)) {
-        Write-Error "Provisioning key cannot be empty"
+    Write-Host "🔑 Generating provisioning key via API..." -ForegroundColor Cyan
+    
+    try {
+        # Call API to generate provisioning key
+        $body = @{
+            fleetId = $FleetId
+            newKey = $false
+        } | ConvertTo-Json
+
+        $response = Invoke-RestMethod -Uri "$ApiUrl/api/v1/provisioning-keys/generate" `
+            -Method Post `
+            -ContentType "application/json" `
+            -Body $body `
+            -ErrorAction Stop
+
+        $ProvisioningKey = $response.key
+        $keyId = $response.id
+        $expiresAt = $response.expiresAt
+
+        Write-Host "✅ Provisioning key generated successfully!" -ForegroundColor Green
+        Write-Host "   Key ID: $keyId" -ForegroundColor Gray
+        Write-Host "   Expires: $expiresAt" -ForegroundColor Gray
+        Write-Host "   Fleet: $FleetId" -ForegroundColor Gray
+    }
+    catch {
+        Write-Error "Failed to generate provisioning key via API: $($_.Exception.Message)"
+        Write-Host ""
+        Write-Host "💡 Make sure the API is running at: $ApiUrl" -ForegroundColor Yellow
+        Write-Host "   You can manually provide a key with: -ProvisioningKey <key>" -ForegroundColor Yellow
         exit 1
     }
+} else {
+    Write-Host "Using provided provisioning key: $($ProvisioningKey.Substring(0, 16))..." -ForegroundColor Green
 }
-
-Write-Host "Using provisioning key: $ProvisioningKey" -ForegroundColor Green
 
 # Agent template
 $template = @"
@@ -94,6 +128,12 @@ $template = @"
                 - LOG_COMPRESSION=true
                 - REQUIRE_PROVISIONING=false
                 - PROVISIONING_API_KEY={PROVISIONING_KEY}
+                # Data resilience (IoT best practices)
+                - LOG_FILE_PERSISTANCE=true
+                - LOG_MAX_AGE=86400000
+                - MAX_LOG_FILE_SIZE=52428800
+                - MAX_LOGS=10000
+                
                 
             depends_on:
                 api:
@@ -117,18 +157,25 @@ $before = $content.Substring(0, $lastAgent.Index + $lastAgent.Length)
 $after  = $content.Substring($lastAgent.Index + $lastAgent.Length)
 $content = $before + $newAgentService + $after
 
-# Add volume block (without duplicate driver)
+# Add volume block
 $newVolume = "  agent-$AgentNumber-data:`n    driver: local"
 
-# Insert after last agent volume
-$volumeMatches = [regex]::Matches($content, '(?m)^\s*agent-\d+-data:')
-if ($volumeMatches.Count -eq 0) {
-    Write-Error "No agent volumes found"
-    exit 1
+# Find the volumes section and add after last agent volume
+if ($content -match '(?ms)^volumes:.*') {
+    $volumeMatches = [regex]::Matches($content, '(?m)^\s*agent-\d+-data:\s*\n\s*driver: local')
+    if ($volumeMatches.Count -gt 0) {
+        $lastVolume = $volumeMatches[$volumeMatches.Count - 1]
+        $insertIndex = $lastVolume.Index + $lastVolume.Length
+        $content = $content.Insert($insertIndex, "`n$newVolume")
+    } else {
+        # No agent volumes with driver found, add after wg-data
+        $wgDataMatch = [regex]::Match($content, '(?m)^\s*wg-data:')
+        if ($wgDataMatch.Success) {
+            $insertIndex = $content.IndexOf("`n", $wgDataMatch.Index) + 1
+            $content = $content.Insert($insertIndex, "$newVolume`n")
+        }
+    }
 }
-$lastVolume = $volumeMatches[$volumeMatches.Count - 1]
-$insertIndex = $content.IndexOf($lastVolume.Value) + $lastVolume.Value.Length
-$content = $content.Insert($insertIndex, "`n$newVolume")
 
 # Write back
 Set-Content -Path $dockerComposeFile -Value $content -NoNewline
@@ -137,6 +184,11 @@ Write-Host "`n✅ Successfully added agent-$AgentNumber to docker-compose.yml" -
 
 # Save provisioning key
 $keysFile = Join-Path $PSScriptRoot ".." "provisioning-keys.txt"
-$keyEntry = "agent-${AgentNumber}: $ProvisioningKey (Added: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss'))"
+$keyEntry = "agent-${AgentNumber}: $ProvisioningKey (Added: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), Fleet: $FleetId)"
 Add-Content -Path $keysFile -Value $keyEntry
 Write-Host "📝 Provisioning key saved to: provisioning-keys.txt" -ForegroundColor Magenta
+Write-Host ""
+Write-Host "🚀 Next steps:" -ForegroundColor Cyan
+Write-Host "   1. Run: docker compose up -d agent-$AgentNumber" -ForegroundColor White
+Write-Host "   2. Check logs: docker logs agent-$AgentNumber --follow" -ForegroundColor White
+Write-Host "   3. Device will auto-provision and connect to cloud" -ForegroundColor White

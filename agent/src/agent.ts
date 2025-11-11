@@ -34,6 +34,7 @@ import {
   SensorConfig,
 } from "./features/sensors/index.js";
 import { AgentFirewall } from "./security/firewall.js";
+import { AgentUpdater } from "./updater.js";
 import { readFileSync } from "fs";
 import { join } from "path";
 
@@ -60,6 +61,7 @@ export default class DeviceAgent {
   private logMonitor?: ContainerLogMonitor;
   private agentLogger!: AgentLogger; // Structured logging for agent-level events
   private firewall?: AgentFirewall; // Network firewall protection
+  private updater?: AgentUpdater; // Agent self-update handler
   private jobs?: JobsFeature;
   private sensorPublish?: SensorPublishFeature;
   private sensors?: SensorsFeature;
@@ -170,8 +172,8 @@ export default class DeviceAgent {
       // 14. Initialize Sensor Config Handler (if Sensor Publish enabled)
       await this.initializeSensorConfigHandler();
 
-      // 15. Initialize MQTT Update Listener (if MQTT enabled)
-      await this.initializeMqttUpdateListener();
+      // 15. Initialize Agent Updater (if MQTT enabled)
+      await this.initializeAgentUpdater();
 
       // 16. Initialize Firewall (if enabled)
       await this.initializeFirewall(configSettings);
@@ -933,202 +935,30 @@ export default class DeviceAgent {
     }
   }
 
-  private async initializeMqttUpdateListener(): Promise<void> {
-    const mqttManager = MqttManager.getInstance();
-    
-    if (!mqttManager.isConnected()) {
-      this.agentLogger?.debugSync("MQTT not connected - skipping update listener", {
-        component: "Agent",
-        note: "Update listener will not be available"
-      });
-      return;
-    }
-
-    const updateTopic = `agent/${this.deviceInfo.uuid}/update`;
-    const statusTopic = `agent/${this.deviceInfo.uuid}/status`;
-    
+  /**
+   * Initialize Agent Updater for remote updates via MQTT
+   */
+  private async initializeAgentUpdater(): Promise<void> {
     try {
-      // Subscribe to update commands with message handler
-      await mqttManager.subscribe(updateTopic, undefined, async (topic: string, message: Buffer) => {
-        try {
-          const command = JSON.parse(message.toString());
-          
-          if (command.action === 'update') {
-            const { version, scheduled_time, force } = command;
-            
-            this.agentLogger?.infoSync("Agent update command received", {
-              component: "Agent",
-              version,
-              scheduled_time,
-              force: !!force
-            });
-
-            // Report update command received
-            await mqttManager.publish(statusTopic, JSON.stringify({
-              type: 'update_command_received',
-              version,
-              timestamp: Date.now()
-            }));
-
-            // If scheduled, wait until that time
-            if (scheduled_time) {
-              const scheduledDate = new Date(scheduled_time);
-              const delay = scheduledDate.getTime() - Date.now();
-              
-              if (delay > 0) {
-                this.agentLogger?.infoSync("Update scheduled for later", {
-                  component: "Agent",
-                  scheduled_time,
-                  delay_ms: delay,
-                  delay_hours: Math.round(delay / 3600000)
-                });
-                
-                await mqttManager.publish(statusTopic, JSON.stringify({
-                  type: 'update_scheduled',
-                  version,
-                  scheduled_time,
-                  timestamp: Date.now()
-                }));
-                
-                setTimeout(() => this.performUpdate(version, force), delay);
-                return;
-              }
-            }
-
-            // Execute immediately
-            await this.performUpdate(version, force);
-          }
-        } catch (error) {
-          this.agentLogger?.errorSync(
-            "Failed to process update command",
-            error instanceof Error ? error : new Error(String(error)),
-            {
-              component: "Agent",
-              topic
-            }
-          );
-        }
-      });
+      const currentVersion = process.env.AGENT_VERSION || getPackageVersion();
       
-      this.agentLogger?.infoSync("MQTT update listener initialized", {
-        component: "Agent",
-        updateTopic,
-        statusTopic
+      this.updater = new AgentUpdater({
+        deviceUuid: this.deviceInfo.uuid,
+        currentVersion,
+        logger: this.agentLogger
       });
-      
+
+      await this.updater.initialize();
     } catch (error) {
       this.agentLogger?.errorSync(
-        "Failed to initialize MQTT update listener",
-        error instanceof Error ? error : new Error(String(error)),
-        {
-          component: "Agent"
-        }
-      );
-    }
-  }
-
-  private async performUpdate(version: string, force: boolean = false): Promise<void> {
-    const { existsSync } = await import('fs');
-    const { exec } = await import('child_process');
-    const { promisify } = await import('util');
-    const execAsync = promisify(exec);
-    
-    // Detect deployment type
-    const deploymentType = process.env.DEPLOYMENT_TYPE || 
-      (existsSync('/.dockerenv') ? 'docker' : 'systemd');
-    
-    const currentVersion = process.env.AGENT_VERSION || getPackageVersion();
-    
-    this.agentLogger?.infoSync("Starting agent self-update", {
-      component: "Agent",
-      currentVersion,
-      targetVersion: version,
-      deploymentType,
-      force
-    });
-
-    // Report update started
-    const mqttManager = MqttManager.getInstance();
-    const statusTopic = `agent/${this.deviceInfo.uuid}/status`;
-    
-    try {
-      await mqttManager.publish(statusTopic, JSON.stringify({
-        type: 'update_started',
-        current_version: currentVersion,
-        target_version: version,
-        deployment_type: deploymentType,
-        timestamp: Date.now()
-      }));
-    } catch (error) {
-      this.agentLogger?.warnSync("Failed to publish update started status", {
-        component: "Agent",
-        error: error instanceof Error ? error.message : String(error)
-      });
-    }
-
-    // Determine update script path
-    const updateScript = deploymentType === 'docker'
-      ? '/app/bin/update-agent-docker.sh'
-      : '/usr/local/bin/update-agent-systemd.sh';
-    
-    // Check if update script exists
-    if (!existsSync(updateScript)) {
-      this.agentLogger?.errorSync(
-        "Update script not found",
-        new Error(`Script not found: ${updateScript}`),
-        {
-          component: "Agent",
-          updateScript,
-          deploymentType
-        }
-      );
-      
-      await mqttManager.publish(statusTopic, JSON.stringify({
-        type: 'update_failed',
-        reason: 'update_script_not_found',
-        script_path: updateScript,
-        timestamp: Date.now()
-      }));
-      
-      return;
-    }
-
-    this.agentLogger?.infoSync("Executing update script", {
-      component: "Agent",
-      script: updateScript,
-      version,
-      note: "Agent will restart shortly"
-    });
-
-    // Execute update script in background (agent will restart)
-    // Pass version and force flag as arguments
-    const forceFlag = force ? 'true' : 'false';
-    const command = `${updateScript} ${version} ${forceFlag} > /tmp/agent-update.log 2>&1 &`;
-    
-    try {
-      execAsync(command);
-      
-      this.agentLogger?.infoSync("Update script executed", {
-        component: "Agent",
-        note: "Agent will restart to complete update"
-      });
-      
-    } catch (error) {
-      this.agentLogger?.errorSync(
-        "Failed to execute update script",
+        "Failed to initialize Agent Updater",
         error instanceof Error ? error : new Error(String(error)),
         {
           component: "Agent",
-          script: updateScript
+          note: "Remote agent updates will not be available"
         }
       );
-      
-      await mqttManager.publish(statusTopic, JSON.stringify({
-        type: 'update_failed',
-        reason: 'script_execution_failed',
-        error: error instanceof Error ? error.message : String(error),
-        timestamp: Date.now()
-      }));
+      this.updater = undefined;
     }
   }
 
@@ -1249,6 +1079,14 @@ export default class DeviceAgent {
       if (this.firewall) {
         await this.firewall.stop();
         this.agentLogger?.infoSync("Firewall stopped", {
+          component: "Agent",
+        });
+      }
+
+      // Stop updater
+      if (this.updater) {
+        await this.updater.cleanup();
+        this.agentLogger?.infoSync("Agent Updater stopped", {
           component: "Agent",
         });
       }

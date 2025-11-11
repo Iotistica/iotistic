@@ -27,6 +27,7 @@ import { OfflineQueue } from './offline-queue';
 import type { AgentLogger } from './logging/agent-logger';
 import { buildDeviceEndpoint, buildApiEndpoint } from './utils/api-utils';
 import { HttpClient, FetchHttpClient } from './http/client';
+import { RetryPolicy } from './utils/retry-policy';
 
 const gzipAsync = promisify(gzip);
 
@@ -312,13 +313,14 @@ export class ApiBinder extends EventEmitter {
 		// Calculate next poll interval (exponential backoff with jitter on errors)
 		let interval: number;
 		if (this.pollErrors > 0) {
-			const baseBackoff = 15000 * Math.pow(2, this.pollErrors - 1);
-			const maxBackoff = 15 * 60 * 1000; // 15 minutes max
-			const backoffWithoutJitter = Math.min(baseBackoff, maxBackoff);
-			
-			// Add random jitter (±30%) to prevent thundering herd
-			const jitter = Math.random() * 0.6 - 0.3; // Random between -0.3 and +0.3
-			interval = Math.floor(backoffWithoutJitter * (1 + jitter));
+			// Use retry policy helper for exponential backoff with jitter
+			interval = RetryPolicy.calculateBackoffWithJitter(
+				this.pollErrors,
+				15000,           // Base delay: 15s
+				2,               // Backoff multiplier: 2x
+				15 * 60 * 1000,  // Max delay: 15 minutes
+				0.3              // Jitter: ±30%
+			);
 			
 			this.logger?.debugSync('Poll backing off due to errors', {
 				component: 'Sync',
@@ -495,13 +497,14 @@ export class ApiBinder extends EventEmitter {
 		// Calculate next report interval (exponential backoff with jitter on errors)
 		let interval: number;
 		if (this.reportErrors > 0) {
-			const baseBackoff = 15000 * Math.pow(2, this.reportErrors - 1);
-			const maxBackoff = 15 * 60 * 1000; // 15 minutes max
-			const backoffWithoutJitter = Math.min(baseBackoff, maxBackoff);
-			
-			// Add random jitter (±30%) to prevent thundering herd
-			const jitter = Math.random() * 0.6 - 0.3; // Random between -0.3 and +0.3
-			interval = Math.floor(backoffWithoutJitter * (1 + jitter));
+			// Use retry policy helper for exponential backoff with jitter
+			interval = RetryPolicy.calculateBackoffWithJitter(
+				this.reportErrors,
+				15000,           // Base delay: 15s
+				2,               // Backoff multiplier: 2x
+				15 * 60 * 1000,  // Max delay: 15 minutes
+				0.3              // Jitter: ±30%
+			);
 			
 			this.logger?.debugSync('Report backing off due to errors', {
 				component: 'Sync',
@@ -804,37 +807,40 @@ export class ApiBinder extends EventEmitter {
 			this.logger?.infoSync('Reported current state to cloud', optimizationDetails);
 			
 		} catch (error) {
-			// Failed to send - queue for later if offline
-			const isOnline = this.connectionMonitor.isOnline();
-			this.logger?.debugSync('Report failed, checking connection status', {
+			// Failed to send - queue for later (regardless of connection state)
+			// This ensures we don't lose reports during degraded/offline states
+			const connectionHealth = this.connectionMonitor.getHealth();
+			
+			this.logger?.debugSync('Report failed, queueing for retry', {
 				component: 'Sync',
 				operation: 'report',
-				isOnline,
+				connectionStatus: connectionHealth.status,
 				queueSize: this.reportQueue.size()
 			});
 			
-			if (!isOnline) {
-				// Strip verbose data before queueing to save storage
-				const strippedReport = this.stripReportForQueue(reportToSend);
-				const originalSize = JSON.stringify(reportToSend).length;
-				const strippedSize = JSON.stringify(strippedReport).length;
-				const savings = originalSize - strippedSize;
-				const savingsPercent = ((savings / originalSize) * 100).toFixed(1);
-				
-				this.logger?.infoSync('Queueing report for later (offline)', {
-					component: 'Sync',
-					operation: 'queue-report',
-					originalBytes: originalSize,
-					strippedBytes: strippedSize,
-					savings: `${savings} bytes (${savingsPercent}%)`,
-				});
-				
-				await this.reportQueue.enqueue(strippedReport);
-				this.logger?.debugSync('Report queued', {
-					component: 'Sync',
-					queueSize: this.reportQueue.size()
-				});
-			}
+			// Strip verbose data before queueing to save storage
+			const strippedReport = this.stripReportForQueue(reportToSend);
+			const originalSize = JSON.stringify(reportToSend).length;
+			const strippedSize = JSON.stringify(strippedReport).length;
+			const savings = originalSize - strippedSize;
+			const savingsPercent = ((savings / originalSize) * 100).toFixed(1);
+			
+			this.logger?.infoSync('Queueing report for later', {
+				component: 'Sync',
+				operation: 'queue-report',
+				originalBytes: originalSize,
+				strippedBytes: strippedSize,
+				savings: `${savings} bytes (${savingsPercent}%)`,
+				connectionStatus: connectionHealth.status
+			});
+			
+			await this.reportQueue.enqueue(strippedReport);
+			this.logger?.debugSync('Report queued', {
+				component: 'Sync',
+				queueSize: this.reportQueue.size(),
+				connectionStatus: connectionHealth.status
+			});
+			
 			throw error;
 		}
 	}

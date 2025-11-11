@@ -193,16 +193,22 @@ export class PeerManager {
   }
 
   private async allocateIP(): Promise<string> {
+    // Use FOR UPDATE SKIP LOCKED to prevent race conditions
+    // This ensures only one transaction can grab each IP address
     const result = await query(
-      `UPDATE wg_ip_pool 
-       SET is_available = false, assigned_at = NOW()
-       WHERE ip_address = (
-         SELECT ip_address FROM wg_ip_pool 
+      `WITH next_ip AS (
+         SELECT ip_address 
+         FROM wg_ip_pool 
          WHERE is_available = true 
          ORDER BY ip_address 
          LIMIT 1
+         FOR UPDATE SKIP LOCKED
        )
-       RETURNING ip_address`
+       UPDATE wg_ip_pool 
+       SET is_available = false, assigned_at = NOW()
+       FROM next_ip
+       WHERE wg_ip_pool.ip_address = next_ip.ip_address
+       RETURNING wg_ip_pool.ip_address`
     );
 
     if (result.rows.length === 0) {

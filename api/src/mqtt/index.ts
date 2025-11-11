@@ -8,7 +8,8 @@ import MqttManager from './mqtt-manager';
 import logger from '../utils/logger';
 import {
   handleSensorData,
-  handleDeviceState
+  handleDeviceState,
+  handleAgentStatus
 } from './handlers';
 
 let mqttManager: MqttManager | null = null;
@@ -57,6 +58,14 @@ export async function initializeMqtt(): Promise<MqttManager | null> {
       }
     });
 
+    mqttManager.on('agent', async (data) => {
+      try {
+        await handleAgentStatus(data);
+      } catch (error) {
+        logger.error('Error handling agent status:', error);
+      }
+    });
+
     // Subscribe to all device topics
     // Use '*' wildcard for all devices, or specific UUIDs for targeted subscriptions
     const subscribeToAll = process.env.MQTT_SUBSCRIBE_ALL !== 'false';
@@ -66,6 +75,7 @@ export async function initializeMqtt(): Promise<MqttManager | null> {
       mqttManager.subscribeToAll([
         'sensor',
         'state',
+        'agent',
       ]);
     } else {
       logger.warn('MQTT subscription disabled. Set MQTT_SUBSCRIBE_ALL=true to enable.');

@@ -1452,7 +1452,8 @@ router.post('/devices/:uuid/update-agent', async (req, res) => {
     });
 
     // Publish update command
-    const updateTopic = `agent/${uuid}/update`;
+    // Follow standard IoT topic pattern: iot/device/{uuid}/agent/update
+    const updateTopic = `iot/device/${uuid}/agent/update`;
     const updateCommand = {
       action: 'update',
       version: version || 'latest',

@@ -17,6 +17,49 @@ import zlib from 'zlib';
 import type { LogBackend, LogMessage, LogFilter } from './types';
 import { buildApiEndpoint } from '../utils/api-utils';
 import type { AgentLogger } from '../logging/agent-logger';
+import { RetryPolicy } from '../utils/retry-policy';
+import { isRetryableNetworkError, getNetworkErrorType } from '../utils/network-errors';
+
+/**
+ * Summary of dropped logs for analysis
+ * Captures key metadata without storing full log content
+ */
+interface DroppedLogSummary {
+	/** When logs were dropped */
+	droppedAt: number;
+	/** Time range of dropped logs */
+	timeRange: {
+		start: number;
+		end: number;
+	};
+	/** Total logs dropped in this batch */
+	totalCount: number;
+	/** Breakdown by log level */
+	levelCounts: {
+		error: number;
+		warn: number;
+		info: number;
+		debug: number;
+	};
+	/** Breakdown by service */
+	serviceCounts: Record<string, number>;
+	/** Sample error messages (up to 5) */
+	errorSamples: Array<{
+		timestamp: number;
+		serviceName: string;
+		message: string;
+	}>;
+	/** Sample warning messages (up to 5) */
+	warningSamples: Array<{
+		timestamp: number;
+		serviceName: string;
+		message: string;
+	}>;
+	/** Estimated bytes dropped */
+	estimatedBytes: number;
+	/** Reason for dropping */
+	reason: 'network_failure' | 'buffer_overflow' | 'retry_exhausted';
+}
 
 /**
  * Cloud Log Backend Configuration
@@ -46,6 +89,7 @@ export class CloudLogBackend implements LogBackend {
 	private buffer: LogMessage[] = [];
 	private isStreaming: boolean = false;
 	private retryCount: number = 0;
+	private retryPolicy: RetryPolicy;
 	private abortController?: AbortController;
 	private logger?: AgentLogger;
 	private flushTimer?: NodeJS.Timeout;
@@ -53,6 +97,10 @@ export class CloudLogBackend implements LogBackend {
 	private samplingRates: Required<NonNullable<CloudLogBackendConfig['samplingRates']>>;
 	private sampledLogCount: number = 0;
 	private totalLogCount: number = 0;
+	
+	/** Circular buffer of dropped log summaries (for later analysis) */
+	private droppedLogSummaries: DroppedLogSummary[] = [];
+	private readonly MAX_DROPPED_SUMMARIES = 50; // Keep last 50 drop events
 	
 	constructor(config: CloudLogBackendConfig, logger?: AgentLogger) {
 
@@ -79,6 +127,37 @@ export class CloudLogBackend implements LogBackend {
 			info: config.samplingRates?.info ?? 0.1,     // 10% - sample info logs
 			debug: config.samplingRates?.debug ?? 0.01,  // 1% - sample debug logs
 		};
+		
+		// Initialize retry policy
+		this.retryPolicy = new RetryPolicy(
+			{
+				maxAttempts: 5,
+				baseDelayMs: 5000,
+				maxDelayMs: 300000,
+				backoffMultiplier: 2,
+				
+				onRetry: (attempt, error, remaining) => {
+					const errorType = getNetworkErrorType(error);
+					this.logger?.warnSync('Temporary network error, will retry', {
+						component: 'Logs',
+						errorType,
+						consecutiveFailures: attempt,
+						attemptsRemaining: remaining
+					});
+				},
+				
+				onFailure: (error, attempts) => {
+					const errorType = getNetworkErrorType(error);
+					this.logger?.errorSync('Persistent network error', undefined, {
+						component: 'Logs',
+						errorType,
+						consecutiveFailures: attempts,
+						endpoint: this.config.cloudEndpoint
+					});
+				}
+			},
+			{ isRetryable: isRetryableNetworkError }
+		);
 	}
 	
 	async initialize(): Promise<void> {
@@ -220,7 +299,7 @@ export class CloudLogBackend implements LogBackend {
 			batches.push(this.buffer.slice(i, i + batchSize));
 		}
 		
-		this.logger?.infoSync('Flushing logs to cloud', { 
+		this.logger?.debugSync('Attempting to flush logs to cloud', { 
 			component: 'Logs',
 			totalLogs: this.buffer.length,
 			batches: batches.length,
@@ -235,33 +314,33 @@ export class CloudLogBackend implements LogBackend {
 		
 		for (const batch of batches) {
 			try {
-				await this.sendLogs(batch);
-				this.retryCount = 0; // Reset on success
-			} catch (error) {
-				this.logger?.errorSync('Failed to send batch', error instanceof Error ? error : undefined, { 
+				// Use retry policy for network resilience
+				await this.retryPolicy.execute(() => this.sendLogs(batch));
+				
+				this.logger?.infoSync('Successfully sent logs to cloud', { 
 					component: 'Logs',
-					batchSize: batch.length
+					logCount: batch.length,
+					httpStatus: 200
 				});
 				
-				// Check if it's a DNS error (unrecoverable until config fixed)
-				const isDnsError = error instanceof Error && 
-					('cause' in error && error.cause && 
-					typeof error.cause === 'object' && 
-					'code' in error.cause && 
-					error.cause.code === 'ENOTFOUND');
-				
-				if (isDnsError) {
-					this.logger?.errorSync('DNS resolution failed - check CLOUD_API_ENDPOINT environment variable', undefined, { component: 'Logs' });
-					console.error('Hint: If using network_mode: host, use http://localhost:PORT instead of container names');
-					// Drop logs on DNS errors to prevent infinite accumulation
-					this.logger?.warnSync('Dropping logs due to DNS configuration error', { 
+				// Reset retry counters on success
+				this.retryCount = 0;
+				this.retryPolicy.reset();
+			} catch (error) {
+				// All retries exhausted - create summary before dropping
+				if (this.retryPolicy.hasExhaustedRetries()) {
+					const summary = this.createDroppedLogSummary(batch, 'retry_exhausted');
+					this.storeDroppedLogSummary(summary);
+					
+					this.logger?.warnSync('Dropping logs due to persistent network errors', { 
 						component: 'Logs',
-						droppedLogs: batch.length
+						droppedLogs: batch.length,
+						consecutiveFailures: this.retryPolicy.getConsecutiveFailures()
 					});
-					continue;
+					continue; // Drop these logs
 				}
 				
-				// For other errors, keep logs for retry
+				// Keep logs for retry (shouldn't happen with current policy, but safety net)
 				failedLogs.push(...batch);
 				this.retryCount++;
 			}
@@ -273,9 +352,13 @@ export class CloudLogBackend implements LogBackend {
 			const logsToKeep = failedLogs.slice(-maxBufferLogs); // Keep most recent
 			
 			if (failedLogs.length > maxBufferLogs) {
+				const droppedLogs = failedLogs.slice(0, failedLogs.length - maxBufferLogs);
+				const summary = this.createDroppedLogSummary(droppedLogs, 'buffer_overflow');
+				this.storeDroppedLogSummary(summary);
+				
 				this.logger?.warnSync('Buffer overflow: dropping oldest logs', { 
 					component: 'Logs',
-					droppedLogs: failedLogs.length - maxBufferLogs
+					droppedLogs: droppedLogs.length
 				});
 			}
 			
@@ -283,6 +366,9 @@ export class CloudLogBackend implements LogBackend {
 			
 			// Schedule reconnect with exponential backoff
 			this.scheduleReconnect();
+		} else {
+			// Connection recovered - send dropped log summaries if any
+			await this.sendDroppedLogSummaries();
 		}
 	}
 	
@@ -329,12 +415,6 @@ export class CloudLogBackend implements LogBackend {
 				});
 				throw new Error(`HTTP ${response.status}: ${response.statusText}`);
 			}
-			
-			this.logger?.infoSync('Successfully sent logs to cloud', { 
-				component: 'Logs',
-				logCount: logs.length,
-				httpStatus: response.status
-			});
 		} catch (error) {
 			clearTimeout(timeoutId);
 			throw error;
@@ -419,5 +499,154 @@ export class CloudLogBackend implements LogBackend {
 		
 		// Default to info
 		return 'info';
+	}
+	
+	/**
+	 * Create summary of dropped logs for later analysis
+	 * Captures key metadata without storing full log content
+	 */
+	private createDroppedLogSummary(
+		logs: LogMessage[], 
+		reason: DroppedLogSummary['reason']
+	): DroppedLogSummary {
+		const levelCounts = { error: 0, warn: 0, info: 0, debug: 0 };
+		const serviceCounts: Record<string, number> = {};
+		const errorSamples: DroppedLogSummary['errorSamples'] = [];
+		const warningSamples: DroppedLogSummary['warningSamples'] = [];
+		
+		let minTimestamp = Infinity;
+		let maxTimestamp = 0;
+		
+		// Analyze logs
+		for (const log of logs) {
+			// Track time range
+			minTimestamp = Math.min(minTimestamp, log.timestamp);
+			maxTimestamp = Math.max(maxTimestamp, log.timestamp);
+			
+			// Count by level
+			const level = log.level || this.detectLogLevel(log);
+			levelCounts[level]++;
+			
+			// Count by service
+			const serviceName = log.serviceName || 'unknown';
+			serviceCounts[serviceName] = (serviceCounts[serviceName] || 0) + 1;
+			
+			// Collect error samples (first 5)
+			if (level === 'error' && errorSamples.length < 5) {
+				errorSamples.push({
+					timestamp: log.timestamp,
+					serviceName: serviceName,
+					message: log.message.substring(0, 200) // Truncate long messages
+				});
+			}
+			
+			// Collect warning samples (first 5)
+			if (level === 'warn' && warningSamples.length < 5) {
+				warningSamples.push({
+					timestamp: log.timestamp,
+					serviceName: serviceName,
+					message: log.message.substring(0, 200)
+				});
+			}
+		}
+		
+		// Estimate bytes
+		const estimatedBytes = JSON.stringify(logs).length;
+		
+		return {
+			droppedAt: Date.now(),
+			timeRange: {
+				start: minTimestamp === Infinity ? Date.now() : minTimestamp,
+				end: maxTimestamp || Date.now()
+			},
+			totalCount: logs.length,
+			levelCounts,
+			serviceCounts,
+			errorSamples,
+			warningSamples,
+			estimatedBytes,
+			reason
+		};
+	}
+	
+	/**
+	 * Store dropped log summary in circular buffer
+	 * Keeps last N summaries for analysis
+	 */
+	private storeDroppedLogSummary(summary: DroppedLogSummary): void {
+		this.droppedLogSummaries.push(summary);
+		
+		// Maintain circular buffer size
+		if (this.droppedLogSummaries.length > this.MAX_DROPPED_SUMMARIES) {
+			this.droppedLogSummaries.shift(); // Remove oldest
+		}
+		
+		// Log summary locally for immediate visibility
+		this.logger?.warnSync('Dropped logs - summary captured', {
+			component: 'Logs',
+			droppedCount: summary.totalCount,
+			errors: summary.levelCounts.error,
+			warnings: summary.levelCounts.warn,
+			services: Object.keys(summary.serviceCounts).length,
+			reason: summary.reason,
+			estimatedKB: Math.round(summary.estimatedBytes / 1024)
+		});
+		
+		// Log first error sample if available
+		if (summary.errorSamples.length > 0) {
+			const sample = summary.errorSamples[0];
+			this.logger?.errorSync('Sample from dropped errors', undefined, {
+				component: 'Logs',
+				service: sample.serviceName,
+				messagePreview: sample.message.substring(0, 100)
+			});
+		}
+	}
+	
+	/**
+	 * Send dropped log summaries to cloud when connection recovers
+	 * This allows analysis of what was lost during outages
+	 */
+	private async sendDroppedLogSummaries(): Promise<void> {
+		if (this.droppedLogSummaries.length === 0) {
+			return;
+		}
+		
+		const endpoint = buildApiEndpoint(
+			this.config.cloudEndpoint, 
+			`/device/${this.config.deviceUuid}/logs/dropped-summaries`
+		);
+		
+		try {
+			const response = await fetch(endpoint, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'X-Device-API-Key': this.config.deviceApiKey || ''
+				},
+				body: JSON.stringify({
+					summaries: this.droppedLogSummaries,
+					deviceUuid: this.config.deviceUuid,
+					reportedAt: Date.now()
+				})
+			});
+			
+			if (response.ok) {
+				this.logger?.infoSync('Sent dropped log summaries to cloud', {
+					component: 'Logs',
+					summaryCount: this.droppedLogSummaries.length,
+					totalDroppedLogs: this.droppedLogSummaries.reduce((sum, s) => sum + s.totalCount, 0)
+				});
+				
+				// Clear summaries after successful send
+				this.droppedLogSummaries = [];
+			}
+		} catch (error) {
+			// Silently fail - summaries will be sent on next recovery
+			this.logger?.debugSync('Failed to send dropped log summaries (will retry)', {
+				component: 'Logs',
+				error: error instanceof Error ? error.message : String(error)
+			});
+		}
 	}
 }

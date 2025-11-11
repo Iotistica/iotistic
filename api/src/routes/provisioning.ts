@@ -844,7 +844,8 @@ router.post('/device/register', provisioningLimiter, async (req, res) => {
         mqtt_username: mqttCredentials.username,
         provisioned_at: new Date(),
         provisioning_state: 'registered',
-        vpn_enabled: !!vpnCredentialsPreReg
+        vpn_enabled: !!vpnCredentialsPreReg,
+        vpn_ip_address: vpnCredentialsPreReg?.ipAddress || null
       });
       
       // Create default target state if not exists
@@ -937,7 +938,8 @@ router.post('/device/register', provisioningLimiter, async (req, res) => {
     // Step 7b: Update device with MQTT username and VPN status (marks provisioning as complete)
     await DeviceModel.update(uuid, {
       mqtt_username: mqttCredentials.username,
-      vpn_enabled: !!vpnCredentials
+      vpn_enabled: !!vpnCredentials,
+      vpn_ip_address: vpnCredentials?.ipAddress || null
     });
     logger.info(` Device record updated with MQTT username: ${mqttCredentials.username}`);
 

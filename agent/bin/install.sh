@@ -21,6 +21,7 @@ echo "Version: $SCRIPT_VERSION"
 echo "=================================="
 echo ""
 
+
 # Check if running as root
 if [ "$(id -u)" -ne 0 ]; then 
     echo "Error: This script must be run as root (use sudo)"
@@ -299,7 +300,8 @@ elif [ "$INSTALL_METHOD" = "systemd" ]; then
     apt-get install -y \
         curl wget git build-essential python3 make g++ \
         sqlite3 libsqlite3-dev jq procps \
-        openvpn iproute2 iptables net-tools iputils-ping
+        openvpn wireguard wireguard-tools \
+        iproute2 iptables net-tools iputils-ping
 
     echo "✓ System dependencies installed"
 
@@ -430,9 +432,19 @@ elif [ "$INSTALL_METHOD" = "systemd" ]; then
     # Create environment file
     echo ""
     echo "Creating environment file..."
+    
+    # Generate device UUID if not already set
+    if [ ! -f /var/lib/iotistic/agent/device-uuid ]; then
+        DEVICE_UUID=$(cat /proc/sys/kernel/random/uuid)
+        echo "$DEVICE_UUID" > /var/lib/iotistic/agent/device-uuid
+    else
+        DEVICE_UUID=$(cat /var/lib/iotistic/agent/device-uuid)
+    fi
+    
     cat > /etc/iotistic/agent.env << EOF
 AGENT_VERSION=${AGENT_VERSION}
 DEVICE_API_PORT=${DEVICE_API_PORT}
+DEVICE_UUID=${DEVICE_UUID}
 NODE_ENV=production
 LOG_LEVEL=info
 ORCHESTRATOR_TYPE=docker-compose

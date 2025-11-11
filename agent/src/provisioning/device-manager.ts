@@ -7,6 +7,7 @@
  * 2. Use provisioningApiKey (fleet-level) to register device
  * 3. Exchange provisioningApiKey for deviceApiKey authentication
  * 4. Remove provisioningApiKey (one-time use)
+ * 5. Setup VPN tunnel if provided in provisioning response
  * 
  * Refactored for testability with dependency injection:
  * - HttpClient abstraction for API calls (no global fetch stubbing needed)
@@ -24,6 +25,7 @@ import { buildApiEndpoint } from '../utils/api-utils';
 import type { AgentLogger } from '../logging/agent-logger';
 import { HttpClient, FetchHttpClient } from '../http/client';
 import { DatabaseClient, KnexDatabaseClient } from './database-client';
+import { WireGuardManager } from '../vpn/wireguard-manager';
 
 /**
  * UUID Generator Interface for dependency injection
@@ -325,6 +327,40 @@ export class DeviceManager {
 				mqttUsername: this.deviceInfo.mqttUsername,
 				mqttBrokerUrl: this.deviceInfo.mqttBrokerUrl,
 			});
+
+			// Phase 4: Setup VPN if provided in response
+			if (response.vpnConfig?.enabled) {
+				this.logger?.infoSync('Setting up WireGuard VPN', {
+					component: 'DeviceManager',
+					operation: 'provision',
+					vpnIpAddress: response.vpnConfig.ipAddress,
+				});
+
+				try {
+					const vpnManager = new WireGuardManager('wg0', '/etc/wireguard', this.logger);
+					const vpnSetupSuccess = await vpnManager.setup(response.vpnConfig);
+
+					if (vpnSetupSuccess) {
+						this.logger?.infoSync('VPN tunnel established successfully', {
+							component: 'DeviceManager',
+							operation: 'provision',
+							vpnIpAddress: response.vpnConfig.ipAddress,
+						});
+					} else {
+						this.logger?.warnSync('VPN setup was skipped or failed (non-critical)', {
+							component: 'DeviceManager',
+							operation: 'provision',
+						});
+					}
+				} catch (vpnError) {
+					// VPN setup failure is non-critical - device can still operate
+					this.logger?.warnSync('VPN setup failed (device will continue without VPN)', {
+						component: 'DeviceManager',
+						operation: 'provision',
+						error: vpnError instanceof Error ? vpnError.message : String(vpnError),
+					});
+				}
+			}
 
 			return this.getDeviceInfo();
 		} catch (error: any) {

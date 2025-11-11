@@ -3,8 +3,8 @@ import { spawn } from 'child_process';
 import { Readable } from 'stream';
 import { TypedError } from 'typed-error';
 
+
 import { exec } from './fs-utils';
-import log from './supervisor-console';
 
 export class IPTablesRuleError extends TypedError {
 	public constructor(
@@ -328,7 +328,7 @@ export async function getRulePosition(
 		}
 		return parseInt(line.split(' ')[0], 10);
 	} catch (e: unknown) {
-		log.error(
+		console.error(
 			`Received ${
 				e instanceof StdError ? 'stderr' : 'error'
 			} querying iptables ${chain} chain:`,
