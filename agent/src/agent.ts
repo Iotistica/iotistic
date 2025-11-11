@@ -9,8 +9,6 @@
  * - Logging
  */
 
-import { createOrchestratorDriver } from "./orchestrator/driver-factory.js";
-import type { IOrchestratorDriver } from "./orchestrator/driver-interface.js";
 import { StateReconciler } from "./orchestrator/state-reconciler.js";
 import type { DeviceState } from "./orchestrator/state-reconciler.js";
 import ContainerManager from "./compose/container-manager.js";
@@ -27,7 +25,6 @@ import { CloudLogBackend } from "./logging/cloud-backend.js";
 import { ContainerLogMonitor } from "./logging/monitor.js";
 import { AgentLogger } from "./logging/agent-logger.js";
 import type { LogBackend } from "./logging/types.js";
-import { SSHTunnelManager } from "./features/remote-access/ssh-tunnel.js";
 import { JobsFeature } from "./features/jobs/src/jobs-feature.js";
 import { SensorPublishFeature } from "./features/sensor-publish/index.js";
 import { SensorConfigHandler } from "./features/sensor-publish/config-handler.js";
@@ -36,6 +33,7 @@ import {
   SensorsFeature as SensorsFeature,
   SensorConfig,
 } from "./features/sensors/index.js";
+import { AgentFirewall } from "./security/firewall.js";
 import { readFileSync } from "fs";
 import { join } from "path";
 
@@ -51,7 +49,6 @@ const getPackageVersion = (): string => {
 };
 
 export default class DeviceAgent {
-  private orchestratorDriver!: IOrchestratorDriver;
   private stateReconciler!: StateReconciler; // Main state manager
   private containerManager!: ContainerManager; // Keep for backward compatibility with DeviceAPI
   private deviceManager!: DeviceManager;
@@ -62,7 +59,7 @@ export default class DeviceAgent {
   private logBackends: LogBackend[] = [];
   private logMonitor?: ContainerLogMonitor;
   private agentLogger!: AgentLogger; // Structured logging for agent-level events
-  private sshTunnel?: SSHTunnelManager;
+  private firewall?: AgentFirewall; // Network firewall protection
   private jobs?: JobsFeature;
   private sensorPublish?: SensorPublishFeature;
   private sensors?: SensorsFeature;
@@ -104,7 +101,7 @@ export default class DeviceAgent {
   }
 
   public async init(): Promise<void> {
-    try {
+
       // 1. Initialize logging FIRST (so all other components can use agentLogger)
       await this.initializeLogging();
 
@@ -123,46 +120,21 @@ export default class DeviceAgent {
       // 6. Initialize device API
       await this.initializeDeviceAPI();
 
-      // 7. Load config from cached target state (set during container manager init)
-      //    Config-driven feature management with env var fallbacks for local dev
       const configFeatures = this.getConfigFeatures();
       const configSettings = this.getConfigSettings();
       const configLogging = this.getConfigLogging();
 
-      // Get feature flags from config with environment variable fallbacks for local development
-      const enableRemoteAccess =
-        configFeatures.enableDeviceRemoteAccess ??
-        process.env.ENABLE_REMOTE_ACCESS === "true";
-      const enableJobs =
-        configFeatures.enableDeviceJobs ??
-        process.env.ENABLE_CLOUD_JOBS === "true";
-      const enableSensorPublish =
-        configFeatures.enableDeviceSensorPublish ??
-        process.env.ENABLE_SENSOR_PUBLISH === "true";
+      const enableJobs = configFeatures.enableDeviceJobs ?? process.env.ENABLE_CLOUD_JOBS === "true";
+      const enableSensorPublish = configFeatures.enableDeviceSensorPublish ??process.env.ENABLE_SENSOR_PUBLISH === "true";
 
       // Auto-enable protocol adapters if sensors are configured in target state
-      const hasSensors =
-        this.cachedTargetState?.config?.sensors &&
-        Array.isArray(this.cachedTargetState.config.sensors) &&
-        this.cachedTargetState.config.sensors.length > 0;
+      const hasSensors = this.cachedTargetState?.config?.sensors &&Array.isArray(this.cachedTargetState.config.sensors) &&this.cachedTargetState.config.sensors.length > 0;
 
       // Get system settings from config (with defaults)
-      const reconciliationIntervalMs =
-        configSettings.reconciliationIntervalMs || this.RECONCILIATION_INTERVAL;
-      const targetStatePollIntervalMs =
-        configSettings.targetStatePollIntervalMs ||
-        parseInt(process.env.POLL_INTERVAL_MS || "60000", 10);
-      const deviceReportIntervalMs =
-        configSettings.deviceReportIntervalMs ||
-        parseInt(process.env.REPORT_INTERVAL_MS || "60000", 10);
-      const metricsIntervalMs =
-        configSettings.metricsIntervalMs ||
-        parseInt(process.env.METRICS_INTERVAL_MS || "300000", 10);
+      const reconciliationIntervalMs = configSettings.reconciliationIntervalMs || this.RECONCILIATION_INTERVAL;
 
       // Get logging settings from config
       const logLevel = configLogging.level || "info";
-      const enableFilePersistence =
-        configLogging.enableFilePersistence || false;
 
       // Apply log level if configured
       if (
@@ -176,45 +148,6 @@ export default class DeviceAgent {
 
       // Update instance variable with config value
       this.reconciliationIntervalMs = reconciliationIntervalMs;
-
-      this.agentLogger.infoSync("Loading configuration from target state", {
-        component: "Agent",
-        features: {
-          remoteAccess: enableRemoteAccess,
-          jobEngine: enableJobs,
-          cloudJobs: enableJobs,
-          sensorPublish: enableSensorPublish,
-        },
-        settings: {
-          reconciliationIntervalMs,
-          targetStatePollIntervalMs:
-            targetStatePollIntervalMs ||
-            parseInt(process.env.POLL_INTERVAL_MS || "60000", 10),
-          deviceReportIntervalMs:
-            deviceReportIntervalMs ||
-            parseInt(process.env.REPORT_INTERVAL_MS || "60000", 10),
-          metricsIntervalMs:
-            metricsIntervalMs ||
-            parseInt(process.env.METRICS_INTERVAL_MS || "300000", 10),
-          cloudJobsPollingIntervalMs:
-            configSettings.cloudJobsPollingIntervalMs ||
-            parseInt(process.env.CLOUD_JOBS_POLLING_INTERVAL || "30000", 10),
-          shadowPublishIntervalMs:
-            configSettings.shadowPublishIntervalMs ||
-            (process.env.SHADOW_PUBLISH_INTERVAL
-              ? parseInt(process.env.SHADOW_PUBLISH_INTERVAL, 10)
-              : undefined),
-        },
-        logging: {
-          level: logLevel,
-		  enableFilePersistence: enableFilePersistence,
-        },
-      });
-
-      // 9. Initialize SSH Reverse Tunnel (if enabled by config)
-      if (enableRemoteAccess) {
-        await this.initializeRemoteAccess();
-      }
 
       // 10. Initialize Jobs Feature (MQTT primary + HTTP fallback)
       if (enableJobs) {
@@ -240,7 +173,10 @@ export default class DeviceAgent {
       // 15. Initialize MQTT Update Listener (if MQTT enabled)
       await this.initializeMqttUpdateListener();
 
-      // 16. Start auto-reconciliation
+      // 16. Initialize Firewall (if enabled)
+      await this.initializeFirewall(configSettings);
+
+      // 17. Start auto-reconciliation
       this.startAutoReconciliation();
 
       //Final words
@@ -259,49 +195,7 @@ export default class DeviceAgent {
         cloudFeaturesEnabled: this.deviceInfo.provisioned && !!this.apiBinder,
       });
 
-      // Log comprehensive device summary, features, and settings
-      this.agentLogger.infoSync("Device Configuration Summary", {
-        component: "Agent",
-        device: {
-          uuid: this.deviceInfo.uuid,
-          deviceId: this.deviceInfo.deviceId || "Not assigned",
-          deviceName: this.deviceInfo.deviceName || `device-${this.deviceInfo.uuid.slice(0, 8)}`,
-          deviceType: this.deviceInfo.deviceType || "iot-device",
-          provisioned: this.deviceInfo.provisioned,
-          registeredAt: this.deviceInfo.registeredAt ? new Date(this.deviceInfo.registeredAt).toISOString() : "Not registered",
-          applicationId: this.deviceInfo.applicationId || "None",
-          agentVersion: this.deviceInfo.agentVersion || process.env.AGENT_VERSION || "unknown",
-          osVersion: this.deviceInfo.osVersion || "unknown",
-        },
-        connectivity: {
-          cloudApiEndpoint: this.CLOUD_API_ENDPOINT || "Not configured",
-          mqttBrokerUrl: this.deviceInfo.mqttBrokerUrl || "Not configured",
-          mqttUsername: this.deviceInfo.mqttUsername || "Not configured",
-        },
-        features: {
-          cloudSync: !!this.apiBinder,
-          jobEngine: !!this.jobs,
-          sensorPublish: !!this.sensorPublish,
-          sensors: !!this.sensors,
-          sshTunnel: !!this.sshTunnel,
-        },
-        settings: {
-          reconciliationIntervalMs: this.reconciliationIntervalMs,
-          deviceApiPort: this.DEVICE_API_PORT,
-          logCompression: process.env.LOG_COMPRESSION === 'true',
-          logFilePersistence: process.env.LOG_FILE_PERSISTANCE === 'true',
-        },
-      });
-    } catch (error) {
-      this.agentLogger?.errorSync(
-        "Failed to initialize Device Agent",
-        error instanceof Error ? error : new Error(String(error)),
-        {
-          component: "Agent",
-        }
-      );
-      throw error;
-    }
+     
   }
 
   private async initializeLogging(): Promise<void> {
@@ -473,15 +367,6 @@ export default class DeviceAgent {
     });
   }
 
-  /**
-   * Initialize centralized MQTT Manager
-   *
-   * This must be called BEFORE any features that use MQTT (logging, shadow, jobs).
-   * The MqttManager provides a single shared connection for all MQTT operations.
-   *
-   * Uses MQTT credentials from device provisioning (mqttBrokerUrl, mqttUsername, mqttPassword).
-   * Falls back to environment variables (MQTT_BROKER, MQTT_USERNAME, MQTT_PASSWORD) if not provisioned.
-   */
   private async initializeMqttManager(): Promise<void> {
     this.agentLogger.infoSync("Initializing MQTT Manager", {
       component: "Agent",
@@ -756,68 +641,12 @@ export default class DeviceAgent {
     await this.apiBinder.startReporting();
   }
 
-  private async initializeRemoteAccess(): Promise<void> {
-    const cloudHost = process.env.CLOUD_HOST;
-    if (!cloudHost) {
-      this.agentLogger?.errorSync(
-        "CLOUD_HOST environment variable required for remote access",
-        undefined,
-        {
-          component: "Agent",
-          feature: "RemoteAccess",
-        }
-      );
-      return;
-    }
-
-    this.agentLogger?.infoSync("Initializing SSH reverse tunnel", {
-      component: "Agent",
-      cloudHost,
-      localPort: this.DEVICE_API_PORT,
-    });
-
-    try {
-      this.sshTunnel = new SSHTunnelManager({
-        cloudHost,
-        cloudPort: parseInt(process.env.CLOUD_SSH_PORT || "22", 10),
-        localPort: this.DEVICE_API_PORT,
-        sshUser: process.env.SSH_TUNNEL_USER || "tunnel",
-        sshKeyPath: process.env.SSH_KEY_PATH || "/data/ssh/id_rsa",
-        autoReconnect: process.env.SSH_AUTO_RECONNECT !== "false",
-        reconnectDelay: parseInt(process.env.SSH_RECONNECT_DELAY || "5000", 10),
-      });
-
-      await this.sshTunnel.connect();
-      this.agentLogger?.infoSync("Remote access enabled via SSH tunnel", {
-        component: "Agent",
-        accessEndpoint: `${cloudHost}:${this.DEVICE_API_PORT}`,
-      });
-    } catch (error) {
-      this.agentLogger?.errorSync(
-        "Failed to initialize SSH tunnel",
-        error instanceof Error ? error : new Error(String(error)),
-        {
-          component: "Agent",
-          note: "Continuing without remote access",
-        }
-      );
-      this.sshTunnel = undefined;
-    }
-  }
-
   private async initializeJobs(
     configSettings: Record<string, any>
   ): Promise<void> {
     try {
       // Get cloud API URL from environment
       const cloudApiUrl = process.env.CLOUD_API_URL || this.CLOUD_API_ENDPOINT;
-      if (!cloudApiUrl) {
-        this.agentLogger?.errorSync("CLOUD_API_URL not configured", undefined, {
-          component: "Agent",
-          note: "Set CLOUD_API_URL environment variable (e.g., http://your-cloud-server:4002/api/v1)",
-        });
-        return;
-      }
 
       // Get polling interval from config (passed as parameter during init)
       const pollingIntervalMs =
@@ -1104,10 +933,6 @@ export default class DeviceAgent {
     }
   }
 
-  /**
-   * Initialize MQTT listener for agent update commands
-   * Subscribes to agent/{uuid}/update topic to receive update commands from cloud
-   */
   private async initializeMqttUpdateListener(): Promise<void> {
     const mqttManager = MqttManager.getInstance();
     
@@ -1202,10 +1027,6 @@ export default class DeviceAgent {
     }
   }
 
-  /**
-   * Perform agent self-update
-   * Executes appropriate update script based on deployment type (docker or systemd)
-   */
   private async performUpdate(version: string, force: boolean = false): Promise<void> {
     const { existsSync } = await import('fs');
     const { exec } = await import('child_process');
@@ -1311,6 +1132,64 @@ export default class DeviceAgent {
     }
   }
 
+  /**
+   * Initialize network firewall protection
+   * Protects Device API and MQTT from unauthorized access
+   */
+  private async initializeFirewall(
+    configSettings: Record<string, any>
+  ): Promise<void> {
+    // Get firewall configuration from config or environment
+    const firewallMode = 
+      configSettings.firewallMode || 
+      process.env.FIREWALL_MODE || 
+      'auto';
+    
+    // Check if firewall is enabled
+    if (firewallMode === 'disabled' || process.env.FIREWALL_ENABLED === 'false') {
+      this.agentLogger?.infoSync('Firewall disabled by configuration', {
+        component: 'Agent',
+      });
+      return;
+    }
+
+    // Determine MQTT port (if Mosquitto is running locally)
+    const mqttPort = process.env.MQTT_LOCAL_PORT 
+      ? parseInt(process.env.MQTT_LOCAL_PORT) 
+      : undefined;
+
+    this.agentLogger?.infoSync('Initializing firewall', {
+      component: 'Agent',
+      mode: firewallMode,
+      deviceApiPort: this.DEVICE_API_PORT,
+      mqttPort: mqttPort || 'not configured',
+    });
+
+    try {
+      this.firewall = new AgentFirewall(
+        {
+          enabled: true,
+          mode: firewallMode as 'on' | 'off' | 'auto',
+          deviceApiPort: this.DEVICE_API_PORT,
+          mqttPort,
+        },
+        this.agentLogger
+      );
+
+      await this.firewall.initialize();
+    } catch (error) {
+      this.agentLogger?.errorSync(
+        'Failed to initialize firewall',
+        error instanceof Error ? error : new Error(String(error)),
+        {
+          component: 'Agent',
+          note: 'Agent will continue without firewall protection',
+        }
+      );
+      this.firewall = undefined;
+    }
+  }
+
   private startAutoReconciliation(): void {
     this.containerManager.startAutoReconciliation(
       this.reconciliationIntervalMs
@@ -1321,555 +1200,6 @@ export default class DeviceAgent {
     });
   }
 
-  /**
-   * Handle configuration updates from target state
-   * This is called whenever config changes in device_target_state
-   */
-  private async handleConfigUpdate(config: Record<string, any>): Promise<void> {
-    this.agentLogger?.info("📋 Processing configuration update", {
-      category: "Agent",
-      configKeys: Object.keys(config).length,
-      keys: Object.keys(config),
-      hasSensors: !!config.sensors,
-      sensorCount: config.sensors?.length || 0,
-    });
-
-    try {
-      // Logging Config - Update log level dynamically
-      if (config.logging) {
-        this.agentLogger?.debug("Logging configuration detected", {
-          category: "Agent",
-        });
-        const logging = config.logging;
-
-        // Update log level
-        if (logging.level !== undefined) {
-          const validLevels = ["debug", "info", "warn", "error"];
-          const newLevel = logging.level;
-
-          if (validLevels.includes(newLevel)) {
-            const currentLevel = this.agentLogger?.getLogLevel();
-
-            if (newLevel !== currentLevel) {
-              this.agentLogger?.debug("Updating log level", {
-                category: "Agent",
-                from: currentLevel,
-                to: newLevel,
-              });
-              this.agentLogger?.setLogLevel(
-                newLevel as "debug" | "info" | "warn" | "error"
-              );
-              this.agentLogger?.debug("Log level updated successfully", {
-                category: "Agent",
-                newLevel,
-              });
-            } else {
-              this.agentLogger?.debug("Log level already set", {
-                category: "Agent",
-                level: currentLevel,
-              });
-            }
-          } else {
-            this.agentLogger?.warn("Invalid log level", {
-              category: "Agent",
-              invalidLevel: newLevel,
-              validLevels,
-            });
-          }
-        }
-      }
-
-      // Settings Config - Update system settings dynamically
-      if (config.settings) {
-        this.agentLogger?.debug("Settings configuration detected", {
-          category: "Agent",
-        });
-        const settings = config.settings;
-
-        // Update reconciliation interval
-        if (settings.reconciliationIntervalMs !== undefined) {
-          const newInterval = settings.reconciliationIntervalMs;
-          const currentInterval = this.reconciliationIntervalMs;
-
-          if (newInterval !== currentInterval) {
-            this.agentLogger?.debug("Updating reconciliation interval", {
-              category: "Agent",
-              fromMs: currentInterval,
-              toMs: newInterval,
-            });
-            this.reconciliationIntervalMs = newInterval;
-
-            // Restart auto-reconciliation with new interval
-            this.containerManager.stopAutoReconciliation();
-            this.containerManager.startAutoReconciliation(newInterval);
-            this.agentLogger?.debug(
-              "Reconciliation interval updated successfully",
-              {
-                category: "Agent",
-                intervalMs: newInterval,
-              }
-            );
-          } else {
-            this.agentLogger?.debug("Reconciliation interval already set", {
-              category: "Agent",
-              intervalMs: currentInterval,
-            });
-          }
-        }
-
-        // Update device report interval
-        if (settings.deviceReportIntervalMs !== undefined) {
-          const newInterval = settings.deviceReportIntervalMs;
-          const currentInterval = this.apiBinder?.["config"]?.reportInterval;
-
-          if (currentInterval && newInterval !== currentInterval) {
-            this.agentLogger?.debug("Updating device report interval", {
-              category: "Agent",
-              fromMs: currentInterval,
-              toMs: newInterval,
-            });
-
-            // Update the API binder's report interval
-            if (this.apiBinder) {
-              (this.apiBinder as any).config.reportInterval = newInterval;
-              this.agentLogger?.debug(
-                "Device report interval updated successfully",
-                {
-                  category: "Agent",
-                  intervalMs: newInterval,
-                }
-              );
-            }
-          }
-        }
-
-        // Update target state poll interval
-        if (settings.targetStatePollIntervalMs !== undefined) {
-          const newInterval = settings.targetStatePollIntervalMs;
-          const currentInterval = this.apiBinder?.["config"]?.pollInterval;
-
-          if (currentInterval && newInterval !== currentInterval) {
-            this.agentLogger?.debug("Updating target state poll interval", {
-              category: "Agent",
-              fromMs: currentInterval,
-              toMs: newInterval,
-            });
-
-            // Update the API binder's poll interval
-            if (this.apiBinder) {
-              (this.apiBinder as any).config.pollInterval = newInterval;
-              this.agentLogger?.debug(
-                "Target state poll interval updated successfully",
-                {
-                  category: "Agent",
-                  intervalMs: newInterval,
-                }
-              );
-            }
-          }
-        }
-
-        // Update metrics interval
-        if (settings.metricsIntervalMs !== undefined) {
-          const newInterval = settings.metricsIntervalMs;
-          const currentInterval = this.apiBinder?.["config"]?.metricsInterval;
-
-          if (currentInterval && newInterval !== currentInterval) {
-            this.agentLogger?.debug("Updating metrics interval", {
-              category: "Agent",
-              fromMs: currentInterval,
-              toMs: newInterval,
-            });
-
-            // Update the API binder's metrics interval
-            if (this.apiBinder) {
-              (this.apiBinder as any).config.metricsInterval = newInterval;
-              this.agentLogger?.debug("Metrics interval updated successfully", {
-                category: "Agent",
-                intervalMs: newInterval,
-              });
-            }
-          }
-        }
-
-        // Update cloud jobs polling interval
-        if (settings.cloudJobsPollingIntervalMs !== undefined && this.jobs) {
-          const newInterval = settings.cloudJobsPollingIntervalMs;
-          const currentInterval = (this.jobs as any).config?.pollingIntervalMs;
-
-          if (currentInterval && newInterval !== currentInterval) {
-            this.agentLogger?.debug("Updating cloud jobs polling interval", {
-              category: "Agent",
-              fromMs: currentInterval,
-              toMs: newInterval,
-            });
-
-            // Update the Jobs's polling interval
-            (this.jobs as any).config.pollingIntervalMs = newInterval;
-
-            // Restart Jobs with new interval
-            await this.jobs.stop();
-            await this.jobs.start();
-
-            this.agentLogger?.debug(
-              "Cloud jobs polling interval updated successfully",
-              {
-                category: "Agent",
-                intervalMs: newInterval,
-              }
-            );
-          }
-        }
-      }
-
-      // Features Config - Enable/disable features dynamically
-      if (config.features) {
-        this.agentLogger?.debug("Features configuration detected", {
-          category: "Agent",
-        });
-        const features = config.features;
-
-        // Enable/disable Remote Access dynamically
-        if (features.enableRemoteAccess !== undefined) {
-          const isCurrentlyEnabled = !!this.sshTunnel;
-          const shouldBeEnabled = features.enableRemoteAccess;
-
-          if (shouldBeEnabled === isCurrentlyEnabled) {
-            this.agentLogger?.debug("Remote Access already in desired state", {
-              category: "Agent",
-              enabled: shouldBeEnabled,
-            });
-          } else if (shouldBeEnabled && !isCurrentlyEnabled) {
-            this.agentLogger?.debug("Enabling Remote Access", {
-              category: "Agent",
-            });
-            await this.initializeRemoteAccess();
-          } else if (!shouldBeEnabled && isCurrentlyEnabled) {
-            this.agentLogger?.debug("Disabling Remote Access", {
-              category: "Agent",
-            });
-            await this.sshTunnel!.disconnect();
-            this.sshTunnel = undefined;
-            this.agentLogger?.debug("Remote Access disabled successfully", {
-              category: "Agent",
-            });
-          }
-        }
-
-        // Enable/disable Jobs dynamically
-        if (
-          features.enableJobEngine !== undefined ||
-          features.enableCloudJobs !== undefined ||
-          features.enableDeviceJobs !== undefined
-        ) {
-          const isCurrentlyEnabled = !!this.jobs;
-          const shouldBeEnabled =
-            features.enableDeviceJobs ??
-            ((features.enableCloudJobs ?? !!this.jobs) &&
-            (features.enableJobEngine ?? !!this.jobs));
-
-          if (shouldBeEnabled === isCurrentlyEnabled) {
-            this.agentLogger?.debug("Jobs already in desired state", {
-              category: "Agent",
-              enabled: shouldBeEnabled,
-            });
-          } else if (shouldBeEnabled && !isCurrentlyEnabled) {
-            this.agentLogger?.debug("Enabling Jobs", { category: "Agent" });
-            await this.initializeJobs(this.getConfigSettings());
-          } else if (!shouldBeEnabled && isCurrentlyEnabled) {
-            this.agentLogger?.debug("Disabling Jobs", { category: "Agent" });
-            await this.jobs!.stop();
-            this.jobs = undefined;
-            this.agentLogger?.debug("Jobs disabled successfully", {
-              category: "Agent",
-            });
-          }
-        } // Enable/disable Sensor Publish dynamically
-        if (features.enableSensorPublish !== undefined) {
-          const isCurrentlyEnabled = !!this.sensorPublish;
-          const shouldBeEnabled = features.enableSensorPublish;
-
-          if (shouldBeEnabled === isCurrentlyEnabled) {
-            this.agentLogger?.debugSync(
-              "Sensor Publish already in desired state",
-              {
-                category: "Agent",
-                enabled: shouldBeEnabled,
-              }
-            );
-          } else if (shouldBeEnabled && !isCurrentlyEnabled) {
-            this.agentLogger?.infoSync("Enabling Sensor Publish", {
-              category: "Agent",
-            });
-            await this.initializeSensorPublish();
-          } else if (!shouldBeEnabled && isCurrentlyEnabled) {
-            this.agentLogger?.infoSync("Disabling Sensor Publish", {
-              category: "Agent",
-            });
-            await this.sensorPublish!.stop();
-            this.sensorPublish = undefined;
-            this.agentLogger?.infoSync("Sensor Publish disabled successfully", {
-              category: "Agent",
-            });
-          }
-        }
-
-        // Log other feature flags for future implementation
-        if (features.pollingIntervalMs !== undefined) {
-          this.agentLogger?.debugSync("Polling interval configured", {
-            category: "Agent",
-            pollingIntervalMs: features.pollingIntervalMs,
-          });
-        }
-        if (features.enableHealthChecks !== undefined) {
-          this.agentLogger?.debugSync("Health checks configured", {
-            category: "Agent",
-            enabled: features.enableHealthChecks,
-          });
-        }
-      }
-
-      // Sensors Config - Update sensor configurations dynamically
-      if (
-        config.sensors &&
-        Array.isArray(config.sensors) &&
-        this.sensorPublish
-      ) {
-        this.agentLogger?.debug("Sensor configuration detected", {
-          category: "Agent",
-          sensorCount: config.sensors.length,
-        });
-
-        try {
-          // Get current sensor config
-          const currentConfig = (this.sensorPublish as any).config;
-
-          // Merge target state sensors with existing sensors from env var
-          // Target state sensors take precedence
-          const existingSensors: any[] = currentConfig.sensors || [];
-          const targetSensors: any[] = config.sensors;
-
-          // Combine: start with existing, then add/override with target state
-          const mergedSensors = [...existingSensors];
-
-          // Add or update sensors from target state
-          for (const targetSensor of targetSensors) {
-            const existingIndex = mergedSensors.findIndex(
-              (s: any) => s.name === targetSensor.name
-            );
-            if (existingIndex >= 0) {
-              // Update existing sensor
-              mergedSensors[existingIndex] = targetSensor;
-              this.agentLogger?.debug("Updated sensor configuration", {
-                category: "Agent",
-                sensorName: targetSensor.name,
-              });
-            } else {
-              // Add new sensor
-              mergedSensors.push(targetSensor);
-              this.agentLogger?.info("Added new sensor configuration", {
-                category: "Agent",
-                sensorName: targetSensor.name,
-                addr: targetSensor.addr,
-              });
-            }
-          }
-
-          // Update the sensor publish feature configuration
-          currentConfig.sensors = mergedSensors;
-
-          // Restart sensor publish to apply changes
-          await this.sensorPublish.stop();
-          await this.sensorPublish.start();
-
-          this.agentLogger?.info("Sensor configuration updated successfully", {
-            category: "Agent",
-            totalSensors: mergedSensors.length,
-            targetStateSensors: targetSensors.length,
-          });
-        } catch (error) {
-          this.agentLogger?.errorSync(
-            "Failed to update sensor configuration",
-            error instanceof Error ? error : new Error(String(error)),
-            {
-              category: "Agent",
-            }
-          );
-        }
-      }
-
-      // Protocol Adapter Devices - Update device configurations dynamically
-      if (config.sensors && Array.isArray(config.sensors)) {
-        this.agentLogger?.info(
-          "📥 Sensor configuration detected - Starting sync to sensors table",
-          {
-            category: "Agent",
-            deviceCount: config.sensors.length,
-            devices: config.sensors
-              .map((d: any) => `${d.name} (${d.protocol})`)
-              .join(", "),
-          }
-        );
-
-        try {
-          this.agentLogger?.info("Importing DeviceSensorModel...", {
-            category: "Agent",
-          });
-          const { DeviceSensorModel: DeviceSensorModel } = await import(
-            "./models/sensors.model.js"
-          );
-          this.agentLogger?.info("DeviceSensorModel imported successfully", {
-            category: "Agent",
-          });
-
-          // Get current devices from SQLite to detect deletions
-          this.agentLogger?.info("Querying current devices from SQLite...", {
-            category: "Agent",
-          });
-          const currentDevices = await DeviceSensorModel.getAll();
-          this.agentLogger?.info("Current devices loaded from SQLite", {
-            category: "Agent",
-            currentCount: currentDevices.length,
-            currentDevices: currentDevices.map((d) => d.name).join(", "),
-          });
-          const targetDeviceNames = new Set(config.sensors.map((d) => d.name));
-
-          // Sync each device to SQLite
-          for (const device of config.sensors) {
-            // Normalize property names from cloud API (camelCase) to SQLite (snake_case)
-            const normalizedDevice = {
-              name: device.name,
-              protocol: device.protocol,
-              enabled: device.enabled !== undefined ? device.enabled : true,
-              poll_interval:
-                (device as any).pollInterval ||
-                (device as any).poll_interval ||
-                5000,
-              connection: device.connection,
-              data_points:
-                (device as any).registers ||
-                (device as any).dataPoints ||
-                (device as any).data_points,
-              metadata: device.metadata,
-            };
-
-            const existing = await DeviceSensorModel.getByName(
-              normalizedDevice.name
-            );
-
-            if (existing) {
-              await DeviceSensorModel.update(
-                normalizedDevice.name,
-                normalizedDevice
-              );
-              this.agentLogger?.info("Updated sensor", {
-                category: "Agent",
-                deviceName: normalizedDevice.name,
-                protocol: normalizedDevice.protocol,
-              });
-            } else {
-              await DeviceSensorModel.create(normalizedDevice);
-              this.agentLogger?.info("Added sensor", {
-                category: "Agent",
-                deviceName: normalizedDevice.name,
-                protocol: normalizedDevice.protocol,
-              });
-            }
-          }
-
-          // Delete devices that are no longer in target state
-          for (const currentDevice of currentDevices) {
-            if (!targetDeviceNames.has(currentDevice.name)) {
-              await DeviceSensorModel.delete(currentDevice.name);
-              this.agentLogger?.info("Removed sensor", {
-                category: "Agent",
-                deviceName: currentDevice.name,
-                protocol: currentDevice.protocol,
-              });
-            }
-          }
-
-          // Ensure output configurations exist for each protocol
-          const protocols = new Set(config.sensors.map((d: any) => d.protocol));
-          for (const protocol of protocols) {
-            const existingOutput = await DeviceSensorModel.getOutput(
-              protocol as string
-            ); // Create default output configuration for this protocol
-            const defaultSocketPath =
-              process.platform === "win32"
-                ? `\\\\.\\pipe\\${protocol}-sensors`
-                : `/tmp/${protocol}-sensors.sock`;
-
-            if (!existingOutput) {
-              // Create new output configuration
-              await DeviceSensorModel.setOutput({
-                protocol: protocol,
-                socket_path: defaultSocketPath,
-                data_format: "json",
-                delimiter: "\n",
-                include_timestamp: true,
-                include_device_name: true,
-              });
-
-              this.agentLogger?.info("Created default output configuration", {
-                category: "Agent",
-                protocol: protocol,
-                socketPath: defaultSocketPath,
-              });
-            } else if (
-              !existingOutput.delimiter ||
-              existingOutput.delimiter === ""
-            ) {
-              // Fix existing output configuration with missing delimiter
-              await DeviceSensorModel.setOutput({
-                ...existingOutput,
-                delimiter: "\n",
-              });
-              this.agentLogger?.info("Fixed output configuration delimiter", {
-                category: "Agent",
-                protocol: protocol,
-              });
-            }
-          }
-
-          // Restart protocol adapters to apply changes
-          if (this.sensors) {
-            this.agentLogger?.info(
-              "Restarting protocol adapters to apply configuration changes",
-              {
-                category: "Agent",
-              }
-            );
-            await this.sensors.stop();
-            await this.initializeDeviceSensors(this.getConfigFeatures());
-          }
-        } catch (error) {
-          this.agentLogger?.errorSync(
-            "Failed to sync sensors",
-            error instanceof Error ? error : new Error(String(error)),
-            {
-              category: "Agent",
-            }
-          );
-        }
-      }
-
-      this.agentLogger?.infoSync(
-        "Configuration update processed successfully",
-        {
-          category: "Agent",
-        }
-      );
-    } catch (error) {
-      this.agentLogger?.errorSync(
-        "Failed to process config update",
-        error instanceof Error ? error : new Error(String(error)),
-        {
-          category: "Agent",
-        }
-      );
-    }
-  }
 
   public async stop(): Promise<void> {
     this.agentLogger?.infoSync("Stopping Device Agent", { component: "Agent" });
@@ -1905,18 +1235,20 @@ export default class DeviceAgent {
         this.agentLogger?.infoSync("Jobs Feature stopped", {
           component: "Agent",
         });
-      } // Stop SSH tunnel
-      if (this.sshTunnel) {
-        await this.sshTunnel.disconnect();
-        this.agentLogger?.infoSync("SSH tunnel stopped", {
-          component: "Agent",
-        });
-      }
-
+      } 
+     
       // Stop API binder
       if (this.apiBinder) {
         await this.apiBinder.stop();
         this.agentLogger?.infoSync("API Binder stopped", {
+          component: "Agent",
+        });
+      }
+
+      // Stop firewall
+      if (this.firewall) {
+        await this.firewall.stop();
+        this.agentLogger?.infoSync("Firewall stopped", {
           component: "Agent",
         });
       }
@@ -1986,31 +1318,20 @@ export default class DeviceAgent {
     }
   }
 
-  /**
-   * Update cached target state
-   * Called when target state changes to keep cache in sync
-   */
+  
   private updateCachedTargetState(): void {
     this.cachedTargetState = this.stateReconciler.getTargetState();
   }
 
-  /**
-   * Get config features from cached target state
-   */
   private getConfigFeatures(): Record<string, any> {
     return this.cachedTargetState?.config?.features || {};
   }
 
-  /**
-   * Get config settings from cached target state
-   */
+
   private getConfigSettings(): Record<string, any> {
     return this.cachedTargetState?.config?.settings || {};
   }
 
-  /**
-   * Get config logging from cached target state
-   */
   private getConfigLogging(): Record<string, any> {
     return this.cachedTargetState?.config?.logging || {};
   }

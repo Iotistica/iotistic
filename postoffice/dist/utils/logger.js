@@ -19,10 +19,10 @@ const logger = winston_1.default.createLogger({
     format: winston_1.default.format.combine(winston_1.default.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }), winston_1.default.format.errors({ stack: true }), logFormat === 'pretty'
         ? prettyFormat
         : winston_1.default.format.json()),
-    defaultMeta: { service: 'housekeeper' },
+    defaultMeta: { service: 'postoffice' },
     transports: [
         new winston_1.default.transports.Console({
-            format: winston_1.default.format.combine(winston_1.default.format.colorize(), logFormat === 'pretty'
+            format: winston_1.default.format.combine(logFormat === 'pretty' ? winston_1.default.format.colorize() : winston_1.default.format.uncolorize(), logFormat === 'pretty'
                 ? prettyFormat
                 : winston_1.default.format.json()),
         }),

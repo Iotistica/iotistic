@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.log
+.env
+*.key
+*.conf
+!*.conf.example
+wg-data/
+postgres-data/
+.tsbuildinfo

@@ -80,14 +80,6 @@ export class ConfigManager extends EventEmitter {
 	 */
 	public getCurrentConfig(): DeviceConfig {
 		// Log what we're returning (for debugging)
-		console.log('[ConfigManager] getCurrentConfig called:', {
-			keys: Object.keys(this.currentConfig),
-			hasLogging: !!this.currentConfig.logging,
-			hasFeatures: !!this.currentConfig.features,
-			hasSettings: !!this.currentConfig.settings,
-			hasSensors: !!this.currentConfig.sensors,
-			sensorCount: this.currentConfig.sensors?.length || 0,
-		});
 		return _.cloneDeep(this.currentConfig);
 	}
 
