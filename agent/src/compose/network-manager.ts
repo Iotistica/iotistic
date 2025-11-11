@@ -3,8 +3,6 @@ import _ from 'lodash';
 import * as constants from '../lib/constants';
 import { docker } from '../lib/docker-utils';
 import { isNotFoundError } from '../lib/errors';
-import logTypes = require('../lib/log-types');
-import log from '../lib/supervisor-console';
 
 import * as logger from '../logging';
 import { Network } from './network';
@@ -44,7 +42,7 @@ export async function create(network: Network) {
 		// already created, we can skip this
 	} catch (e: unknown) {
 		if (!isNotFoundError(e)) {
-			logger.logSystemEvent(logTypes.createNetworkError, {
+			logger.logSystemEvent('createNetworkError', {
 				network: { name: network.name, appUuid: network.appUuid },
 				error: e,
 			});
@@ -78,7 +76,7 @@ export async function supervisorNetworkReady(): Promise<boolean> {
 			network.IPAM.Config[0].Gateway === gateway;
 		return result;
 	} catch (e: unknown) {
-		log.warn(
+		console.warn(
 			`Failed to read docker configuration of network ${iface}:`,
 			(e as Error).message,
 		);
@@ -104,7 +102,7 @@ export async function ensureSupervisorNetwork(): Promise<void> {
 			return;
 		}
 
-		log.debug(`Creating ${iface} network`);
+		console.debug(`Creating ${iface} network`);
 		await docker.createNetwork({
 			Name: iface,
 			Options: {

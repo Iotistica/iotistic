@@ -2,9 +2,7 @@ import _ from 'lodash';
 import type dockerode from 'dockerode';
 
 import { docker } from '../lib/docker-utils';
-import logTypes = require('../lib/log-types');
 import * as logger from '../logging';
-import log from '../lib/supervisor-console';
 import * as ComposeUtils from './utils';
 
 import type {
@@ -185,7 +183,7 @@ class NetworkImpl implements NetworkIface {
 	}
 
 	public async create(): Promise<void> {
-		logger.logSystemEvent(logTypes.createNetwork, {
+		logger.logSystemEvent('createNetwork', {
 			network: { name: this.name, appUuid: this.appUuid },
 		});
 
@@ -226,7 +224,7 @@ class NetworkImpl implements NetworkIface {
 	}
 
 	public async remove() {
-		logger.logSystemEvent(logTypes.removeNetwork, {
+		logger.logSystemEvent('removeNetwork', {
 			network: { name: this.name, appUuid: this.appUuid },
 		});
 
@@ -260,7 +258,7 @@ class NetworkImpl implements NetworkIface {
 				networkIds.map((networkId) => docker.getNetwork(networkId).remove()),
 			);
 		} catch (error) {
-			logger.logSystemEvent(logTypes.removeNetworkError, {
+			logger.logSystemEvent('removeNetworkError', {
 				network: { name: this.name, appUuid: this.appUuid },
 				error,
 			});
@@ -303,7 +301,7 @@ class NetworkImpl implements NetworkIface {
 				({ subnet, gateway }) => !subnet || !gateway,
 			)
 		) {
-			log.warn(
+			console.warn(
 				'Network IPAM config entries must have both a subnet and gateway defined.' +
 					' Your network might not work properly otherwise.',
 			);

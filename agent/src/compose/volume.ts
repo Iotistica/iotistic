@@ -5,7 +5,6 @@ import omitBy = require('lodash/omitBy');
 import * as constants from '../lib/constants';
 import { docker } from '../lib/docker-utils';
 import { InternalInconsistencyError } from '../lib/errors';
-import * as LogTypes from '../lib/log-types';
 import * as logger from '../logging';
 import * as ComposeUtils from './utils';
 
@@ -86,7 +85,7 @@ class VolumeImpl implements Volume {
 	}
 
 	public async create(): Promise<void> {
-		logger.logSystemEvent(LogTypes.createVolume, {
+		logger.logSystemEvent('createVolume', {
 			volume: { name: this.name },
 		});
 		await docker.createVolume({
@@ -98,7 +97,7 @@ class VolumeImpl implements Volume {
 	}
 
 	public async remove(): Promise<void> {
-		logger.logSystemEvent(LogTypes.removeVolume, {
+		logger.logSystemEvent('removeVolume', {
 			volume: { name: this.name },
 		});
 
@@ -107,7 +106,7 @@ class VolumeImpl implements Volume {
 				.getVolume(Volume.generateDockerName(this.appId, this.name))
 				.remove();
 		} catch (e) {
-			logger.logSystemEvent(LogTypes.removeVolumeError, {
+			logger.logSystemEvent('removeVolumeError', {
 				volume: { name: this.name, appId: this.appId },
 				error: e,
 			});

@@ -11,8 +11,6 @@ import { checkFalsey } from './lib/validation';
 
 import { getBlink } from './lib/blink';
 
-import log from './lib/supervisor-console';
-
 const networkPattern = {
 	blinks: 4,
 	pause: 1000,
@@ -44,7 +42,7 @@ export async function isVPNActive(): Promise<boolean> {
 	} catch {
 		active = false;
 	}
-	log.info(`VPN connection is ${active ? 'active' : 'not active'}.`);
+	console.info(`VPN connection is ${active ? 'active' : 'not active'}.`);
 	return active;
 }
 
@@ -60,7 +58,7 @@ export const startConnectivityCheck = _.once(
 	) => {
 		enableConnectivityCheck(enable);
 		if (!apiEndpoint) {
-			log.debug('No API endpoint specified, skipping connectivity check');
+			console.debug('No API endpoint specified, skipping connectivity check');
 			return;
 		}
 
@@ -68,7 +66,7 @@ export const startConnectivityCheck = _.once(
 			await fs.mkdir(constants.vpnStatusPath);
 		} catch (err: any) {
 			if (isEEXIST(err)) {
-				log.debug('VPN status path exists.');
+				console.debug('VPN status path exists.');
 			} else {
 				throw err;
 			}
@@ -93,10 +91,10 @@ export const startConnectivityCheck = _.once(
 			(connected) => {
 				onChangeCallback?.(connected);
 				if (connected) {
-					log.info('Internet Connectivity: OK');
+					console.info('Internet Connectivity: OK');
 					blink.pattern.stop();
 				} else {
-					log.info('Waiting for connectivity...');
+					console.info('Waiting for connectivity...');
 					blink.pattern.start(networkPattern);
 				}
 			},
@@ -108,7 +106,7 @@ export function enableConnectivityCheck(enable: boolean) {
 	// Only disable if value explicitly matches falsey
 	enable = !checkFalsey(enable);
 	enableCheck(enable);
-	log.debug(`Connectivity check enabled: ${enable}`);
+	console.debug(`Connectivity check enabled: ${enable}`);
 }
 
 export const connectivityCheckEnabled = async () => isConnectivityCheckEnabled;

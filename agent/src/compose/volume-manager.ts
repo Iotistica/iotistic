@@ -4,8 +4,6 @@ import type { VolumeInspectInfo } from 'dockerode';
 
 import { isNotFoundError, InternalInconsistencyError } from '../lib/errors';
 import { docker } from '../lib/docker-utils';
-import * as LogTypes from '../lib/log-types';
-import log from '../lib/supervisor-console';
 import * as logger from '../logging';
 import { ResourceRecreationAttemptError } from './errors';
 import type { VolumeConfig } from './types';
@@ -32,7 +30,7 @@ export async function getAll(): Promise<Volume[]> {
 			volumesList.push(volume);
 		} catch (err) {
 			if (err instanceof InternalInconsistencyError) {
-				log.debug(`Found unmanaged or anonymous Volume: ${volumeInfo.Name}`);
+				console.debug(`Found unmanaged or anonymous Volume: ${volumeInfo.Name}`);
 			} else {
 				throw err;
 			}
@@ -60,7 +58,7 @@ export async function create(volume: Volume): Promise<void> {
 		}
 	} catch (e: unknown) {
 		if (!isNotFoundError(e)) {
-			logger.logSystemEvent(LogTypes.createVolumeError, {
+			logger.logSystemEvent('createVolumeError', {
 				volume: { name: volume.name },
 				error: e,
 			});
