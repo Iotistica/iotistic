@@ -97,7 +97,7 @@ Real-time anomaly detection monitors device metrics using multiple algorithms:
 **Monitored Metrics:**
 - CPU usage, temperature, memory usage
 - Storage usage, network latency
-- Custom sensor data (temperature, humidity, pressure, gas)
+- Custom sensor data (needs to be configured)
 
 **Detection Methods:**
 1. **Z-Score** - Statistical deviation from baseline
@@ -203,9 +203,9 @@ This package provides two application managers:
    - REST API available (`api/server.ts`)
    - **Start here!** See examples in `examples/docker-integration.ts`
 
-2. **ApplicationManager** (`src/application-manager.ts`) - Original extraction
-   - Full Balena-style commit tracking
-   - More complex, closer to original Balena code
+2. **ApplicationManager** (`src/application-manager.ts`) - Legacy implementation
+   - Full commit tracking and state management
+   - More complex architecture
    - Uses stubs for dependencies
 
 ## Project Structure
@@ -419,12 +419,11 @@ Currently, this is a demonstration extraction. To make it production-ready:
 This standalone version is a simplified extraction that:
 - Uses stub implementations for external dependencies
 - Lacks full error handling
-- Doesn't include all features of the original Balena Supervisor
 - Requires additional work to be production-ready
 
 ## Original Source
 
-This code is extracted from the [Balena Supervisor](https://github.com/balena-os/balena-supervisor), which is licensed under Apache 2.0.
+Container orchestration patterns inspired by modern IoT platforms. Built specifically for the Iotistic multi-tenant SaaS architecture.
 
 ## License
 
@@ -432,7 +431,7 @@ Apache-2.0
 
 ## Contributing
 
-This is an extraction for standalone use. If you want to contribute to the full Balena Supervisor, visit the [official repository](https://github.com/balena-os/balena-supervisor).
+Contributions welcome! Please open an issue or pull request on the [Iotistic repository](https://github.com/Iotistica/iotistic).
 
 ## Next Steps
 
