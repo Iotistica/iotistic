@@ -5,6 +5,7 @@
  */
 
 import type { AgentLogger } from '../../logging/agent-logger';
+import { LogComponents } from '../../logging/types';
 import { WireGuardManager } from './wireguard-manager';
 
 export interface RouteConfig {
@@ -57,7 +58,7 @@ export class NetworkRouteManager {
 
 		if (!vpnAvailable) {
 			this.logger?.warnSync('VPN not available, using public endpoint', {
-				component: 'NetworkRouteManager',
+				component: LogComponents.networkRouteManager,
 				operation: 'getEndpoint',
 			});
 
@@ -72,7 +73,7 @@ export class NetworkRouteManager {
 		// VPN is available
 		if (preferVpn) {
 			this.logger?.infoSync('Using VPN route for cloud communication', {
-				component: 'NetworkRouteManager',
+				component: LogComponents.networkRouteManager,
 				operation: 'getEndpoint',
 				endpoint: config.vpnEndpoint,
 			});
@@ -125,7 +126,7 @@ export class NetworkRouteManager {
 
 				if (handshakeAge > fiveMinutes) {
 					this.logger?.warnSync('VPN handshake stale', {
-						component: 'NetworkRouteManager',
+						component: LogComponents.networkRouteManager,
 						operation: 'isVpnAvailable',
 						handshakeAge: Math.floor(handshakeAge / 1000) + 's',
 					});
@@ -139,7 +140,7 @@ export class NetworkRouteManager {
 				'Failed to check VPN status',
 				error instanceof Error ? error : new Error(String(error)),
 				{
-					component: 'NetworkRouteManager',
+					component: LogComponents.networkRouteManager,
 					operation: 'isVpnAvailable',
 				}
 			);

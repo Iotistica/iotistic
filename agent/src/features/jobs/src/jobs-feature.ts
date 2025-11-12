@@ -21,6 +21,7 @@
 import axios, { AxiosInstance } from 'axios';
 import { BaseFeature, FeatureConfig } from '../../../features/base-feature.js';
 import { AgentLogger } from '../../../logging/agent-logger.js';
+import { LogComponents } from '../../../logging/types.js';
 import { MqttManager } from '../../../mqtt/manager.js';
 import { JobEngine } from './job-engine.js';
 import { JobDocument, JobStatus, JobExecutionData } from './types.js';
@@ -85,14 +86,14 @@ export class JobsFeature extends BaseFeature {
     super(
       config,
       agentLogger,
-      'Jobs',
+      LogComponents.jobs,
       deviceUuid,
       false, // We'll manage MQTT ourselves
       'JOBS_DEBUG'
     );
 
-    // Create shared JobEngine
-    this.jobEngine = new JobEngine(this.logger);
+    // Create shared JobEngine - pass agentLogger instead of this.logger
+    this.jobEngine = new JobEngine(agentLogger);
 
     // Create HTTP client for polling with normalized endpoint
     const jobConfig = this.config as JobsConfig;

@@ -9,6 +9,7 @@ import { existsSync } from 'fs';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { AgentLogger } from './logging/agent-logger.js';
+import { LogComponents } from './logging/types.js';
 import { MqttManager } from './mqtt/manager.js';
 
 const execAsync = promisify(exec);
@@ -57,7 +58,7 @@ export class AgentUpdater {
     
     if (!mqttManager.isConnected()) {
       this.logger.debugSync("MQTT not connected - skipping update listener", {
-        component: "AgentUpdater",
+        component: LogComponents.agentUpdater,
         note: "Update listener will not be available"
       });
       return;
@@ -70,7 +71,7 @@ export class AgentUpdater {
       });
       
       this.logger.infoSync("MQTT update listener initialized", {
-        component: "AgentUpdater",
+        component: LogComponents.agentUpdater,
         updateTopic: this.updateTopic,
         statusTopic: this.statusTopic
       });
@@ -80,7 +81,7 @@ export class AgentUpdater {
         "Failed to initialize MQTT update listener",
         error instanceof Error ? error : new Error(String(error)),
         {
-          component: "AgentUpdater"
+          component: LogComponents.agentUpdater
         }
       );
     }
@@ -95,7 +96,7 @@ export class AgentUpdater {
       
       if (command.action !== 'update') {
         this.logger.warnSync("Unknown update command action", {
-          component: "AgentUpdater",
+          component: LogComponents.agentUpdater,
           action: command.action
         });
         return;
@@ -104,7 +105,7 @@ export class AgentUpdater {
       const { version, scheduled_time, force } = command;
       
       this.logger.infoSync("Agent update command received", {
-        component: "AgentUpdater",
+        component: LogComponents.agentUpdater,
         version,
         scheduled_time,
         force: !!force
@@ -124,7 +125,7 @@ export class AgentUpdater {
         
         if (delay > 0) {
           this.logger.infoSync("Update scheduled for later", {
-            component: "AgentUpdater",
+            component: LogComponents.agentUpdater,
             scheduled_time,
             delay_ms: delay,
             delay_hours: Math.round(delay / 3600000)
@@ -150,7 +151,7 @@ export class AgentUpdater {
         "Failed to process update command",
         error instanceof Error ? error : new Error(String(error)),
         {
-          component: "AgentUpdater",
+          component: LogComponents.agentUpdater,
           topic: this.updateTopic
         }
       );
@@ -166,7 +167,7 @@ export class AgentUpdater {
       (existsSync('/.dockerenv') ? 'docker' : 'systemd');
     
     this.logger.infoSync("Starting agent self-update", {
-      component: "AgentUpdater",
+      component: LogComponents.agentUpdater,
       currentVersion: this.currentVersion,
       targetVersion: version,
       deploymentType,
@@ -184,7 +185,7 @@ export class AgentUpdater {
       });
     } catch (error) {
       this.logger.warnSync("Failed to publish update started status", {
-        component: "AgentUpdater",
+        component: LogComponents.agentUpdater,
         error: error instanceof Error ? error.message : String(error)
       });
     }
@@ -200,7 +201,7 @@ export class AgentUpdater {
         "Update script not found",
         new Error(`Script not found: ${updateScript}`),
         {
-          component: "AgentUpdater",
+          component: LogComponents.agentUpdater,
           updateScript,
           deploymentType
         }
@@ -217,7 +218,7 @@ export class AgentUpdater {
     }
 
     this.logger.infoSync("Executing update script", {
-      component: "AgentUpdater",
+      component: LogComponents.agentUpdater,
       script: updateScript,
       version,
       note: "Agent will restart shortly"
@@ -232,7 +233,7 @@ export class AgentUpdater {
       execAsync(command);
       
       this.logger.infoSync("Update script executed", {
-        component: "AgentUpdater",
+        component: LogComponents.agentUpdater,
         note: "Agent will restart to complete update"
       });
       
@@ -241,7 +242,7 @@ export class AgentUpdater {
         "Failed to execute update script",
         error instanceof Error ? error : new Error(String(error)),
         {
-          component: "AgentUpdater",
+          component: LogComponents.agentUpdater,
           script: updateScript
         }
       );
@@ -269,7 +270,7 @@ export class AgentUpdater {
       await mqttManager.publish(this.statusTopic, JSON.stringify(payload));
     } catch (error) {
       this.logger.warnSync("Failed to publish status update", {
-        component: "AgentUpdater",
+        component: LogComponents.agentUpdater,
         error: error instanceof Error ? error.message : String(error)
       });
     }
@@ -288,12 +289,12 @@ export class AgentUpdater {
     try {
       await mqttManager.unsubscribe(this.updateTopic);
       this.logger.debugSync("Unsubscribed from update topic", {
-        component: "AgentUpdater",
+        component: LogComponents.agentUpdater,
         topic: this.updateTopic
       });
     } catch (error) {
       this.logger.warnSync("Failed to unsubscribe from update topic", {
-        component: "AgentUpdater",
+        component: LogComponents.agentUpdater,
         error: error instanceof Error ? error.message : String(error)
       });
     }

@@ -3,18 +3,18 @@
  * Core actions for device management
  */
 
-import type ContainerManager from '../compose/container-manager';
+import ContainerManager from '../compose/container-manager';
 import type { DeviceManager } from '../provisioning';
-import type { ApiBinder } from '../sync';
+import type { CloudSync } from '../sync';
 
 let containerManager: ContainerManager;
 let deviceManager: DeviceManager;
-let apiBinder: ApiBinder | undefined;
+let cloudSync: CloudSync | undefined;
 
-export function initialize(cm: ContainerManager, dm: DeviceManager, ab?: ApiBinder) {
+export function initialize(cm: ContainerManager, dm: DeviceManager, ab?: CloudSync) {
 	containerManager = cm;
 	deviceManager = dm;
-	apiBinder = ab;
+	cloudSync = ab;
 }
 
 /**
@@ -204,12 +204,12 @@ export const purgeApp = async (appId: number, force: boolean = false) => {
  * Used by: GET /v2/connection/health
  */
 export const getConnectionHealth = async () => {
-	if (!apiBinder) {
+	if (!cloudSync) {
 		return {
 			status: 'offline',
 			message: 'API binder not initialized',
 		};
 	}
 	
-	return apiBinder.getConnectionHealth();
+	return cloudSync.getConnectionHealth();
 };

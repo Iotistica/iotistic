@@ -6,6 +6,77 @@
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
+/**
+ * Standardized component names for structured logging.
+ * Use these constants instead of hardcoded strings to ensure consistency.
+ * 
+ * Usage:
+ *   logger.info('Connection restored', { component: LogComponents.connectionMonitor });
+ */
+export const LogComponents = {
+  // Core Agent
+  agent: 'Agent',
+  agentUpdater: 'AgentUpdater',
+  
+  // API Integration
+  cloudSync: 'CloudSync',
+  apiPoller: 'ApiPoller',
+  
+  // Connectivity
+  connectionMonitor: 'ConnectionMonitor',
+  
+  // State Management
+  sync: 'Sync',
+  stateReconciler: 'StateReconciler',
+  configManager: 'ConfigManager',
+  
+  // Container Orchestration
+  containerManager: 'ContainerManager',
+  dockerManager: 'DockerManager',
+  dockerDriver: 'DockerDriver',
+  k3sDriver: 'K3sDriver',
+  orchestratorDriver: 'OrchestratorDriver',
+  driverFactory: 'DriverFactory',
+  
+  // Protocol Adapters
+  modbus: 'Modbus',
+  modbusRtu: 'ModbusRTU',
+  modbusTcp: 'ModbusTCP',
+  
+  // Logging System
+  logMonitor: 'LogMonitor',
+  localLogBackend: 'LocalLogBackend',
+  cloudLogBackend: 'CloudLogBackend',
+  logs: 'Logs',
+  offlineQueue: 'OfflineQueue',
+  
+  // Device API
+  deviceApi: 'DeviceAPI',
+  cloudApi: 'CloudAPI',
+  
+  // Provisioning
+  deviceManager: 'DeviceManager',
+  
+  // Network
+  firewall: 'Firewall',
+  wireGuardManager: 'WireGuardManager',
+  networkRouteManager: 'NetworkRouteManager',
+  
+  // Database
+  database: 'Database',
+  migrations: 'Migrations',
+  
+  // System
+  systemInfo: 'SystemInfo',
+  metrics: 'Metrics',
+  
+  // Features
+  jobEngine: 'JobEngine',
+  jobs: 'Jobs',
+} as const;
+
+export type LogComponent = typeof LogComponents[keyof typeof LogComponents];
+
 export interface LogMessage {
 	/** Unique log message ID */
 	id?: string;

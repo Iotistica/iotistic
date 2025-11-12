@@ -8,7 +8,7 @@
  * Usage:
  *   const logger = new AgentLogger(logBackends);
  *   await logger.info('Connection restored', { component: 'ConnectionMonitor' });
- *   await logger.error('Poll failed', error, { component: 'ApiBinder', operation: 'poll' });
+ *   await logger.error('Poll failed', error, { component: LogComponents.cloudSync, operation: 'poll' });
  */
 
 import type { LogBackend, LogLevel } from './types';

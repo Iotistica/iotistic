@@ -7,16 +7,20 @@
 
 import type Docker from 'dockerode';
 import type { LogMessage, LogStreamOptions, ContainerLogAttachment, LogBackend } from './types';
+import type { AgentLogger } from './agent-logger';
+import { LogComponents } from './types';
 
 export class ContainerLogMonitor {
 	private attachments: Map<string, ContainerLogAttachment> = new Map();
 	private docker: Docker;
 	private logBackends: LogBackend[];
+	private logger?: AgentLogger;
 
-	constructor(docker: Docker, logBackend: LogBackend | LogBackend[]) {
+	constructor(docker: Docker, logBackend: LogBackend | LogBackend[], logger?: AgentLogger) {
 		this.docker = docker;
 		// Support both single backend and multiple backends
 		this.logBackends = Array.isArray(logBackend) ? logBackend : [logBackend];
+		this.logger = logger;
 	}
 
 	/**
@@ -35,11 +39,19 @@ export class ContainerLogMonitor {
 
 		// Check if already attached
 		if (this.isAttached(containerId)) {
-			console.log(`[LogMonitor] Already attached to container ${containerId}`);
+			this.logger?.debugSync(`Already attached to container ${containerId}`, {
+				component: LogComponents.logMonitor,
+				containerId: containerId.substring(0, 12),
+				serviceName
+			});
 			return this.attachments.get(containerId)!;
 		}
 
-		console.log(`[LogMonitor] Attaching to container ${containerId} (${serviceName})`);
+		this.logger?.infoSync(`Attaching to container logs`, {
+			component: LogComponents.logMonitor,
+			containerId: containerId.substring(0, 12),
+			serviceName
+		});
 
 		try {
 			const container = this.docker.getContainer(containerId);
@@ -64,7 +76,11 @@ export class ContainerLogMonitor {
 				serviceName,
 				isAttached: true,
 				detach: async () => {
-					console.log(`[LogMonitor] Detaching from container ${containerId}`);
+					this.logger?.debugSync(`Detaching from container`, {
+						component: LogComponents.logMonitor,
+						containerId: containerId.substring(0, 12),
+						serviceName
+					});
 					if ('destroy' in logStream && typeof logStream.destroy === 'function') {
 						logStream.destroy();
 					}
@@ -76,18 +92,30 @@ export class ContainerLogMonitor {
 
 			// Handle stream end
 			logStream.on('end', () => {
-				console.log(`[LogMonitor] Log stream ended for container ${containerId}`);
+				this.logger?.debugSync(`Log stream ended for container`, {
+					component: LogComponents.logMonitor,
+					containerId: containerId.substring(0, 12),
+					serviceName
+				});
 				this.attachments.delete(containerId);
 			});
 
 			logStream.on('error', (error) => {
-				console.error(`[LogMonitor] Log stream error for container ${containerId}:`, error);
+				this.logger?.errorSync(`Log stream error for container`, error, {
+					component: LogComponents.logMonitor,
+					containerId: containerId.substring(0, 12),
+					serviceName
+				});
 				this.attachments.delete(containerId);
 			});
 
 			return attachment;
 		} catch (error) {
-			console.error(`[LogMonitor] Failed to attach to container ${containerId}:`, error);
+			this.logger?.errorSync(`Failed to attach to container`, error as Error, {
+				component: LogComponents.logMonitor,
+				containerId: containerId.substring(0, 12),
+				serviceName
+			});
 			throw error;
 		}
 	}
@@ -201,7 +229,11 @@ export class ContainerLogMonitor {
 					Promise.all(
 						this.logBackends.map((backend) => backend.log(logMessage)),
 					).catch((error: Error) => {
-						console.error('[LogMonitor] Failed to store log:', error);
+						this.logger?.errorSync('Failed to store log', error, {
+							component: LogComponents.logMonitor,
+							containerId: containerId.substring(0, 12),
+							serviceName
+						});
 					});
 				}
 			}

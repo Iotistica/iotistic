@@ -5,12 +5,13 @@
  * Tracks connection health and online/offline state.
  * Emits events when connection state changes.
  * 
- * Used by ApiBinder to track API connectivity and trigger
+ * Used by CloudSync to track API connectivity and trigger
  * graceful degradation when offline for extended periods.
  */
 
 import { EventEmitter } from 'events';
 import type { AgentLogger } from '../logging/agent-logger';
+import { LogComponents } from '../logging/types';
 
 export interface ConnectionState {
 	isOnline: boolean;
@@ -80,7 +81,7 @@ export class ConnectionMonitor extends EventEmitter {
 		if (failureCount > 0) {
 			if (this.logger) {
 				this.logger.debugSync(`${operation} success after ${failureCount} failures`, {
-					component: 'ConnectionMonitor',
+					component: LogComponents.connectionMonitor,
 					operation,
 					failureCount,
 					wasOffline,
@@ -113,7 +114,7 @@ export class ConnectionMonitor extends EventEmitter {
 			
 			if (this.logger) {
 				this.logger.infoSync('Connection restored (both poll and report successful)', {
-					component: 'ConnectionMonitor',
+					component: LogComponents.connectionMonitor,
 				});
 			} else {
 				console.log('✅ Connection restored (both poll and report successful)');
@@ -148,7 +149,7 @@ export class ConnectionMonitor extends EventEmitter {
 		// Debug logging
 		if (this.logger) {
 			this.logger.debugSync(`${operation} failure`, {
-				component: 'ConnectionMonitor',
+				component: LogComponents.connectionMonitor,
 				operation,
 				attemptNumber: operation === 'poll' ? this.state.consecutivePollFailures : this.state.consecutiveReportFailures,
 				pollFailures: this.state.consecutivePollFailures,
@@ -166,7 +167,7 @@ export class ConnectionMonitor extends EventEmitter {
 		    wasOnline) {
 			if (this.logger) {
 				this.logger.warnSync('Connection degraded', {
-					component: 'ConnectionMonitor',
+					component: LogComponents.connectionMonitor,
 					consecutiveFailures: maxFailures,
 				});
 			} else {
@@ -184,7 +185,7 @@ export class ConnectionMonitor extends EventEmitter {
 			
 			if (this.logger) {
 				this.logger.errorSync('Connection lost', undefined, {
-					component: 'ConnectionMonitor',
+					component: LogComponents.connectionMonitor,
 					consecutiveFailures: maxFailures,
 					lastSuccessfulPoll: this.formatTimestamp(this.state.lastSuccessfulPoll),
 					lastSuccessfulReport: this.formatTimestamp(this.state.lastSuccessfulReport),

@@ -8,6 +8,7 @@
 
 import type { IOrchestratorDriver, TargetState } from './types';
 import type { AgentLogger } from '../logging/agent-logger';
+import { LogComponents } from '../logging/types';
 
 /**
  * Driver factory configuration
@@ -31,7 +32,7 @@ export async function createOrchestratorDriver(
 	const { orchestrator = 'docker', logger, targetState } = config;
 
 	logger?.infoSync('Creating orchestrator driver', {
-		component: 'DriverFactory',
+		component: LogComponents.driverFactory,
 		orchestrator
 	});
 
@@ -58,14 +59,14 @@ export async function createOrchestratorDriver(
 	try {
 		await driver.init();
 		logger?.infoSync('Driver initialized successfully', {
-			component: 'DriverFactory',
+			component: LogComponents.driverFactory,
 			driver: driver.name,
 			version: driver.version
 		});
 	} catch (error) {
 		const errorObj = error instanceof Error ? error : new Error(String(error));
 		logger?.errorSync('Driver initialization failed', errorObj, {
-			component: 'DriverFactory',
+			component: LogComponents.driverFactory,
 			driver: orchestrator
 		});
 		throw new Error(`Failed to initialize ${orchestrator} driver: ${errorObj.message}`);
@@ -109,7 +110,7 @@ export function getAvailableDrivers(): Array<{
  */
 export async function detectOrchestrator(logger?: AgentLogger): Promise<'docker' | 'k3s'> {
 	logger?.debugSync('Detecting available orchestrator', {
-		component: 'DriverFactory'
+		component: LogComponents.driverFactory
 	});
 
 	// Try Docker first (most common)
@@ -119,12 +120,12 @@ export async function detectOrchestrator(logger?: AgentLogger): Promise<'docker'
 		await testDriver.init();
 		await testDriver.shutdown();
 		logger?.infoSync('Docker detected and available', {
-			component: 'DriverFactory'
+			component: LogComponents.driverFactory
 		});
 		return 'docker';
 	} catch (error) {
 		logger?.debugSync('Docker not available', {
-			component: 'DriverFactory',
+			component: LogComponents.driverFactory,
 			error: error instanceof Error ? error.message : String(error)
 		});
 	}
@@ -136,19 +137,19 @@ export async function detectOrchestrator(logger?: AgentLogger): Promise<'docker'
 		await testDriver.init();
 		await testDriver.shutdown();
 		logger?.infoSync('K3s detected and available', {
-			component: 'DriverFactory'
+			component: LogComponents.driverFactory
 		});
 		return 'k3s';
 	} catch (error) {
 		logger?.debugSync('K3s not available', {
-			component: 'DriverFactory',
+			component: LogComponents.driverFactory,
 			error: error instanceof Error ? error.message : String(error)
 		});
 	}
 
 	// Default to Docker if nothing detected
 	logger?.warnSync('No orchestrator detected, defaulting to Docker', {
-		component: 'DriverFactory'
+		component: LogComponents.driverFactory
 	});
 	return 'docker';
 }

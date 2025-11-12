@@ -15,6 +15,7 @@
 import { Writable } from 'stream';
 import zlib from 'zlib';
 import type { LogBackend, LogMessage, LogFilter } from './types';
+import { LogComponents } from './types';
 import { buildApiEndpoint } from '../utils/api-utils';
 import type { AgentLogger } from '../logging/agent-logger';
 import { RetryPolicy } from '../utils/retry-policy';
@@ -139,7 +140,7 @@ export class CloudLogBackend implements LogBackend {
 				onRetry: (attempt, error, remaining) => {
 					const errorType = getNetworkErrorType(error);
 					this.logger?.warnSync('Temporary network error, will retry', {
-						component: 'Logs',
+						component: LogComponents.logs,
 						errorType,
 						consecutiveFailures: attempt,
 						attemptsRemaining: remaining
@@ -149,7 +150,7 @@ export class CloudLogBackend implements LogBackend {
 				onFailure: (error, attempts) => {
 					const errorType = getNetworkErrorType(error);
 					this.logger?.errorSync('Persistent network error', undefined, {
-						component: 'Logs',
+						component: LogComponents.logs,
 						errorType,
 						consecutiveFailures: attempts,
 						endpoint: this.config.cloudEndpoint
@@ -161,9 +162,9 @@ export class CloudLogBackend implements LogBackend {
 	}
 	
 	async initialize(): Promise<void> {
-		this.logger?.infoSync('Initializing Cloud Log Backend...', { component: 'Logs' });
+		this.logger?.infoSync('Initializing Cloud Log Backend...', { component: LogComponents.logs });
 		this.logger?.infoSync('Configuration loaded', { 
-			component: 'Logs',
+			component: LogComponents.logs,
 			endpoint: this.config.cloudEndpoint,
 			device: this.config.deviceUuid,
 			compression: this.config.compression,
@@ -178,7 +179,7 @@ export class CloudLogBackend implements LogBackend {
 		// Start streaming
 		await this.connect();
 		
-		this.logger?.infoSync('Cloud Log Backend initialized', { component: 'Logs' });
+		this.logger?.infoSync('Cloud Log Backend initialized', { component: LogComponents.logs });
 	
 	}
 	
@@ -197,7 +198,7 @@ export class CloudLogBackend implements LogBackend {
 		this.buffer.push(logMessage);
 		
 		this.logger?.debugSync('Buffered log', { 
-			component: 'Logs',
+			component: LogComponents.logs,
 			bufferSize: this.buffer.length,
 			samplingRatio: `${this.sampledLogCount}/${this.totalLogCount}`,
 			service: logMessage.serviceName,
@@ -215,7 +216,7 @@ export class CloudLogBackend implements LogBackend {
 		const bufferBytes = JSON.stringify(this.buffer).length;
 		if (bufferBytes > this.config.bufferSize) {
 			this.logger?.warnSync('Log buffer full, forcing flush', { 
-				component: 'Logs',
+				component: LogComponents.logs,
 				bufferSizeKB: Math.round(bufferBytes / 1024)
 			});
 			await this.flush();
@@ -238,7 +239,7 @@ export class CloudLogBackend implements LogBackend {
 	}
 	
 	async stop(): Promise<void> {
-		this.logger?.infoSync('Stopping Cloud Log Backend...', { component: 'Logs' });
+		this.logger?.infoSync('Stopping Cloud Log Backend...', { component: LogComponents.logs });
 		
 		// Flush remaining logs
 		await this.flush();
@@ -263,7 +264,7 @@ export class CloudLogBackend implements LogBackend {
 			clearTimeout(this.reconnectTimer);
 		}
 		
-		this.logger?.infoSync('Cloud Log Backend stopped', { component: 'Logs' });
+		this.logger?.infoSync('Cloud Log Backend stopped', { component: LogComponents.logs });
 	}
 	
 	// ============================================================================
@@ -276,7 +277,7 @@ export class CloudLogBackend implements LogBackend {
 		}
 		
 		this.isStreaming = true;
-		this.logger?.infoSync('Connecting to cloud log stream...', { component: 'Logs' });
+		this.logger?.infoSync('Connecting to cloud log stream...', { component: LogComponents.logs });
 	}
 	
 	private async flush(): Promise<void> {
@@ -300,7 +301,7 @@ export class CloudLogBackend implements LogBackend {
 		}
 		
 		this.logger?.debugSync('Attempting to flush logs to cloud', { 
-			component: 'Logs',
+			component: LogComponents.logs,
 			totalLogs: this.buffer.length,
 			batches: batches.length,
 			batchSize
@@ -318,7 +319,7 @@ export class CloudLogBackend implements LogBackend {
 				await this.retryPolicy.execute(() => this.sendLogs(batch));
 				
 				this.logger?.infoSync('Successfully sent logs to cloud', { 
-					component: 'Logs',
+					component: LogComponents.logs,
 					logCount: batch.length,
 					httpStatus: 200
 				});
@@ -333,7 +334,7 @@ export class CloudLogBackend implements LogBackend {
 					this.storeDroppedLogSummary(summary);
 					
 					this.logger?.warnSync('Dropping logs due to persistent network errors', { 
-						component: 'Logs',
+						component: LogComponents.logs,
 						droppedLogs: batch.length,
 						consecutiveFailures: this.retryPolicy.getConsecutiveFailures()
 					});
@@ -357,7 +358,7 @@ export class CloudLogBackend implements LogBackend {
 				this.storeDroppedLogSummary(summary);
 				
 				this.logger?.warnSync('Buffer overflow: dropping oldest logs', { 
-					component: 'Logs',
+					component: LogComponents.logs,
 					droppedLogs: droppedLogs.length
 				});
 			}
@@ -410,7 +411,7 @@ export class CloudLogBackend implements LogBackend {
 			if (!response.ok) {
 				const responseText = await response.text();
 				this.logger?.errorSync(`HTTP ${response.status}: ${response.statusText}`, undefined, { 
-					component: 'Logs',
+					component: LogComponents.logs,
 					responsePreview: responseText.substring(0, 200)
 				});
 				throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -445,7 +446,7 @@ export class CloudLogBackend implements LogBackend {
 		);
 		
 		this.logger?.infoSync('Retrying log upload', { 
-			component: 'Logs',
+			component: LogComponents.logs,
 			retryInSeconds: Math.round(delay / 1000),
 			retryCount: this.retryCount
 		});
@@ -583,7 +584,7 @@ export class CloudLogBackend implements LogBackend {
 		
 		// Log summary locally for immediate visibility
 		this.logger?.warnSync('Dropped logs - summary captured', {
-			component: 'Logs',
+			component: LogComponents.logs,
 			droppedCount: summary.totalCount,
 			errors: summary.levelCounts.error,
 			warnings: summary.levelCounts.warn,
@@ -596,7 +597,7 @@ export class CloudLogBackend implements LogBackend {
 		if (summary.errorSamples.length > 0) {
 			const sample = summary.errorSamples[0];
 			this.logger?.errorSync('Sample from dropped errors', undefined, {
-				component: 'Logs',
+				component: LogComponents.logs,
 				service: sample.serviceName,
 				messagePreview: sample.message.substring(0, 100)
 			});
@@ -633,7 +634,7 @@ export class CloudLogBackend implements LogBackend {
 			
 			if (response.ok) {
 				this.logger?.infoSync('Sent dropped log summaries to cloud', {
-					component: 'Logs',
+					component: LogComponents.logs,
 					summaryCount: this.droppedLogSummaries.length,
 					totalDroppedLogs: this.droppedLogSummaries.reduce((sum, s) => sum + s.totalCount, 0)
 				});
@@ -644,7 +645,7 @@ export class CloudLogBackend implements LogBackend {
 		} catch (error) {
 			// Silently fail - summaries will be sent on next recovery
 			this.logger?.debugSync('Failed to send dropped log summaries (will retry)', {
-				component: 'Logs',
+				component: LogComponents.logs,
 				error: error instanceof Error ? error.message : String(error)
 			});
 		}

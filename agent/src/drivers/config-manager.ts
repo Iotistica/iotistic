@@ -13,6 +13,7 @@ import { EventEmitter } from 'events';
 import _ from 'lodash';
 import { models as db } from '../db/connection.js';
 import type { AgentLogger } from '../logging/agent-logger.js';
+import { LogComponents } from '../logging/types.js';
 import type {
 	DeviceConfig,
 	ConfigStep,
@@ -42,7 +43,7 @@ export class ConfigManager extends EventEmitter {
 	 */
 	public async init(): Promise<void> {
 		this.logger?.infoSync('Initializing ConfigManager', {
-			component: 'ConfigManager',
+			component: LogComponents.configManager,
 			operation: 'init',
 		});
 		
@@ -55,7 +56,7 @@ export class ConfigManager extends EventEmitter {
 	 */
 	public async setTarget(config: DeviceConfig): Promise<void> {
 		this.logger?.infoSync('Setting target config', {
-			component: 'ConfigManager',
+			component: LogComponents.configManager,
 			operation: 'setTarget',
 			deviceCount: config.sensors?.length || 0,
 			sensorNames: config.sensors?.map(s => s.name) || [],
@@ -88,7 +89,7 @@ export class ConfigManager extends EventEmitter {
 	 */
 	public async reconcile(): Promise<ConfigReconciliationResult> {
 		this.logger?.infoSync('Starting config reconciliation', {
-			component: 'ConfigManager',
+			component: LogComponents.configManager,
 			operation: 'reconcile',
 		});
 
@@ -136,7 +137,7 @@ export class ConfigManager extends EventEmitter {
 
 			if (steps.length === 0) {
 				this.logger?.infoSync('No sensor config changes needed', {
-					component: 'ConfigManager',
+					component: LogComponents.configManager,
 					operation: 'reconcile',
 				});
 				
@@ -147,7 +148,7 @@ export class ConfigManager extends EventEmitter {
 			}
 
 			this.logger?.infoSync('Generated config reconciliation steps', {
-				component: 'ConfigManager',
+				component: LogComponents.configManager,
 				operation: 'reconcile',
 				stepsCount: steps.length,
 			});
@@ -170,7 +171,7 @@ export class ConfigManager extends EventEmitter {
 						'Config step failed',
 						error instanceof Error ? error : new Error(String(error)),
 						{
-							component: 'ConfigManager',
+							component: LogComponents.configManager,
 							operation: 'reconcile',
 							action: step.action,
 							deviceId: step.device?.id || step.deviceId,
@@ -188,7 +189,7 @@ export class ConfigManager extends EventEmitter {
 			}
 
 		this.logger?.infoSync('Config reconciliation complete', {
-			component: 'ConfigManager',
+			component: LogComponents.configManager,
 			operation: 'reconcile',
 			devicesRegistered: result.devicesRegistered,
 			devicesUpdated: result.devicesUpdated,
@@ -205,7 +206,7 @@ export class ConfigManager extends EventEmitter {
 				'Critical error during config reconciliation',
 				error instanceof Error ? error : new Error(String(error)),
 				{
-					component: 'ConfigManager',
+					component: LogComponents.configManager,
 					operation: 'reconcile',
 				}
 			);
@@ -227,7 +228,7 @@ export class ConfigManager extends EventEmitter {
 		
 		// Debug logging
 		this.logger?.infoSync('Calculating config steps', {
-			component: 'ConfigManager',
+			component: LogComponents.configManager,
 			operation: 'calculateSteps',
 			targetDevicesCount: targetDevices.length,
 			currentDevicesCount: currentDevices.length,
@@ -243,7 +244,7 @@ export class ConfigManager extends EventEmitter {
 		for (const device of targetDevices) {
 			if (!currentMap.has(device.id)) {
 				this.logger?.debugSync('Device needs to be registered', {
-					component: 'ConfigManager',
+					component: LogComponents.configManager,
 					operation: 'calculateSteps',
 					deviceId: device.id,
 					deviceName: device.name,
@@ -260,7 +261,7 @@ export class ConfigManager extends EventEmitter {
 		for (const device of currentDevices) {
 			if (!targetMap.has(device.id)) {
 				this.logger?.debugSync('Device needs to be unregistered', {
-					component: 'ConfigManager',
+					component: LogComponents.configManager,
 					operation: 'calculateSteps',
 					deviceId: device.id,
 					deviceName: device.name,
@@ -278,7 +279,7 @@ export class ConfigManager extends EventEmitter {
 			const currentDevice = currentMap.get(targetDevice.id);
 			if (currentDevice && !_.isEqual(targetDevice, currentDevice)) {
 				this.logger?.debugSync('Device needs to be updated', {
-					component: 'ConfigManager',
+					component: LogComponents.configManager,
 					operation: 'calculateSteps',
 					deviceId: targetDevice.id,
 					deviceName: targetDevice.name,
@@ -324,7 +325,7 @@ export class ConfigManager extends EventEmitter {
 	 */
 	private async registerDevice(device: ProtocolAdapterDevice): Promise<void> {
 		this.logger?.infoSync('Registering protocol adapter device', {
-			component: 'ConfigManager',
+			component: LogComponents.configManager,
 			operation: 'registerDevice',
 			deviceId: device.id,
 			deviceName: device.name,
@@ -380,14 +381,14 @@ export class ConfigManager extends EventEmitter {
 			await DeviceSensorModel.create(normalizedDevice);
 			
 			this.logger?.infoSync('Device saved to sensors table', {
-				component: 'ConfigManager',
+				component: LogComponents.configManager,
 				operation: 'registerDevice',
 				deviceName: device.name,
 			});
 		} catch (error) {
 			this.logger?.errorSync('Failed to save device to sensors table', 
 				error instanceof Error ? error : new Error(String(error)), {
-				component: 'ConfigManager',
+				component: LogComponents.configManager,
 				operation: 'registerDevice',
 				deviceName: device.name,
 			});
@@ -407,7 +408,7 @@ export class ConfigManager extends EventEmitter {
 		this.emit('device-registered', device);
 		
 		this.logger?.infoSync('Device registered successfully', {
-			component: 'ConfigManager',
+			component: LogComponents.configManager,
 			operation: 'registerDevice',
 			deviceId: device.id,
 		});
@@ -418,7 +419,7 @@ export class ConfigManager extends EventEmitter {
 	 */
 	private async updateDevice(device: ProtocolAdapterDevice): Promise<void> {
 		this.logger?.infoSync('Updating protocol adapter device', {
-			component: 'ConfigManager',
+			component: LogComponents.configManager,
 			operation: 'updateDevice',
 			deviceId: device.id,
 			deviceName: device.name,
@@ -477,7 +478,7 @@ export class ConfigManager extends EventEmitter {
 				await DeviceSensorModel.update(device.name, normalizedDevice);
 				
 				this.logger?.infoSync('Device updated in sensors table', {
-					component: 'ConfigManager',
+					component: LogComponents.configManager,
 					operation: 'updateDevice',
 					deviceName: device.name,
 				});
@@ -489,7 +490,7 @@ export class ConfigManager extends EventEmitter {
 				});
 				
 				this.logger?.infoSync('Device created in sensors table (was missing)', {
-					component: 'ConfigManager',
+					component: LogComponents.configManager,
 					operation: 'updateDevice',
 					deviceName: device.name,
 				});
@@ -497,7 +498,7 @@ export class ConfigManager extends EventEmitter {
 		} catch (error) {
 			this.logger?.errorSync('Failed to update device in sensors table', 
 				error instanceof Error ? error : new Error(String(error)), {
-				component: 'ConfigManager',
+				component: LogComponents.configManager,
 				operation: 'updateDevice',
 				deviceName: device.name,
 			});
@@ -523,7 +524,7 @@ export class ConfigManager extends EventEmitter {
 		this.emit('device-updated', device);
 		
 		this.logger?.infoSync('Device updated successfully', {
-			component: 'ConfigManager',
+			component: LogComponents.configManager,
 			operation: 'updateDevice',
 			deviceId: device.id,
 		});
@@ -534,7 +535,7 @@ export class ConfigManager extends EventEmitter {
 	 */
 	private async unregisterDevice(deviceId: string): Promise<void> {
 		this.logger?.infoSync('Unregistering protocol adapter device', {
-			component: 'ConfigManager',
+			component: LogComponents.configManager,
 			operation: 'unregisterDevice',
 			deviceId,
 		});
@@ -549,14 +550,14 @@ export class ConfigManager extends EventEmitter {
 				await DeviceSensorModel.delete(device.name);
 				
 				this.logger?.infoSync('Device removed from sensors table', {
-					component: 'ConfigManager',
+					component: LogComponents.configManager,
 					operation: 'unregisterDevice',
 					deviceName: device.name,
 				});
 			} catch (error) {
 				this.logger?.errorSync('Failed to remove device from sensors table', 
 					error instanceof Error ? error : new Error(String(error)), {
-					component: 'ConfigManager',
+					component: LogComponents.configManager,
 					operation: 'unregisterDevice',
 					deviceName: device.name,
 				});
@@ -576,7 +577,7 @@ export class ConfigManager extends EventEmitter {
 		this.emit('device-unregistered', deviceId);
 		
 		this.logger?.infoSync('Device unregistered successfully', {
-			component: 'ConfigManager',
+			component: LogComponents.configManager,
 			operation: 'unregisterDevice',
 			deviceId,
 		});
@@ -597,13 +598,13 @@ export class ConfigManager extends EventEmitter {
 				this.currentConfig = JSON.parse(snapshots[0].state);
 
 			this.logger?.infoSync('Loaded current config from database', {
-				component: 'ConfigManager',
+				component: LogComponents.configManager,
 				operation: 'loadCurrentConfig',
 				deviceCount: this.currentConfig.sensors?.length || 0,
 			});
 			} else {
 				this.logger?.debugSync('No current config in database, starting fresh', {
-					component: 'ConfigManager',
+					component: LogComponents.configManager,
 					operation: 'loadCurrentConfig',
 				});
 			}
@@ -612,7 +613,7 @@ export class ConfigManager extends EventEmitter {
 				'Failed to load current config from DB',
 				error instanceof Error ? error : new Error(String(error)),
 				{
-					component: 'ConfigManager',
+					component: LogComponents.configManager,
 					operation: 'loadCurrentConfig',
 				}
 			);
@@ -641,7 +642,7 @@ export class ConfigManager extends EventEmitter {
 			const configJson = JSON.stringify(this.currentConfig);
 
 			this.logger?.infoSync('Saving current config to database', {
-				component: 'ConfigManager',
+				component: LogComponents.configManager,
 				operation: 'saveCurrentConfig',
 				deviceCount: this.currentConfig.sensors?.length || 0,
 				configKeys: Object.keys(this.currentConfig),
@@ -661,7 +662,7 @@ export class ConfigManager extends EventEmitter {
 			});
 
 			this.logger?.infoSync('Current config saved to database', {
-				component: 'ConfigManager',
+				component: LogComponents.configManager,
 				operation: 'saveCurrentConfig',
 			});
 		} catch (error) {
@@ -669,7 +670,7 @@ export class ConfigManager extends EventEmitter {
 				'Failed to save current config to DB',
 				error instanceof Error ? error : new Error(String(error)),
 				{
-					component: 'ConfigManager',
+					component: LogComponents.configManager,
 					operation: 'saveCurrentConfig',
 				}
 			);

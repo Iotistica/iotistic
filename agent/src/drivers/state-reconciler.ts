@@ -18,6 +18,7 @@ import _ from 'lodash';
 import crypto from 'crypto';
 import { models as db } from '../db/connection.js';
 import type { AgentLogger } from '../logging/agent-logger.js';
+import { LogComponents } from '../logging/types.js';
 import { ContainerManager } from '../compose/container-manager.js';
 import { ConfigManager } from './config-manager.js';
 import type { DeviceConfig } from './types.js';
@@ -55,13 +56,13 @@ export class StateReconciler extends EventEmitter {
 		// Forward events from managers
 		this.containerManager.on('state-applied', () => {
 			this.logger?.debugSync('Container reconciliation complete', {
-				component: 'StateReconciler',
+				component: LogComponents.stateReconciler,
 			});
 		});
 		
 		this.configManager.on('config-applied', () => {
 			this.logger?.debugSync('Config reconciliation complete', {
-				component: 'StateReconciler',
+				component: LogComponents.stateReconciler,
 			});
 		});
 	}
@@ -71,7 +72,7 @@ export class StateReconciler extends EventEmitter {
 	 */
 	public async init(): Promise<void> {
 		this.logger?.infoSync('Initializing StateReconciler', {
-			component: 'StateReconciler',
+			component: LogComponents.stateReconciler,
 			operation: 'init',
 		});
 
@@ -83,7 +84,7 @@ export class StateReconciler extends EventEmitter {
 		await this.configManager.init();
 
 		this.logger?.infoSync('StateReconciler initialized', {
-			component: 'StateReconciler',
+			component: LogComponents.stateReconciler,
 			operation: 'init',
 			appsCount: Object.keys(this.targetState.apps).length,
 			devicesCount: this.targetState.config?.sensors?.length || 0,
@@ -95,7 +96,7 @@ export class StateReconciler extends EventEmitter {
 	 */
 	public async setTarget(state: DeviceState): Promise<void> {
 		this.logger?.infoSync('Setting target state', {
-			component: 'StateReconciler',
+			component: LogComponents.stateReconciler,
 			operation: 'setTarget',
 			appsCount: Object.keys(state.apps).length,
 			devicesCount: state.config?.sensors?.length || 0,
@@ -150,7 +151,7 @@ export class StateReconciler extends EventEmitter {
 	public async reconcile(): Promise<void> {
 		if (this.isReconciling) {
 			this.logger?.debugSync('Already reconciling, skipping', {
-				component: 'StateReconciler',
+				component: LogComponents.stateReconciler,
 				operation: 'reconcile',
 			});
 			return;
@@ -160,13 +161,13 @@ export class StateReconciler extends EventEmitter {
 
 		try {
 			this.logger?.infoSync('Starting full state reconciliation', {
-				component: 'StateReconciler',
+				component: LogComponents.stateReconciler,
 				operation: 'reconcile',
 			});
 
 			// Step 1: Reconcile containers (protocol adapters must be running first)
 			this.logger?.debugSync('Step 1: Reconciling containers', {
-				component: 'StateReconciler',
+				component: LogComponents.stateReconciler,
 			});
 			
 			await this.containerManager.setTarget({
@@ -175,13 +176,13 @@ export class StateReconciler extends EventEmitter {
 
 			// Step 2: Reconcile config (after containers are up)
 			this.logger?.debugSync('Step 2: Reconciling device config', {
-				component: 'StateReconciler',
+				component: LogComponents.stateReconciler,
 			});
 			
 			await this.configManager.setTarget(this.targetState.config || {});
 
 			this.logger?.infoSync('Full state reconciliation complete', {
-				component: 'StateReconciler',
+				component: LogComponents.stateReconciler,
 				operation: 'reconcile',
 			});
 
@@ -191,7 +192,7 @@ export class StateReconciler extends EventEmitter {
 				'State reconciliation failed',
 				error instanceof Error ? error : new Error(String(error)),
 				{
-					component: 'StateReconciler',
+					component: LogComponents.stateReconciler,
 					operation: 'reconcile',
 				}
 			);
@@ -225,7 +226,7 @@ export class StateReconciler extends EventEmitter {
 				}
 
 			this.logger?.infoSync('Loaded target state from database', {
-				component: 'StateReconciler',
+				component: LogComponents.stateReconciler,
 				operation: 'loadTargetState',
 				appsCount: Object.keys(this.targetState.apps).length,
 				devicesCount: this.targetState.config?.sensors?.length || 0,
@@ -236,7 +237,7 @@ export class StateReconciler extends EventEmitter {
 				'Failed to load target state from DB',
 				error instanceof Error ? error : new Error(String(error)),
 				{
-					component: 'StateReconciler',
+					component: LogComponents.stateReconciler,
 					operation: 'loadTargetState',
 				}
 			);
@@ -252,7 +253,7 @@ export class StateReconciler extends EventEmitter {
 			// Skip if state hasn't changed
 			if (stateHash === this.lastSavedStateHash) {
 				this.logger?.debugSync('Skipping save - state unchanged', {
-					component: 'StateReconciler',
+					component: LogComponents.stateReconciler,
 					operation: 'saveTargetState',
 				});
 				return;
@@ -278,7 +279,7 @@ export class StateReconciler extends EventEmitter {
 				'Failed to save target state to DB',
 				error instanceof Error ? error : new Error(String(error)),
 				{
-					component: 'StateReconciler',
+					component: LogComponents.stateReconciler,
 					operation: 'saveTargetState',
 				}
 			);

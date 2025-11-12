@@ -9,23 +9,23 @@ import {
   JobResult, 
   ActionType,
   ActionHandlerInput,
-  ActionCommandInput,
-  Logger 
+  ActionCommandInput
 } from './types';
+import type { AgentLogger } from '../../../logging/agent-logger';
+import { LogComponents } from '../../../logging/types';
 
 /**
  * JobEngine - Manages execution of job actions and commands
  * Ported from C++ JobEngine class
  */
 export class JobEngine {
-  private static readonly TAG = 'JobEngine';
   private static readonly MAX_LOG_LINES = 1000;
   private static readonly MAX_OUTPUT_LENGTH = 1024 * 10; // 10KB max output
   private static readonly DEFAULT_PATH_KEYWORD = 'default';
 
-  private logger: Logger;
+  private logger?: AgentLogger;
 
-  constructor(logger: Logger) {
+  constructor(logger?: AgentLogger) {
     this.logger = logger;
   }
 
@@ -37,7 +37,9 @@ export class JobEngine {
     // Validate jobDocument
     if (!jobDocument) {
       const errorMsg = 'Job document is undefined or null';
-      this.logger.error(`${JobEngine.TAG}: ${errorMsg}`);
+      this.logger?.errorSync(errorMsg, new Error(errorMsg), {
+        component: LogComponents.jobEngine
+      });
       return {
         success: false,
         exitCode: 1,
@@ -51,7 +53,10 @@ export class JobEngine {
 
     if (!jobDocument.steps || !Array.isArray(jobDocument.steps)) {
       const errorMsg = 'Job document missing required "steps" array';
-      this.logger.error(`${JobEngine.TAG}: ${errorMsg}`, { jobDocument });
+      this.logger?.errorSync(errorMsg, new Error(errorMsg), {
+        component: LogComponents.jobEngine,
+        jobDocument
+      });
       return {
         success: false,
         exitCode: 1,
@@ -63,7 +68,10 @@ export class JobEngine {
       };
     }
 
-    this.logger.info(`${JobEngine.TAG}: Starting job execution with ${jobDocument.steps.length} steps`);
+    this.logger?.infoSync(`Starting job execution with ${jobDocument.steps.length} steps`, {
+      component: LogComponents.jobEngine,
+      stepCount: jobDocument.steps.length
+    });
     
     let overallSuccess = true;
     let overallExitCode = 0;
@@ -74,7 +82,10 @@ export class JobEngine {
 
     // Execute main steps
     for (const step of jobDocument.steps) {
-      this.logger.info(`${JobEngine.TAG}: Executing step: ${step.name}`);
+      this.logger?.infoSync(`Executing step: ${step.name}`, {
+        component: LogComponents.jobEngine,
+        stepName: step.name
+      });
       
       const result = await this.executeAction(step, jobHandlerDir);
       executedSteps++;
@@ -83,7 +94,11 @@ export class JobEngine {
       combinedStderr += result.stderr ? `=== Step: ${step.name} STDERR ===\n${result.stderr}\n` : '';
       
       if (!result.success) {
-        this.logger.error(`${JobEngine.TAG}: Step '${step.name}' failed with exit code ${result.exitCode}`);
+        this.logger?.errorSync(`Step '${step.name}' failed with exit code ${result.exitCode}`, new Error(result.reason), {
+          component: LogComponents.jobEngine,
+          stepName: step.name,
+          exitCode: result.exitCode
+        });
         
         if (!step.ignoreStepFailure) {
           overallSuccess = false;
@@ -91,14 +106,20 @@ export class JobEngine {
           failedStep = step.name;
           break;
         } else {
-          this.logger.warn(`${JobEngine.TAG}: Ignoring failure of step '${step.name}' due to ignoreStepFailure=true`);
+          this.logger?.warnSync(`Ignoring failure of step '${step.name}' due to ignoreStepFailure=true`, {
+            component: LogComponents.jobEngine,
+            stepName: step.name
+          });
         }
       }
     }
 
     // Execute final step if all main steps succeeded
     if (overallSuccess && jobDocument.finalStep) {
-      this.logger.info(`${JobEngine.TAG}: Executing final step: ${jobDocument.finalStep.name}`);
+      this.logger?.infoSync(`Executing final step: ${jobDocument.finalStep.name}`, {
+        component: LogComponents.jobEngine,
+        stepName: jobDocument.finalStep.name
+      });
       
       const finalResult = await this.executeAction(jobDocument.finalStep, jobHandlerDir);
       executedSteps++;
@@ -146,7 +167,11 @@ export class JobEngine {
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      this.logger.error(`${JobEngine.TAG}: Action '${action.name}' failed: ${errorMessage}`);
+      this.logger?.errorSync(`Action '${action.name}' failed: ${errorMessage}`, error as Error, {
+        component: LogComponents.jobEngine,
+        actionName: action.name,
+        actionType: action.type
+      });
       
       return {
         exitCode: 1,
@@ -173,7 +198,11 @@ export class JobEngine {
     // Add runAsUser as first argument (matches C++ behavior)
     const allArgs = runAsUser ? [runAsUser, ...args] : args;
     
-    this.logger.debug(`${JobEngine.TAG}: Executing handler: ${handlerPath} with args: ${JSON.stringify(allArgs)}`);
+    this.logger?.debugSync(`Executing handler: ${handlerPath}`, {
+      component: LogComponents.jobEngine,
+      handlerPath,
+      args: allArgs
+    });
     
     return await this.executeProcess(handlerPath, allArgs, runAsUser, allowStdErr);
   }
@@ -196,7 +225,11 @@ export class JobEngine {
       throw new Error('Empty command provided');
     }
     
-    this.logger.debug(`${JobEngine.TAG}: Executing command: ${command} with args: ${JSON.stringify(args)}`);
+    this.logger?.debugSync(`Executing command: ${command}`, {
+      component: LogComponents.jobEngine,
+      command,
+      args
+    });
     
     return await this.executeProcess(command, args, runAsUser, allowStdErr);
   }
@@ -219,7 +252,10 @@ export class JobEngine {
         finalCommand = 'sudo';
         finalArgs = ['-u', runAsUser, '-n', command, ...args];
       } else {
-        this.logger.warn(`${JobEngine.TAG}: sudo not available, running as current user`);
+        this.logger?.warnSync('sudo not available, running as current user', {
+          component: LogComponents.jobEngine,
+          requestedUser: runAsUser
+        });
       }
     }
 

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * SIMPLE CONTAINER MANAGER
  * =========================
  * 
@@ -31,6 +31,7 @@ import { HealthProbe } from './types/health-check';
 import * as db from '../db/connection';
 import type { ContainerLogMonitor } from '../logging/monitor';
 import type { AgentLogger } from '../logging/agent-logger';
+import { LogComponents } from '../logging/types';
 import * as networkManager from './network-manager';
 import { Network } from './network';
 
@@ -233,7 +234,7 @@ export class ContainerManager extends EventEmitter {
 		this.logger = logger;
 		this.useRealDocker = true;
 		this.logger?.debugSync('Creating DockerManager', {
-			component: 'ContainerManager',
+			component: LogComponents.containerManager,
 			platform: process.platform
 		});
 		this.dockerManager = new DockerManager(undefined, this.logger);
@@ -243,7 +244,7 @@ export class ContainerManager extends EventEmitter {
 		// Listen to health check events
 		this.healthCheckManager.on('liveness-failed', async ({ containerId, serviceName, message }) => {
 			this.logger?.warnSync('Liveness probe failed, restarting container', {
-				component: 'ContainerManager',
+				component: LogComponents.containerManager,
 				operation: 'health-check',
 				serviceName,
 				containerId: containerId.substring(0, 12),
@@ -254,7 +255,7 @@ export class ContainerManager extends EventEmitter {
 		
 		this.healthCheckManager.on('readiness-changed', ({ containerId, serviceName, isReady }) => {
 			this.logger?.debugSync('Readiness changed', {
-				component: 'ContainerManager',
+				component: LogComponents.containerManager,
 				operation: 'health-check',
 				serviceName,
 				containerId: containerId.substring(0, 12),
@@ -265,7 +266,7 @@ export class ContainerManager extends EventEmitter {
 		
 		this.healthCheckManager.on('startup-completed', ({ containerId, serviceName }) => {
 			this.logger?.infoSync('Startup probe completed', {
-				component: 'ContainerManager',
+				component: LogComponents.containerManager,
 				operation: 'health-check',
 				serviceName,
 				containerId: containerId.substring(0, 12)
@@ -278,7 +279,7 @@ export class ContainerManager extends EventEmitter {
 	 */
 	public async init(): Promise<void> {
 		this.logger?.infoSync('Initializing ContainerManager', {
-			component: 'ContainerManager',
+			component: LogComponents.containerManager,
 			operation: 'init'
 		});
 		
@@ -289,7 +290,7 @@ export class ContainerManager extends EventEmitter {
 		await this.syncCurrentStateFromDocker();
 		
 		this.logger?.infoSync('ContainerManager initialized', {
-			component: 'ContainerManager',
+			component: LogComponents.containerManager,
 			operation: 'init'
 		});
 	}
@@ -327,7 +328,7 @@ export class ContainerManager extends EventEmitter {
 			
 			// Sanitize loaded state to ensure ports are strings
 			this.sanitizeState(this.targetState);				this.logger?.infoSync('Loaded target state from database', {
-					component: 'ContainerManager',
+					component: LogComponents.containerManager,
 					operation: 'loadTargetState',
 					appsCount: Object.keys(this.targetState.apps).length
 				});
@@ -338,7 +339,7 @@ export class ContainerManager extends EventEmitter {
 				'Failed to load target state from DB',
 				error instanceof Error ? error : new Error(String(error)),
 				{
-					component: 'ContainerManager',
+					component: LogComponents.containerManager,
 					operation: 'loadTargetState'
 				}
 			);
@@ -354,7 +355,7 @@ export class ContainerManager extends EventEmitter {
 			
 			// Log save attempt details
 			this.logger?.debugSync('Target state save attempt', {
-				component: 'ContainerManager',
+				component: LogComponents.containerManager,
 				operation: 'saveTargetState',
 				newHashPreview: stateHash.substring(0, 8),
 				lastSavedHashPreview: this.lastSavedTargetStateHash?.substring(0, 8) || 'none',
@@ -366,14 +367,14 @@ export class ContainerManager extends EventEmitter {
 			// Skip if state hasn't changed (compare hashes)
 			if (stateHash === this.lastSavedTargetStateHash) {
 				this.logger?.debugSync('Skipping save - state unchanged', {
-					component: 'ContainerManager',
+					component: LogComponents.containerManager,
 					operation: 'saveTargetState'
 				});
 				return;
 			}
 			
 		this.logger?.debugSync('Saving target state to database', {
-			component: 'ContainerManager',
+			component: LogComponents.containerManager,
 			operation: 'saveTargetState'
 		});
 		this.lastSavedTargetStateHash = stateHash;
@@ -382,7 +383,7 @@ export class ContainerManager extends EventEmitter {
 		
 		// Log JSON details for debugging
 		this.logger?.debugSync('Target state JSON details', {
-			component: 'ContainerManager',
+			component: LogComponents.containerManager,
 			operation: 'saveTargetState',
 			jsonPreview: stateJson.substring(0, 500),
 			jsonLength: stateJson.length,
@@ -405,7 +406,7 @@ export class ContainerManager extends EventEmitter {
 				'Failed to save target state to DB',
 				error instanceof Error ? error : new Error(String(error)),
 				{
-					component: 'ContainerManager',
+					component: LogComponents.containerManager,
 					operation: 'saveTargetState'
 				}
 			);
@@ -438,7 +439,7 @@ export class ContainerManager extends EventEmitter {
 				'Failed to save current state to DB',
 				error instanceof Error ? error : new Error(String(error)),
 				{
-					component: 'ContainerManager',
+					component: LogComponents.containerManager,
 					operation: 'saveCurrentState'
 				}
 			);
@@ -469,7 +470,7 @@ export class ContainerManager extends EventEmitter {
 	 */
 	public async setTarget(target: SimpleState): Promise<void> {
 		this.logger?.infoSync('Setting target state', {
-			component: 'ContainerManager',
+			component: LogComponents.containerManager,
 			operation: 'setTarget',
 			appsCount: Object.keys(target.apps).length
 		});
@@ -487,7 +488,7 @@ export class ContainerManager extends EventEmitter {
 		// Trigger immediate reconciliation if using real Docker
 		if (this.useRealDocker && !this.isApplyingState) {
 			this.logger?.infoSync('Triggering immediate reconciliation', {
-				component: 'ContainerManager',
+				component: LogComponents.containerManager,
 				operation: 'setTarget'
 			});
 			try {
@@ -497,7 +498,7 @@ export class ContainerManager extends EventEmitter {
 					'Failed to apply target state',
 					error instanceof Error ? error : new Error(String(error)),
 					{
-						component: 'ContainerManager',
+						component: LogComponents.containerManager,
 						operation: 'setTarget'
 					}
 				);
@@ -618,7 +619,7 @@ export class ContainerManager extends EventEmitter {
 					}
 				} catch (error) {
 					this.logger?.warnSync('Failed to inspect container', {
-						component: 'ContainerManager',
+						component: LogComponents.containerManager,
 						operation: 'syncCurrentState',
 						containerId: container.id.substring(0, 12),
 						error: error instanceof Error ? error.message : String(error)
@@ -673,7 +674,7 @@ export class ContainerManager extends EventEmitter {
 				'Failed to sync state from Docker',
 				error instanceof Error ? error : new Error(String(error)),
 				{
-					component: 'ContainerManager',
+					component: LogComponents.containerManager,
 					operation: 'syncCurrentState'
 				}
 			);
@@ -696,7 +697,7 @@ export class ContainerManager extends EventEmitter {
 		
 		if (this.isApplyingState) {
 			this.logger?.debugSync('Already applying state, skipping', {
-				component: 'ContainerManager',
+				component: LogComponents.containerManager,
 				operation: 'applyTargetState'
 			});
 			return;
@@ -710,14 +711,14 @@ export class ContainerManager extends EventEmitter {
 
 			if (steps.length === 0) {
 				this.logger?.debugSync('No changes needed - system is in desired state', {
-					component: 'ContainerManager',
+					component: LogComponents.containerManager,
 					operation: 'applyTargetState'
 				});
 				return;
 			}
 
 			this.logger?.infoSync('Generated reconciliation steps', {
-				component: 'ContainerManager',
+				component: LogComponents.containerManager,
 				operation: 'applyTargetState',
 				stepsCount: steps.length
 			});
@@ -725,12 +726,12 @@ export class ContainerManager extends EventEmitter {
 			steps.forEach((step, i) => {
 				if (step.action === 'downloadImage') {
 					this.logger?.debugSync(`Step ${i + 1}: ${step.action}`, {
-						component: 'ContainerManager',
+						component: LogComponents.containerManager,
 						image: step.imageName
 					});
 				} else if (step.action === 'startContainer') {
 					this.logger?.debugSync(`Step ${i + 1}: ${step.action}`, {
-						component: 'ContainerManager',
+						component: LogComponents.containerManager,
 						serviceName: step.service.serviceName,
 						image: step.service.imageName
 					});
@@ -739,7 +740,7 @@ export class ContainerManager extends EventEmitter {
 
 			// Step 2: Execute steps sequentially (K8s-style: continue on failures)
 			this.logger?.infoSync('Executing reconciliation steps', {
-				component: 'ContainerManager',
+				component: LogComponents.containerManager,
 				operation: 'applyTargetState'
 			});
 			const failures: Array<{ step: SimpleStep; error: any }> = [];
@@ -747,19 +748,19 @@ export class ContainerManager extends EventEmitter {
 			for (let i = 0; i < steps.length; i++) {
 				const step = steps[i];
 				this.logger?.debugSync(`Executing step ${i + 1}/${steps.length}: ${step.action}`, {
-					component: 'ContainerManager',
+					component: LogComponents.containerManager,
 					operation: 'applyTargetState'
 				});
 				
 				try {
 					await this.executeStep(step);
 					this.logger?.debugSync(`Step ${i + 1} completed`, {
-						component: 'ContainerManager',
+						component: LogComponents.containerManager,
 						action: step.action
 					});
 				} catch (error: any) {
 					this.logger?.warnSync(`Step ${i + 1} failed`, {
-						component: 'ContainerManager',
+						component: LogComponents.containerManager,
 						action: step.action,
 						error: error.message
 					});
@@ -771,13 +772,13 @@ export class ContainerManager extends EventEmitter {
 			// Report summary
 			if (failures.length === 0) {
 				this.logger?.infoSync('State reconciliation complete - all services healthy', {
-					component: 'ContainerManager',
+					component: LogComponents.containerManager,
 					operation: 'applyTargetState',
 					stepsExecuted: steps.length
 				});
 			} else {
 				this.logger?.warnSync('State reconciliation complete with failures', {
-					component: 'ContainerManager',
+					component: LogComponents.containerManager,
 					operation: 'applyTargetState',
 					failuresCount: failures.length,
 					failures: failures.map(({ step, error }) => {
@@ -804,7 +805,7 @@ export class ContainerManager extends EventEmitter {
 				'Critical error during reconciliation',
 				error instanceof Error ? error : new Error(String(error)),
 				{
-					component: 'ContainerManager',
+					component: LogComponents.containerManager,
 					operation: 'applyTargetState'
 				}
 			);
@@ -1064,7 +1065,7 @@ export class ContainerManager extends EventEmitter {
 			// Skip services that shouldn't be running
 			if (desiredState !== 'running') {
 				this.logger?.debugSync('Skipping service - not in running state', {
-					component: 'ContainerManager',
+					component: LogComponents.containerManager,
 					operation: 'stepsToAddApp',
 					serviceName: service.serviceName,
 					desiredState,
@@ -1138,7 +1139,7 @@ export class ContainerManager extends EventEmitter {
 				// Skip services that shouldn't be running
 				if (desiredState !== 'running') {
 					this.logger?.debugSync('Skipping new service - not in running state', {
-						component: 'ContainerManager',
+						component: LogComponents.containerManager,
 						operation: 'stepsToUpdateApp',
 						serviceName: targetSvc.serviceName,
 						desiredState,
@@ -1148,7 +1149,7 @@ export class ContainerManager extends EventEmitter {
 				}
 				
 				this.logger?.debugSync('Service needs to be added', {
-					component: 'ContainerManager',
+					component: LogComponents.containerManager,
 					operation: 'calculateSteps',
 					serviceName: targetSvc.serviceName,
 					appId: target.appId
@@ -1160,7 +1161,7 @@ export class ContainerManager extends EventEmitter {
 				
 				if (!canRetryImage) {
 					this.logger?.warnSync('Skipping service - image pull failed (max retries exceeded)', {
-						component: 'ContainerManager',
+						component: LogComponents.containerManager,
 						operation: 'calculateSteps',
 						serviceName: targetSvc.serviceName,
 						imageName: targetSvc.imageName
@@ -1192,7 +1193,7 @@ export class ContainerManager extends EventEmitter {
 					// Transition: running → stopped
 					if (currentState === 'running' && targetState === 'stopped') {
 						this.logger?.infoSync('Service state changed to stopped', {
-							component: 'ContainerManager',
+							component: LogComponents.containerManager,
 							operation: 'stepsToUpdateApp',
 							serviceName: currentSvc.serviceName,
 							from: currentState,
@@ -1211,7 +1212,7 @@ export class ContainerManager extends EventEmitter {
 					// Transition: running → paused
 					if (currentState === 'running' && targetState === 'paused') {
 						this.logger?.infoSync('Service state changed to paused', {
-							component: 'ContainerManager',
+							component: LogComponents.containerManager,
 							operation: 'stepsToUpdateApp',
 							serviceName: currentSvc.serviceName,
 							from: currentState,
@@ -1230,7 +1231,7 @@ export class ContainerManager extends EventEmitter {
 					// Transition: stopped → running
 					if (currentState === 'stopped' && targetState === 'running') {
 						this.logger?.infoSync('Service state changed to running (restarting stopped container)', {
-							component: 'ContainerManager',
+							component: LogComponents.containerManager,
 							operation: 'stepsToUpdateApp',
 							serviceName: currentSvc.serviceName,
 							from: currentState,
@@ -1249,7 +1250,7 @@ export class ContainerManager extends EventEmitter {
 					// Transition: paused → running
 					if (currentState === 'paused' && targetState === 'running') {
 						this.logger?.infoSync('Service state changed from paused to running', {
-							component: 'ContainerManager',
+							component: LogComponents.containerManager,
 							operation: 'stepsToUpdateApp',
 							serviceName: currentSvc.serviceName,
 							from: currentState,
@@ -1268,7 +1269,7 @@ export class ContainerManager extends EventEmitter {
 					// Transition: paused → stopped
 					if (currentState === 'paused' && targetState === 'stopped') {
 						this.logger?.infoSync('Service state changed from paused to stopped', {
-							component: 'ContainerManager',
+							component: LogComponents.containerManager,
 							operation: 'stepsToUpdateApp',
 							serviceName: currentSvc.serviceName,
 							from: currentState,
@@ -1294,7 +1295,7 @@ export class ContainerManager extends EventEmitter {
 					// Transition: stopped → paused (not allowed - need to start first)
 					if (currentState === 'stopped' && targetState === 'paused') {
 						this.logger?.warnSync('Cannot pause stopped container - will start first', {
-							component: 'ContainerManager',
+							component: LogComponents.containerManager,
 							operation: 'stepsToUpdateApp',
 							serviceName: currentSvc.serviceName
 						});
@@ -1376,7 +1377,7 @@ export class ContainerManager extends EventEmitter {
 					if (containerStopped) changes.push(`container stopped: ${currentSvc.status}`);
 					
 					this.logger?.infoSync('Service needs update', {
-						component: 'ContainerManager',
+						component: LogComponents.containerManager,
 						operation: 'calculateSteps',
 						serviceName: currentSvc.serviceName,
 						changes
@@ -1434,7 +1435,7 @@ export class ContainerManager extends EventEmitter {
 				// Check if we should retry this image
 				if (!this.retryManager.shouldRetry(stepKey)) {
 					this.logger?.warnSync('Skipping image - max retries exceeded', {
-						component: 'ContainerManager',
+						component: LogComponents.containerManager,
 						operation: 'executeStep',
 						imageName: step.imageName
 					});
@@ -1455,7 +1456,7 @@ export class ContainerManager extends EventEmitter {
 						'Failed to pull image',
 						error instanceof Error ? error : new Error(String(error)),
 						{
-							component: 'ContainerManager',
+							component: LogComponents.containerManager,
 							operation: 'executeStep',
 							imageName: step.imageName
 						}
@@ -1489,7 +1490,7 @@ export class ContainerManager extends EventEmitter {
 				// Update current state to reflect paused status
 				this.updateServiceState(step.appId, step.serviceId, 'paused');
 				this.logger?.infoSync('Container paused', {
-					component: 'ContainerManager',
+					component: LogComponents.containerManager,
 					operation: 'executeStep',
 					containerId: step.containerId,
 					appId: step.appId,
@@ -1503,7 +1504,7 @@ export class ContainerManager extends EventEmitter {
 			// Update current state to reflect running status
 			this.updateServiceState(step.appId, step.serviceId, 'running');
 			this.logger?.infoSync('Container unpaused', {
-				component: 'ContainerManager',
+				component: LogComponents.containerManager,
 				operation: 'executeStep',
 				containerId: step.containerId,
 				appId: step.appId,
@@ -1515,7 +1516,7 @@ export class ContainerManager extends EventEmitter {
 			// For stopped containers, we need to remove and recreate them
 			// Docker doesn't support restarting exited containers directly
 			this.logger?.infoSync('Restarting stopped container (remove + recreate)', {
-				component: 'ContainerManager',
+				component: LogComponents.containerManager,
 				operation: 'executeStep',
 				containerId: step.containerId,
 				appId: step.appId,
@@ -1550,7 +1551,7 @@ export class ContainerManager extends EventEmitter {
 				this.startHealthMonitoring(newContainerId, service);
 				
 				this.logger?.infoSync('Stopped container restarted successfully', {
-					component: 'ContainerManager',
+					component: LogComponents.containerManager,
 					operation: 'executeStep',
 					oldContainerId: step.containerId.substring(0, 12),
 					newContainerId: newContainerId.substring(0, 12),
@@ -1561,7 +1562,7 @@ export class ContainerManager extends EventEmitter {
 					'Failed to restart stopped container',
 					error instanceof Error ? error : new Error(String(error)),
 					{
-						component: 'ContainerManager',
+						component: LogComponents.containerManager,
 						operation: 'executeStep',
 						containerId: step.containerId,
 						serviceId: step.serviceId
@@ -1601,7 +1602,7 @@ export class ContainerManager extends EventEmitter {
 						'Failed to start container',
 						error instanceof Error ? error : new Error(String(error)),
 						{
-							component: 'ContainerManager',
+							component: LogComponents.containerManager,
 							operation: 'executeStep',
 							serviceName: step.service.serviceName
 						}
@@ -1725,7 +1726,7 @@ export class ContainerManager extends EventEmitter {
 			// Create via network-manager
 			await networkManager.create(network);
 			this.logger?.infoSync('Created network', {
-				component: 'ContainerManager',
+				component: LogComponents.containerManager,
 				operation: 'createNetwork',
 				networkName,
 				fullName: `${appId}_${networkName}`,
@@ -1755,7 +1756,7 @@ export class ContainerManager extends EventEmitter {
 			// Remove via network-manager
 			await networkManager.remove(network);
 			this.logger?.infoSync('Removed network', {
-				component: 'ContainerManager',
+				component: LogComponents.containerManager,
 				operation: 'removeNetwork',
 				networkName,
 				fullName: `${appId}_${networkName}`,
@@ -1788,7 +1789,7 @@ export class ContainerManager extends EventEmitter {
 
 			await volume.create();
 			this.logger?.infoSync('Created volume', {
-				component: 'ContainerManager',
+				component: LogComponents.containerManager,
 				operation: 'createVolume',
 				volumeName,
 				fullName: `${appId}_${volumeName}`,
@@ -1814,7 +1815,7 @@ export class ContainerManager extends EventEmitter {
 
 			await volume.remove();
 			this.logger?.infoSync('Removed volume', {
-				component: 'ContainerManager',
+				component: LogComponents.containerManager,
 				operation: 'removeVolume',
 				volumeName,
 				fullName: `${appId}_${volumeName}`,
@@ -1873,7 +1874,7 @@ export class ContainerManager extends EventEmitter {
 		const app = this.currentState.apps[appId] || this.targetState.apps[appId];
 		if (!app) {
 			this.logger?.warnSync('Cannot mark error: app not found', {
-				component: 'ContainerManager',
+				component: LogComponents.containerManager,
 				operation: 'markServiceAsError',
 				appId
 			});
@@ -1887,7 +1888,7 @@ export class ContainerManager extends EventEmitter {
 
 		if (!service) {
 			this.logger?.warnSync('Cannot mark error: service not found', {
-				component: 'ContainerManager',
+				component: LogComponents.containerManager,
 				operation: 'markServiceAsError',
 				serviceIdOrImage
 			});
@@ -1910,7 +1911,7 @@ export class ContainerManager extends EventEmitter {
 		};
 
 		this.logger?.warnSync('Marked service as error', {
-			component: 'ContainerManager',
+			component: LogComponents.containerManager,
 			operation: 'markServiceAsError',
 			serviceName: service.serviceName,
 			errorType,
@@ -1932,7 +1933,7 @@ export class ContainerManager extends EventEmitter {
 			service.serviceStatus = 'running';
 			delete service.error; // Clear any previous errors
 			this.logger?.debugSync('Service marked as running', {
-				component: 'ContainerManager',
+				component: LogComponents.containerManager,
 				operation: 'markServiceAsRunning',
 				serviceName: service.serviceName
 			});
@@ -1988,7 +1989,7 @@ export class ContainerManager extends EventEmitter {
 			if (service) {
 				service.state = state;
 				this.logger?.debugSync('Updated service state in current state', {
-					component: 'ContainerManager',
+					component: LogComponents.containerManager,
 					operation: 'updateServiceState',
 					serviceName: service.serviceName,
 					newState: state
@@ -2292,7 +2293,7 @@ export class ContainerManager extends EventEmitter {
 	public startAutoReconciliation(intervalMs: number = 30000): void {
 		if (this.isReconciliationEnabled) {
 			this.logger?.debugSync('Auto-reconciliation already running', {
-				component: 'ContainerManager',
+				component: LogComponents.containerManager,
 				operation: 'startAutoReconciliation'
 			});
 			return;
@@ -2304,7 +2305,7 @@ export class ContainerManager extends EventEmitter {
 		this.reconciliationInterval = setInterval(async () => {
 			if (this.useRealDocker && !this.isApplyingState) {
 				this.logger?.debugSync('Auto-reconciliation check', {
-					component: 'ContainerManager',
+					component: LogComponents.containerManager,
 					operation: 'autoReconciliation'
 				});
 				try {
@@ -2316,7 +2317,7 @@ export class ContainerManager extends EventEmitter {
 						'Auto-reconciliation error',
 						error instanceof Error ? error : new Error(String(error)),
 						{
-							component: 'ContainerManager',
+							component: LogComponents.containerManager,
 							operation: 'autoReconciliation'
 						}
 					);
@@ -2334,7 +2335,7 @@ export class ContainerManager extends EventEmitter {
 			this.reconciliationInterval = undefined;
 			this.isReconciliationEnabled = false;
 			this.logger?.infoSync('Stopped auto-reconciliation', {
-				component: 'ContainerManager',
+				component: LogComponents.containerManager,
 				operation: 'stopAutoReconciliation'
 			});
 		}
@@ -2363,7 +2364,7 @@ export class ContainerManager extends EventEmitter {
 	public setLogMonitor(monitor: ContainerLogMonitor): void {
 		this.logMonitor = monitor;
 		this.logger?.infoSync('Log monitor attached to ContainerManager', {
-			component: 'ContainerManager',
+			component: LogComponents.containerManager,
 			operation: 'setLogMonitor'
 		});
 	}
@@ -2395,14 +2396,14 @@ export class ContainerManager extends EventEmitter {
 			});
 
 			this.logger?.debugSync('Attached log monitor', {
-				component: 'ContainerManager',
+				component: LogComponents.containerManager,
 				operation: 'attachLogs',
 				serviceName: service.serviceName,
 				containerId: containerId.substring(0, 12)
 			});
 		} catch (error) {
 			this.logger?.warnSync('Failed to attach logs', {
-				component: 'ContainerManager',
+				component: LogComponents.containerManager,
 				operation: 'attachLogs',
 				serviceName: service.serviceName,
 				error: error instanceof Error ? error.message : String(error)
@@ -2419,7 +2420,7 @@ export class ContainerManager extends EventEmitter {
 		}
 
 		this.logger?.infoSync('Attaching logs to existing containers', {
-			component: 'ContainerManager',
+			component: LogComponents.containerManager,
 			operation: 'attachLogsToAll'
 		});
 
@@ -2448,7 +2449,7 @@ export class ContainerManager extends EventEmitter {
 		}
 
 		this.logger?.infoSync('Starting health monitoring', {
-			component: 'ContainerManager',
+			component: LogComponents.containerManager,
 			operation: 'startHealthMonitoring',
 			serviceName: service.serviceName,
 			containerId: containerId.slice(0, 12),
@@ -2533,7 +2534,7 @@ export class ContainerManager extends EventEmitter {
 		message?: string
 	): Promise<void> {
 		this.logger?.infoSync('Restarting unhealthy container', {
-			component: 'ContainerManager',
+			component: LogComponents.containerManager,
 			operation: 'restartUnhealthy',
 			serviceName,
 			containerId: containerId.substring(0, 12),
@@ -2559,7 +2560,7 @@ export class ContainerManager extends EventEmitter {
 					'Cannot restart container - service not found in current state',
 					new Error('Service not found'),
 					{
-						component: 'ContainerManager',
+						component: LogComponents.containerManager,
 						operation: 'restartUnhealthy',
 						containerId: containerId.substring(0, 12)
 					}
@@ -2588,7 +2589,7 @@ export class ContainerManager extends EventEmitter {
 			await this.attachLogsToContainer(newContainerId, targetService);
 
 			this.logger?.infoSync('Container restarted successfully', {
-				component: 'ContainerManager',
+				component: LogComponents.containerManager,
 				operation: 'restartUnhealthy',
 				serviceName,
 				oldContainerId: containerId.substring(0, 12),
@@ -2599,7 +2600,7 @@ export class ContainerManager extends EventEmitter {
 				'Failed to restart unhealthy container',
 				error instanceof Error ? error : new Error(String(error)),
 				{
-					component: 'ContainerManager',
+					component: LogComponents.containerManager,
 					operation: 'restartUnhealthy',
 					serviceName
 				}
@@ -2620,3 +2621,4 @@ export class ContainerManager extends EventEmitter {
 // ============================================================================
 
 export default ContainerManager;
+

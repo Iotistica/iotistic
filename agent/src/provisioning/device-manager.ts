@@ -23,6 +23,7 @@ import type {
 } from './types';
 import { buildApiEndpoint } from '../utils/api-utils';
 import type { AgentLogger } from '../logging/agent-logger';
+import { LogComponents } from '../logging/types';
 import { HttpClient, FetchHttpClient } from '../lib/http-client';
 import { DatabaseClient, KnexDatabaseClient } from '../db/client';
 import { WireGuardManager } from '../network/vpn/wireguard-manager';
@@ -94,14 +95,14 @@ export class DeviceManager {
 			};
 			await this.saveDeviceInfo();
 			this.logger?.infoSync('New device created', {
-				component: 'DeviceManager',
+				component: LogComponents.deviceManager,
 				operation: 'initialize',
 				uuid: this.deviceInfo.uuid,
 				deviceApiKeyPreview: `${this.deviceInfo.deviceApiKey?.substring(0, 8)}...`,
 			});
 		} else {
 			this.logger?.infoSync('Device loaded', {
-				component: 'DeviceManager',
+				component: LogComponents.deviceManager,
 				operation: 'initialize',
 				uuid: this.deviceInfo.uuid,
 				deviceId: this.deviceInfo.deviceId,
@@ -225,7 +226,7 @@ export class DeviceManager {
 		await this.saveDeviceInfo();
 
 		this.logger?.infoSync('Device configured for local mode', {
-			component: 'DeviceManager',
+			component: LogComponents.deviceManager,
 			operation: 'markAsLocalMode',
 			uuid: this.deviceInfo.uuid,
 			deviceName: this.deviceInfo.deviceName,
@@ -268,7 +269,7 @@ export class DeviceManager {
 		try {
 			// Phase 1: Register device with cloud API
 			this.logger?.infoSync('Phase 1: Registering device with provisioning key', {
-				component: 'DeviceManager',
+				component: LogComponents.deviceManager,
 				operation: 'provision',
 			});
 			const response = await this.registerWithAPI(
@@ -294,7 +295,7 @@ export class DeviceManager {
 
 			// Phase 2: Exchange keys - verify device can authenticate with deviceApiKey
 			this.logger?.infoSync('Phase 2: Exchanging keys', {
-				component: 'DeviceManager',
+				component: LogComponents.deviceManager,
 				operation: 'provision',
 			});
 			await this.exchangeKeys(
@@ -305,7 +306,7 @@ export class DeviceManager {
 
 			// Phase 3: Remove provisioning key (one-time use complete)
 			this.logger?.infoSync('Phase 3: Removing provisioning key', {
-				component: 'DeviceManager',
+				component: LogComponents.deviceManager,
 				operation: 'provision',
 			});
 			this.deviceInfo.provisioningApiKey = undefined;
@@ -318,7 +319,7 @@ export class DeviceManager {
 			await this.saveDeviceInfo();
 
 			this.logger?.infoSync('Device provisioned successfully', {
-				component: 'DeviceManager',
+				component: LogComponents.deviceManager,
 				operation: 'provision',
 				uuid: this.deviceInfo.uuid,
 				deviceId: this.deviceInfo.deviceId,
@@ -331,7 +332,7 @@ export class DeviceManager {
 			// Phase 4: Setup VPN if provided in response
 			if (response.vpnConfig?.enabled) {
 				this.logger?.infoSync('Setting up WireGuard VPN', {
-					component: 'DeviceManager',
+					component: LogComponents.deviceManager,
 					operation: 'provision',
 					vpnIpAddress: response.vpnConfig.ipAddress,
 				});
@@ -342,20 +343,20 @@ export class DeviceManager {
 
 					if (vpnSetupSuccess) {
 						this.logger?.infoSync('VPN tunnel established successfully', {
-							component: 'DeviceManager',
+							component: LogComponents.deviceManager,
 							operation: 'provision',
 							vpnIpAddress: response.vpnConfig.ipAddress,
 						});
 					} else {
 						this.logger?.warnSync('VPN setup was skipped or failed (non-critical)', {
-							component: 'DeviceManager',
+							component: LogComponents.deviceManager,
 							operation: 'provision',
 						});
 					}
 				} catch (vpnError) {
 					// VPN setup failure is non-critical - device can still operate
 					this.logger?.warnSync('VPN setup failed (device will continue without VPN)', {
-						component: 'DeviceManager',
+						component: LogComponents.deviceManager,
 						operation: 'provision',
 						error: vpnError instanceof Error ? vpnError.message : String(vpnError),
 					});
@@ -368,7 +369,7 @@ export class DeviceManager {
 				'Provisioning failed',
 				error instanceof Error ? error : new Error(String(error)),
 				{
-					component: 'DeviceManager',
+					component: LogComponents.deviceManager,
 					operation: 'provision',
 				}
 			);
@@ -392,7 +393,7 @@ export class DeviceManager {
 		const url = buildApiEndpoint(apiEndpoint, '/device/register');
 		
 		this.logger?.infoSync('Registering device with API', {
-			component: 'DeviceManager',
+			component: LogComponents.deviceManager,
 			operation: 'registerWithAPI',
 			url,
 			uuid: provisionRequest.uuid,
@@ -421,7 +422,7 @@ export class DeviceManager {
 				'Registration failed',
 				error instanceof Error ? error : new Error(String(error)),
 				{
-					component: 'DeviceManager',
+					component: LogComponents.deviceManager,
 					operation: 'registerWithAPI',
 				}
 			);
@@ -437,7 +438,7 @@ export class DeviceManager {
 		const url = buildApiEndpoint(apiEndpoint, `/device/${uuid}/key-exchange`);
 		
 		this.logger?.infoSync('Exchanging keys for device', {
-			component: 'DeviceManager',
+			component: LogComponents.deviceManager,
 			operation: 'exchangeKeys',
 			uuid,
 		});
@@ -460,7 +461,7 @@ export class DeviceManager {
 
 			const result = await response.json();
 			this.logger?.infoSync('Key exchange successful', {
-				component: 'DeviceManager',
+				component: LogComponents.deviceManager,
 				operation: 'exchangeKeys',
 			});
 		} catch (error: any) {
@@ -468,7 +469,7 @@ export class DeviceManager {
 				'Key exchange failed',
 				error instanceof Error ? error : new Error(String(error)),
 				{
-					component: 'DeviceManager',
+					component: LogComponents.deviceManager,
 					operation: 'exchangeKeys',
 				}
 			);
@@ -504,7 +505,7 @@ export class DeviceManager {
 				'Failed to fetch device',
 				error instanceof Error ? error : new Error(String(error)),
 				{
-					component: 'DeviceManager',
+					component: LogComponents.deviceManager,
 					operation: 'fetchDevice',
 				}
 			);
@@ -570,7 +571,7 @@ export class DeviceManager {
 		await this.saveDeviceInfo();
 
 		this.logger?.infoSync('Device reset (unprovisioned)', {
-			component: 'DeviceManager',
+			component: LogComponents.deviceManager,
 			operation: 'reset',
 			note: 'UUID and deviceApiKey preserved for re-registration',
 		});

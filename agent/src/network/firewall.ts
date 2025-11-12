@@ -11,6 +11,7 @@
  */
 
 import type { AgentLogger } from '../logging/agent-logger';
+import { LogComponents } from '../logging/types';
 import { build, getDefaultRuleAdaptor, RuleAction, type Rule } from '../lib/iptables';
 
 export interface FirewallConfig {
@@ -60,13 +61,13 @@ export class AgentFirewall {
   async initialize(): Promise<void> {
     if (!this.config.enabled) {
       this.logger.infoSync('Firewall disabled by configuration', {
-        component: 'Firewall',
+        component: LogComponents.firewall,
       });
       return;
     }
 
     this.logger.infoSync('Initializing firewall', {
-      component: 'Firewall',
+      component: LogComponents.firewall,
       mode: this.config.mode,
       deviceApiPort: this.config.deviceApiPort,
       mqttPort: this.config.mqttPort,
@@ -77,7 +78,7 @@ export class AgentFirewall {
       this.initialized = true;
       
       this.logger.infoSync('Firewall initialized successfully', {
-        component: 'Firewall',
+        component: LogComponents.firewall,
         mode: this.config.mode,
       });
     } catch (error) {
@@ -85,7 +86,7 @@ export class AgentFirewall {
         'Failed to initialize firewall',
         error instanceof Error ? error : new Error(String(error)),
         {
-          component: 'Firewall',
+          component: LogComponents.firewall,
           note: 'Agent will continue without firewall protection',
         }
       );
@@ -103,7 +104,7 @@ export class AgentFirewall {
                      (this.config.mode === 'auto' && await this.shouldEnableFirewall());
 
     this.logger.debugSync('Applying firewall rules', {
-      component: 'Firewall',
+      component: LogComponents.firewall,
       mode: this.config.mode,
       isActive,
     });
@@ -318,7 +319,7 @@ export class AgentFirewall {
    */
   async updateMode(mode: 'on' | 'off' | 'auto'): Promise<void> {
     this.logger.infoSync('Updating firewall mode', {
-      component: 'Firewall',
+      component: LogComponents.firewall,
       from: this.config.mode,
       to: mode,
     });
@@ -332,7 +333,7 @@ export class AgentFirewall {
    */
   async updateConfig(config: Partial<FirewallConfig>): Promise<void> {
     this.logger.infoSync('Updating firewall configuration', {
-      component: 'Firewall',
+      component: LogComponents.firewall,
       changes: Object.keys(config),
     });
 
@@ -355,7 +356,7 @@ export class AgentFirewall {
     }
 
     this.logger.infoSync('Stopping firewall', {
-      component: 'Firewall',
+      component: LogComponents.firewall,
     });
 
     try {
@@ -395,14 +396,14 @@ export class AgentFirewall {
 
       this.initialized = false;
       this.logger.infoSync('Firewall stopped', {
-        component: 'Firewall',
+        component: LogComponents.firewall,
       });
     } catch (error) {
       this.logger.errorSync(
         'Error stopping firewall',
         error instanceof Error ? error : new Error(String(error)),
         {
-          component: 'Firewall',
+          component: LogComponents.firewall,
         }
       );
     }

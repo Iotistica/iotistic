@@ -15,6 +15,7 @@
 import { EventEmitter } from 'events';
 import type { Stream } from 'stream';
 import type { AgentLogger } from '../logging/agent-logger';
+import { LogComponents } from '../logging/types';
 
 // ============================================================================
 // COMMON TYPES (shared across all drivers)
@@ -624,7 +625,7 @@ export abstract class BaseOrchestratorDriver extends EventEmitter implements IOr
 	async setTargetState(targetState: TargetState): Promise<void> {
 		this.targetState = targetState;
 		this.logger?.debugSync('Target state updated', {
-			component: 'OrchestratorDriver',
+			component: LogComponents.orchestratorDriver,
 			driver: this.name,
 			appsCount: Object.keys(targetState.local?.apps || {}).length
 		});
@@ -636,7 +637,7 @@ export abstract class BaseOrchestratorDriver extends EventEmitter implements IOr
 
 	protected log(level: 'debug' | 'info' | 'warn' | 'error', message: string, meta?: any) {
 		const logMeta = {
-			component: 'OrchestratorDriver',
+			component: LogComponents.orchestratorDriver,
 			driver: this.name,
 			...meta
 		};

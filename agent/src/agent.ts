@@ -17,13 +17,14 @@ import type { DeviceInfo } from "./provisioning/types.js";
 import { DeviceAPI } from "./api/index.js";
 import { router as v1Router } from "./api/v1.js";
 import * as deviceActions from "./api/actions.js";
-import { ApiBinder } from "./sync/index.js";
+import { CloudSync } from "./sync/index.js";
 import * as db from "./db/connection.js";
 import { LocalLogBackend } from "./logging/local-backend.js";
 import { CloudLogBackend } from "./logging/cloud-backend.js";
 import { ContainerLogMonitor } from "./logging/monitor.js";
 import { AgentLogger } from "./logging/agent-logger.js";
 import type { LogBackend } from "./logging/types.js";
+import { LogComponents } from "./logging/types.js";
 import { JobsFeature } from "./features/jobs/src/jobs-feature.js";
 import { SensorPublishFeature } from "./features/sensor-publish/index.js";
 import { SensorConfigHandler } from "./features/sensor-publish/config-handler.js";
@@ -54,7 +55,7 @@ export default class DeviceAgent {
   private deviceManager!: DeviceManager;
   private deviceInfo!: DeviceInfo; // Cache device info after initialization
   private deviceAPI!: DeviceAPI;
-  private apiBinder?: ApiBinder;
+  private cloudSync?: CloudSync;
   private logBackend!: LocalLogBackend;
   private logBackends: LogBackend[] = [];
   private logMonitor?: ContainerLogMonitor;
@@ -188,12 +189,12 @@ export default class DeviceAgent {
         : "Standalone (no cloud endpoint)";
 
       this.agentLogger.infoSync("Device Agent initialized successfully", {
-        component: "Agent",
+        component: LogComponents.agent,
         mode,
         deviceApiPort: this.DEVICE_API_PORT,
         reconciliationInterval: this.reconciliationIntervalMs,
         cloudApiEndpoint: this.CLOUD_API_ENDPOINT || "Not configured",
-        cloudFeaturesEnabled: this.deviceInfo.provisioned && !!this.apiBinder,
+        cloudFeaturesEnabled: this.deviceInfo.provisioned && !!this.cloudSync,
       });
 
      
@@ -218,14 +219,14 @@ export default class DeviceAgent {
 
     // We'll set device ID after device manager initialization
     this.agentLogger.infoSync("Agent logger initialized", {
-      component: "Agent",
+      component: LogComponents.agent,
       backendCount: this.logBackends.length,
     });
   }
 
   private async initializeDatabase(): Promise<void> {
     await db.initialized();
-    this.agentLogger.infoSync("Database initialized", { component: "Agent" });
+    this.agentLogger.infoSync("Database initialized", { component: LogComponents.agent });
   }
 
   private async initializeDeviceManager(): Promise<void> {
@@ -244,7 +245,7 @@ export default class DeviceAgent {
       this.agentLogger.infoSync(
         "Auto-provisioning device with two-phase authentication",
         {
-          component: "Agent",
+          component: LogComponents.agent,
         }
       );
       try {
@@ -256,7 +257,7 @@ export default class DeviceAgent {
         const osVersion = process.env.OS_VERSION || (await getOsVersion());
 
         this.agentLogger.infoSync("System information detected", {
-          component: "Agent",
+          component: LogComponents.agent,
           macAddress: macAddress
             ? `${macAddress.substring(0, 8)}...`
             : "unknown",
@@ -278,14 +279,14 @@ export default class DeviceAgent {
         });
         deviceInfo = this.deviceManager.getDeviceInfo();
         this.agentLogger.infoSync("Device auto-provisioned successfully", {
-          component: "Agent",
+          component: LogComponents.agent,
         });
       } catch (error: any) {
         this.agentLogger.errorSync(
           "Auto-provisioning failed",
           error instanceof Error ? error : new Error(error.message),
           {
-            component: "Agent",
+            component: LogComponents.agent,
             note: "Device will remain unprovisioned. Set PROVISIONING_API_KEY to retry.",
           }
         );
@@ -296,7 +297,7 @@ export default class DeviceAgent {
             "REQUIRE_PROVISIONING enabled - exiting due to provisioning failure",
             undefined,
             {
-              component: "Agent",
+              component: LogComponents.agent,
             }
           );
           process.exit(1);
@@ -308,7 +309,7 @@ export default class DeviceAgent {
       !provisioningApiKey
     ) {
       this.agentLogger.warnSync("Device not provisioned", {
-        component: "Agent",
+        component: LogComponents.agent,
         note: "Set PROVISIONING_API_KEY environment variable to enable auto-provisioning",
       });
 
@@ -318,7 +319,7 @@ export default class DeviceAgent {
           "REQUIRE_PROVISIONING enabled - exiting due to missing provisioning",
           undefined,
           {
-            component: "Agent",
+            component: LogComponents.agent,
           }
         );
         process.exit(1);
@@ -326,14 +327,14 @@ export default class DeviceAgent {
     } else if (!deviceInfo.provisioned && !this.CLOUD_API_ENDPOINT) {
       // Local mode - device never provisioned and no cloud endpoint
       this.agentLogger.infoSync("Running in local mode (no cloud connection)", {
-        component: "Agent",
+        component: LogComponents.agent,
       });
       await this.deviceManager.markAsLocalMode();
       deviceInfo = this.deviceManager.getDeviceInfo();
     } else if (deviceInfo.provisioned && !this.CLOUD_API_ENDPOINT) {
       // Device was previously provisioned but now running in local mode
       this.agentLogger.infoSync("Switching to local mode (no cloud connection)", {
-        component: "Agent",
+        component: LogComponents.agent,
         note: "Device was previously provisioned but CLOUD_API_ENDPOINT is not set",
       });
       await this.deviceManager.markAsLocalMode();
@@ -347,7 +348,7 @@ export default class DeviceAgent {
     const currentVersion = process.env.AGENT_VERSION || getPackageVersion();
     if (this.deviceInfo.agentVersion !== currentVersion) {
       this.agentLogger.infoSync("Updating agent version", {
-        component: "Agent",
+        component: LogComponents.agent,
         oldVersion: this.deviceInfo.agentVersion || "unknown",
         newVersion: currentVersion,
       });
@@ -359,7 +360,7 @@ export default class DeviceAgent {
     this.agentLogger.setDeviceId(this.deviceInfo.uuid);
 
     this.agentLogger.infoSync("Device manager initialized", {
-      component: "Agent",
+      component: LogComponents.agent,
       uuid: this.deviceInfo.uuid,
       name: this.deviceInfo.deviceName || "Not set",
       provisioned: this.deviceInfo.provisioned,
@@ -370,7 +371,7 @@ export default class DeviceAgent {
 
   private async initializeMqttManager(): Promise<void> {
     this.agentLogger.infoSync("Initializing MQTT Manager", {
-      component: "Agent",
+      component: LogComponents.agent,
     });
 
     try {
@@ -384,14 +385,14 @@ export default class DeviceAgent {
 
       // Debug: Log broker URL being used
       this.agentLogger.debugSync(`MQTT Broker URL: ${mqttBrokerUrl}`, {
-        component: "Agent",
+        component: LogComponents.agent,
         source: this.deviceInfo.mqttBrokerUrl ? "provisioning" : "environment",
         hasUsername: !!mqttUsername,
       });
 
       if (!mqttBrokerUrl) {
         this.agentLogger.debugSync("MQTT disabled - no broker URL provided", {
-          component: "Agent",
+          component: LogComponents.agent,
           note: "Provision device or set MQTT_BROKER env var to enable",
         });
         return;
@@ -440,7 +441,7 @@ export default class DeviceAgent {
           (this.agentLogger as any).logBackends = this.logBackends;
 
           this.agentLogger.infoSync("Cloud log backend initialized", {
-            component: "Agent",
+            component: LogComponents.agent,
             cloudEndpoint: this.CLOUD_API_ENDPOINT,
           });
         } catch (error) {
@@ -448,7 +449,7 @@ export default class DeviceAgent {
             "Failed to initialize cloud log backend. Continuing without cloud logging",
             error instanceof Error ? error : new Error(String(error)),
             {
-              component: "Agent",
+              component: LogComponents.agent,
             }
           );
         }
@@ -460,13 +461,13 @@ export default class DeviceAgent {
         this.agentLogger.warnSync(
           "Cloud logging disabled - device not provisioned",
           {
-            component: "Agent",
+            component: LogComponents.agent,
             note: "Device must be provisioned before enabling cloud log streaming",
           }
         );
       }
       this.agentLogger.infoSync("MQTT Manager connected", {
-        component: "Agent",
+        component: LogComponents.agent,
         brokerUrl: mqttBrokerUrl,
         clientId: `device_${this.deviceInfo.uuid}`,
         username: mqttUsername || "(none)",
@@ -481,7 +482,7 @@ export default class DeviceAgent {
         "Failed to initialize MQTT Manager",
         error instanceof Error ? error : new Error(String(error)),
         {
-          component: "Agent",
+          component: LogComponents.agent,
           note: "MQTT features will be unavailable",
         }
       );
@@ -491,7 +492,7 @@ export default class DeviceAgent {
 
   private async initializeContainerManager(): Promise<void> {
     this.agentLogger?.infoSync("Initializing state reconciler", {
-      component: "Agent",
+      component: LogComponents.agent,
     });
 
     // Create StateReconciler (manages both containers and config)
@@ -509,7 +510,7 @@ export default class DeviceAgent {
       this.containerManager.setLogMonitor(this.logMonitor);
       await this.containerManager.attachLogsToAllContainers();
       this.agentLogger?.infoSync("Log monitor attached to container manager", {
-        component: "Agent",
+        component: LogComponents.agent,
         backendCount: this.logBackends.length,
       });
     }
@@ -528,13 +529,13 @@ export default class DeviceAgent {
     this.updateCachedTargetState();
 
     this.agentLogger?.infoSync("State reconciler initialized", {
-      component: "Agent",
+      component: LogComponents.agent,
     });
   }
 
   private async initializeDeviceAPI(): Promise<void> {
     this.agentLogger?.infoSync("Initializing device API", {
-      component: "Agent",
+      component: LogComponents.agent,
     });
 
     // Initialize device actions with managers
@@ -561,7 +562,7 @@ export default class DeviceAgent {
     // Start listening
     await this.deviceAPI.listen(this.DEVICE_API_PORT);
     this.agentLogger?.infoSync("Device API started", {
-      component: "Agent",
+      component: LogComponents.agent,
       port: this.DEVICE_API_PORT,
     });
   }
@@ -573,7 +574,7 @@ export default class DeviceAgent {
       this.agentLogger?.warnSync(
         "Cloud API endpoint not configured - running in standalone mode",
         {
-          component: "Agent",
+          component: LogComponents.agent,
           note: "Set CLOUD_API_ENDPOINT env var to enable cloud features",
         }
       );
@@ -585,7 +586,7 @@ export default class DeviceAgent {
       this.agentLogger?.warnSync(
         "Device not provisioned - cloud sync disabled",
         {
-          component: "Agent",
+          component: LogComponents.agent,
           note: "Device must be provisioned with valid API key before enabling cloud features",
           provisioned: this.deviceInfo.provisioned,
           hasApiKey: !!this.deviceInfo.deviceApiKey,
@@ -595,7 +596,7 @@ export default class DeviceAgent {
     }
 
     this.agentLogger?.infoSync("Initializing API Binder", {
-      component: "Agent",
+      component: LogComponents.agent,
       cloudApiEndpoint: this.CLOUD_API_ENDPOINT,
     });
 
@@ -610,7 +611,7 @@ export default class DeviceAgent {
       configSettings.metricsIntervalMs ||
       parseInt(process.env.METRICS_INTERVAL_MS || "300000", 10);
 
-    this.apiBinder = new ApiBinder(
+    this.cloudSync = new CloudSync(
       this.stateReconciler, // Use StateReconciler instead of ContainerManager
       this.deviceManager,
       {
@@ -625,21 +626,21 @@ export default class DeviceAgent {
       MqttManager.getInstance() // Pass MQTT manager singleton for state reporting (optional)
     );
 
-    // Reinitialize device actions with apiBinder for connection health endpoint
+    // Reinitialize device actions with cloudSync for connection health endpoint
     deviceActions.initialize(
       this.containerManager,
       this.deviceManager,
-      this.apiBinder
+      this.cloudSync
     );
 
     // Config updates are now handled automatically by ConfigManager
     // No need to listen for target-state-changed here
 
     // Start polling for target state
-    await this.apiBinder.startPoll();
+    await this.cloudSync.startPoll();
 
     // Start reporting current state
-    await this.apiBinder.startReporting();
+    await this.cloudSync.startReporting();
   }
 
   private async initializeJobs(
@@ -674,7 +675,7 @@ export default class DeviceAgent {
       await this.jobs.start();
 
       this.agentLogger?.infoSync("Jobs Feature initialized", {
-        component: "Agent",
+        component: LogComponents.agent,
         mode: this.jobs.getCurrentMode(),
         mqttActive: this.jobs.isMqttActive(),
         httpActive: this.jobs.isHttpActive(),
@@ -684,7 +685,7 @@ export default class DeviceAgent {
         "Failed to initialize Jobs Feature",
         error instanceof Error ? error : new Error(String(error)),
         {
-          component: "Agent",
+          component: LogComponents.agent,
           note: "Continuing without Jobs",
         }
       );
@@ -694,7 +695,7 @@ export default class DeviceAgent {
 
   private async initializeSensorPublish(): Promise<void> {
     this.agentLogger?.infoSync("Initializing Sensor Publish Feature", {
-      component: "Agent",
+      component: LogComponents.agent,
     });
 
     try {
@@ -708,7 +709,7 @@ export default class DeviceAgent {
           this.agentLogger?.debugSync(
             "Loaded sensor config from environment variable",
             {
-              component: "Agent",
+              component: LogComponents.agent,
               sensorCount: envSensors.length,
             }
           );
@@ -717,7 +718,7 @@ export default class DeviceAgent {
             "Failed to parse SENSOR_PUBLISH_CONFIG",
             error instanceof Error ? error : new Error(String(error)),
             {
-              component: "Agent",
+              component: LogComponents.agent,
             }
           );
         }
@@ -735,7 +736,7 @@ export default class DeviceAgent {
           this.agentLogger?.debugSync(
             "Loaded sensor config from target state",
             {
-              component: "Agent",
+              component: LogComponents.agent,
               sensorCount: targetStateSensors.length,
             }
           );
@@ -744,7 +745,7 @@ export default class DeviceAgent {
         this.agentLogger?.debugSync(
           "Could not load sensors from target state",
           {
-            component: "Agent",
+            component: LogComponents.agent,
             error: error instanceof Error ? error.message : String(error),
           }
         );
@@ -768,7 +769,7 @@ export default class DeviceAgent {
       // If no sensors configured at all, log warning and skip initialization
       if (mergedSensors.length === 0) {
         this.agentLogger?.warnSync("No sensor configurations found", {
-          component: "Agent",
+          component: LogComponents.agent,
           note: "Add sensors via dashboard or set SENSOR_PUBLISH_CONFIG environment variable",
         });
         return;
@@ -790,7 +791,7 @@ export default class DeviceAgent {
       await this.sensorPublish.start();
 
       this.agentLogger?.infoSync("Sensor Publish Feature initialized", {
-        component: "Agent",
+        component: LogComponents.agent,
         sensorsConfigured: mergedSensors.length,
         fromEnv: envSensors.length,
         fromTargetState: targetStateSensors.length,
@@ -801,7 +802,7 @@ export default class DeviceAgent {
         "Failed to initialize Sensor Publish",
         error instanceof Error ? error : new Error(String(error)),
         {
-          component: "Agent",
+          component: LogComponents.agent,
           note: "Continuing without Sensor Publish",
         }
       );
@@ -828,14 +829,14 @@ export default class DeviceAgent {
           this.agentLogger?.debugSync(
             "Loaded protocol adapters config from PROTOCOL_ADAPTERS_CONFIG",
             {
-              component: "Agent",
+              component: LogComponents.agent,
             }
           );
         } catch (error) {
           this.agentLogger?.warnSync(
             "Failed to parse PROTOCOL_ADAPTERS_CONFIG, using target state config",
             {
-              component: "Agent",
+              component: LogComponents.agent,
             }
           );
         }
@@ -853,7 +854,7 @@ export default class DeviceAgent {
         "Failed to initialize Protocol Adapters",
         error instanceof Error ? error : new Error(String(error)),
         {
-          component: "Agent",
+          component: LogComponents.agent,
           note: "Continuing without Protocol Adapters",
         }
       );
@@ -868,7 +869,7 @@ export default class DeviceAgent {
     }
 
     this.agentLogger?.infoSync("Initializing Sensor Config Handler", {
-      component: "Agent",
+      component: LogComponents.agent,
     });
 
     try {
@@ -917,7 +918,7 @@ export default class DeviceAgent {
           "Failed to report initial sensor state",
           error instanceof Error ? error : new Error(String(error)),
           {
-            component: "Agent",
+            component: LogComponents.agent,
           }
         );
       }
@@ -926,7 +927,7 @@ export default class DeviceAgent {
         "Failed to initialize Sensor Config Handler",
         error instanceof Error ? error : new Error(String(error)),
         {
-          component: "Agent",
+          component: LogComponents.agent,
           note: "Continuing without remote sensor configuration",
         }
       );
@@ -953,7 +954,7 @@ export default class DeviceAgent {
         "Failed to initialize Agent Updater",
         error instanceof Error ? error : new Error(String(error)),
         {
-          component: "Agent",
+          component: LogComponents.agent,
           note: "Remote agent updates will not be available"
         }
       );
@@ -977,7 +978,7 @@ export default class DeviceAgent {
     // Check if firewall is enabled
     if (firewallMode === 'disabled' || process.env.FIREWALL_ENABLED === 'false') {
       this.agentLogger?.infoSync('Firewall disabled by configuration', {
-        component: 'Agent',
+        component: LogComponents.agent,
       });
       return;
     }
@@ -988,7 +989,7 @@ export default class DeviceAgent {
       : undefined;
 
     this.agentLogger?.infoSync('Initializing firewall', {
-      component: 'Agent',
+      component: LogComponents.agent,
       mode: firewallMode,
       deviceApiPort: this.DEVICE_API_PORT,
       mqttPort: mqttPort || 'not configured',
@@ -1011,7 +1012,7 @@ export default class DeviceAgent {
         'Failed to initialize firewall',
         error instanceof Error ? error : new Error(String(error)),
         {
-          component: 'Agent',
+          component: LogComponents.agent,
           note: 'Agent will continue without firewall protection',
         }
       );
@@ -1024,21 +1025,21 @@ export default class DeviceAgent {
       this.reconciliationIntervalMs
     );
     this.agentLogger?.infoSync("Auto-reconciliation started", {
-      component: "Agent",
+      component: LogComponents.agent,
       intervalMs: this.reconciliationIntervalMs,
     });
   }
 
 
   public async stop(): Promise<void> {
-    this.agentLogger?.infoSync("Stopping Device Agent", { component: "Agent" });
+    this.agentLogger?.infoSync("Stopping Device Agent", { component: LogComponents.agent });
 
     try {
       // Stop Sensor Publish
       if (this.sensorPublish) {
         await this.sensorPublish.stop();
         this.agentLogger?.infoSync("Sensor Publish stopped", {
-          component: "Agent",
+          component: LogComponents.agent,
         });
       }
 
@@ -1046,7 +1047,7 @@ export default class DeviceAgent {
       if (this.sensors) {
         await this.sensors.stop();
         this.agentLogger?.infoSync("Protocol Adapters stopped", {
-          component: "Agent",
+          component: LogComponents.agent,
         });
       }
 
@@ -1054,7 +1055,7 @@ export default class DeviceAgent {
       if (this.sensorConfigHandler) {
         // No explicit stop method, just clear reference
         this.agentLogger?.infoSync("Sensor Config Handler cleanup", {
-          component: "Agent",
+          component: LogComponents.agent,
         });
       }
 
@@ -1062,15 +1063,15 @@ export default class DeviceAgent {
       if (this.jobs) {
         await this.jobs.stop();
         this.agentLogger?.infoSync("Jobs Feature stopped", {
-          component: "Agent",
+          component: LogComponents.agent,
         });
       } 
      
       // Stop API binder
-      if (this.apiBinder) {
-        await this.apiBinder.stop();
+      if (this.cloudSync) {
+        await this.cloudSync.stop();
         this.agentLogger?.infoSync("API Binder stopped", {
-          component: "Agent",
+          component: LogComponents.agent,
         });
       }
 
@@ -1078,7 +1079,7 @@ export default class DeviceAgent {
       if (this.firewall) {
         await this.firewall.stop();
         this.agentLogger?.infoSync("Firewall stopped", {
-          component: "Agent",
+          component: LogComponents.agent,
         });
       }
 
@@ -1086,13 +1087,13 @@ export default class DeviceAgent {
       if (this.updater) {
         await this.updater.cleanup();
         this.agentLogger?.infoSync("Agent Updater stopped", {
-          component: "Agent",
+          component: LogComponents.agent,
         });
       }
 
       // Stop log backends (flush buffers, clear timers)
       this.agentLogger?.infoSync("Stopping log backends", {
-        component: "Agent",
+        component: LogComponents.agent,
       });
       for (const backend of this.logBackends) {
         try {
@@ -1106,13 +1107,13 @@ export default class DeviceAgent {
           }
         } catch (error) {
           this.agentLogger?.warnSync("Error stopping log backend", {
-            component: "Agent",
+            component: LogComponents.agent,
             error: error instanceof Error ? error.message : String(error),
           });
         }
       }
       this.agentLogger?.infoSync("Log backends stopped", {
-        component: "Agent",
+        component: LogComponents.agent,
       });
 
       // Stop MQTT Manager (shared singleton - do this after all MQTT-dependent features)
@@ -1120,7 +1121,7 @@ export default class DeviceAgent {
       if (mqttManager.isConnected()) {
         await mqttManager.disconnect();
         this.agentLogger?.infoSync("MQTT Manager disconnected", {
-          component: "Agent",
+          component: LogComponents.agent,
         });
       }
 
@@ -1128,7 +1129,7 @@ export default class DeviceAgent {
       if (this.deviceAPI) {
         await this.deviceAPI.stop();
         this.agentLogger?.infoSync("Device API stopped", {
-          component: "Agent",
+          component: LogComponents.agent,
         });
       }
 
@@ -1136,19 +1137,19 @@ export default class DeviceAgent {
       if (this.containerManager) {
         this.containerManager.stopAutoReconciliation();
         this.agentLogger?.infoSync("Container manager stopped", {
-          component: "Agent",
+          component: LogComponents.agent,
         });
       }
 
       this.agentLogger?.infoSync("Device Agent stopped successfully", {
-        component: "Agent",
+        component: LogComponents.agent,
       });
     } catch (error) {
       this.agentLogger?.errorSync(
         "Error stopping Device Agent",
         error instanceof Error ? error : new Error(String(error)),
         {
-          component: "Agent",
+          component: LogComponents.agent,
         }
       );
       throw error;

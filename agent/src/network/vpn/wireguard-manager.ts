@@ -7,6 +7,7 @@ import { execSync, exec } from 'child_process';
 import { promises as fs } from 'fs';
 import { promisify } from 'util';
 import type { AgentLogger } from '../../logging/agent-logger';
+import { LogComponents } from '../../logging/types';
 
 const execAsync = promisify(exec);
 
@@ -62,7 +63,7 @@ export class WireGuardManager {
 	async setup(vpnConfig: VpnConfig): Promise<boolean> {
 		if (!vpnConfig.enabled) {
 			this.logger?.infoSync('VPN not enabled for this device', {
-				component: 'WireGuardManager',
+				component: LogComponents.wireGuardManager,
 				operation: 'setup',
 			});
 			return false;
@@ -72,7 +73,7 @@ export class WireGuardManager {
 		const available = await this.isAvailable();
 		if (!available) {
 			this.logger?.warnSync('WireGuard not installed - skipping VPN setup', {
-				component: 'WireGuardManager',
+				component: LogComponents.wireGuardManager,
 				operation: 'setup',
 			});
 			return false;
@@ -80,7 +81,7 @@ export class WireGuardManager {
 
 		try {
 			this.logger?.infoSync('Setting up WireGuard VPN', {
-				component: 'WireGuardManager',
+				component: LogComponents.wireGuardManager,
 				operation: 'setup',
 				ipAddress: vpnConfig.ipAddress,
 			});
@@ -93,7 +94,7 @@ export class WireGuardManager {
 			await fs.writeFile(configFile, vpnConfig.wgConfig, { mode: 0o600 });
 
 			this.logger?.infoSync('WireGuard config written', {
-				component: 'WireGuardManager',
+				component: LogComponents.wireGuardManager,
 				operation: 'setup',
 				configFile,
 			});
@@ -108,7 +109,7 @@ export class WireGuardManager {
 			const status = await this.getStatus();
 			if (status.interfaceUp) {
 				this.logger?.infoSync('WireGuard VPN tunnel established', {
-					component: 'WireGuardManager',
+					component: LogComponents.wireGuardManager,
 					operation: 'setup',
 					ipAddress: status.ipAddress,
 				});
@@ -123,7 +124,7 @@ export class WireGuardManager {
 				'Failed to setup WireGuard VPN',
 				error instanceof Error ? error : new Error(String(error)),
 				{
-					component: 'WireGuardManager',
+					component: LogComponents.wireGuardManager,
 					operation: 'setup',
 				}
 			);
@@ -137,7 +138,7 @@ export class WireGuardManager {
 	async up(): Promise<void> {
 		try {
 			this.logger?.infoSync('Starting WireGuard interface', {
-				component: 'WireGuardManager',
+				component: LogComponents.wireGuardManager,
 				operation: 'up',
 				interface: this.interfaceName,
 			});
@@ -149,14 +150,14 @@ export class WireGuardManager {
 				// If wg-quick fails, try manual setup
 				if (error.message?.includes('already exists')) {
 					this.logger?.warnSync('Interface already up', {
-						component: 'WireGuardManager',
+						component: LogComponents.wireGuardManager,
 						operation: 'up',
 					});
 					return;
 				}
 
 				this.logger?.warnSync('wg-quick failed, trying manual setup', {
-					component: 'WireGuardManager',
+					component: LogComponents.wireGuardManager,
 					operation: 'up',
 				});
 
@@ -168,7 +169,7 @@ export class WireGuardManager {
 			}
 
 			this.logger?.infoSync('WireGuard interface is up', {
-				component: 'WireGuardManager',
+				component: LogComponents.wireGuardManager,
 				operation: 'up',
 			});
 		} catch (error) {
@@ -176,7 +177,7 @@ export class WireGuardManager {
 				'Failed to bring up WireGuard interface',
 				error instanceof Error ? error : new Error(String(error)),
 				{
-					component: 'WireGuardManager',
+					component: LogComponents.wireGuardManager,
 					operation: 'up',
 				}
 			);
@@ -190,14 +191,14 @@ export class WireGuardManager {
 	async down(): Promise<void> {
 		try {
 			this.logger?.infoSync('Stopping WireGuard interface', {
-				component: 'WireGuardManager',
+				component: LogComponents.wireGuardManager,
 				operation: 'down',
 			});
 
 			await execAsync(`wg-quick down ${this.interfaceName}`);
 
 			this.logger?.infoSync('WireGuard interface is down', {
-				component: 'WireGuardManager',
+				component: LogComponents.wireGuardManager,
 				operation: 'down',
 			});
 		} catch (error) {
@@ -259,7 +260,7 @@ export class WireGuardManager {
 	private async testConnectivity(): Promise<boolean> {
 		try {
 			this.logger?.infoSync('Testing VPN connectivity', {
-				component: 'WireGuardManager',
+				component: LogComponents.wireGuardManager,
 				operation: 'testConnectivity',
 			});
 
@@ -267,14 +268,14 @@ export class WireGuardManager {
 			await execAsync('ping -c 3 -W 2 10.8.0.1');
 
 			this.logger?.infoSync('VPN connectivity test passed', {
-				component: 'WireGuardManager',
+				component: LogComponents.wireGuardManager,
 				operation: 'testConnectivity',
 			});
 
 			return true;
 		} catch (error) {
 			this.logger?.warnSync('VPN connectivity test failed (may take time to establish)', {
-				component: 'WireGuardManager',
+				component: LogComponents.wireGuardManager,
 				operation: 'testConnectivity',
 			});
 			return false;
@@ -291,7 +292,7 @@ export class WireGuardManager {
 				await execAsync('which systemctl');
 			} catch {
 				this.logger?.warnSync('systemd not available - skipping auto-start setup', {
-					component: 'WireGuardManager',
+					component: LogComponents.wireGuardManager,
 					operation: 'enableAutoStart',
 				});
 				return;
@@ -301,12 +302,12 @@ export class WireGuardManager {
 			await execAsync(`systemctl enable wg-quick@${this.interfaceName}`);
 
 			this.logger?.infoSync('WireGuard auto-start enabled', {
-				component: 'WireGuardManager',
+				component: LogComponents.wireGuardManager,
 				operation: 'enableAutoStart',
 			});
 		} catch (error) {
 			this.logger?.warnSync('Failed to enable auto-start (non-critical)', {
-				component: 'WireGuardManager',
+				component: LogComponents.wireGuardManager,
 				operation: 'enableAutoStart',
 			});
 		}
