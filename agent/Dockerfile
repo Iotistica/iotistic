@@ -12,9 +12,13 @@ COPY package*.json tsconfig.json tsconfig.build.json ./
 RUN npm ci --legacy-peer-deps
 
 COPY src ./src
+COPY cli ./cli
 
 # Build TypeScript using build-specific config (excludes CLI)
 RUN npx tsc --project tsconfig.build.json && npm run copy:migrations
+
+# Build CLI separately
+RUN npx tsc cli/iotctl.ts --outDir dist/cli --module commonjs --target es2020
 
 # ---- Production stage ------
 FROM node:20-alpine AS runtime
@@ -56,6 +60,10 @@ RUN npm ci --omit=dev --legacy-peer-deps \
 
 # Copy built app
 COPY --from=builder /app/dist ./dist
+
+# Create iotctl symlink for easy CLI access
+RUN ln -s /app/dist/cli/iotctl.js /usr/local/bin/iotctl \
+    && chmod +x /app/dist/cli/iotctl.js
 
 # Copy update scripts
 COPY bin/update-agent-docker.sh /app/bin/update-agent-docker.sh

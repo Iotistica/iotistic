@@ -22,13 +22,13 @@ import { join, dirname } from 'path';
 import { spawn } from 'child_process';
 
 
-// Configuration file paths
+// Configuration paths
 const CONFIG_DIR = process.env.CONFIG_DIR || '/app/data';
-const CONFIG_FILE = join(CONFIG_DIR, 'device-config.json');
 const DB_PATH = join(CONFIG_DIR, 'database.sqlite');
 
-// Device API endpoint
-const DEVICE_API_BASE = process.env.DEVICE_API_URL || 'http://localhost:48484';
+// Device API endpoint - construct from DEVICE_API_PORT or fall back to DEVICE_API_URL
+const DEVICE_API_PORT = process.env.DEVICE_API_PORT || '48484';
+const DEVICE_API_BASE = process.env.DEVICE_API_URL || `http://localhost:${DEVICE_API_PORT}`;
 const DEVICE_API_V1 = `${DEVICE_API_BASE}/v1`;
 
 // ============================================================================
@@ -111,35 +111,8 @@ async function apiRequest(endpoint: string, options: RequestInit = {}): Promise<
 }
 
 // ============================================================================
-// Configuration Management
+// Utility Functions
 // ============================================================================
-
-function loadConfig(): DeviceConfig {
-	try {
-		if (existsSync(CONFIG_FILE)) {
-			const content = readFileSync(CONFIG_FILE, 'utf-8');
-			return JSON.parse(content);
-		}
-	} catch (error) {
-		logger.warn('Failed to load config', { error: (error as Error).message });
-	}
-	return {};
-}
-
-function saveConfig(config: DeviceConfig): void {
-	try {
-		// Ensure config directory exists
-		if (!existsSync(CONFIG_DIR)) {
-			mkdirSync(CONFIG_DIR, { recursive: true });
-		}
-		
-		writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), 'utf-8');
-		logger.info('Configuration saved', { file: CONFIG_FILE });
-	} catch (error) {
-		logger.error('Failed to save config', error as Error);
-		process.exit(1);
-	}
-}
 
 function validateUrl(url: string): boolean {
 	try {
@@ -254,7 +227,7 @@ EXAMPLES:
 `);
 }
 
-function configSetApi(url: string): void {
+async function configSetApi(url: string): Promise<void> {
 	if (!url) {
 		logger.error('API URL is required', undefined, {
 			usage: 'iotctl config set-api <url>'
@@ -272,37 +245,44 @@ function configSetApi(url: string): void {
 	// Remove trailing slash
 	url = url.replace(/\/$/, '');
 	
-	const config = loadConfig();
-	config.cloudApiEndpoint = url;
-	saveConfig(config);
-	
-	logger.info('Cloud API endpoint updated', { endpoint: url });
-	logger.warn('Restart required', {
-		hint: 'Run: sudo systemctl restart device-agent'
-	});
-}
-
-function configGetApi(): void {
-	const config = loadConfig();
-	
-	if (config.cloudApiEndpoint) {
-		logger.info('Cloud API Endpoint', { endpoint: config.cloudApiEndpoint });
-	} else {
-		logger.warn('Cloud API endpoint not configured', {
-			hint: 'Set it with: iotctl config set-api <url>'
+	try {
+		await apiRequest(`${DEVICE_API_V1}/config`, {
+			method: 'POST',
+			body: JSON.stringify({ cloudApiEndpoint: url })
 		});
+		
+		logger.info('Cloud API endpoint updated', { endpoint: url });
+		logger.warn('Restart required', {
+			hint: 'Run: iotctl system restart'
+		});
+	} catch (error) {
+		logger.error('Failed to update API endpoint', error as Error);
+		process.exit(1);
 	}
 }
 
-function configSet(key: string, value: string): void {
+async function configGetApi(): Promise<void> {
+	try {
+		const provisionStatus = await apiRequest(`${DEVICE_API_V1}/provision/status`);
+		
+		if (provisionStatus.apiEndpoint) {
+			logger.info('Cloud API Endpoint', { endpoint: provisionStatus.apiEndpoint });
+		} else {
+			logger.warn('Cloud API endpoint not configured');
+		}
+	} catch (error) {
+		logger.error('Failed to retrieve API endpoint', error as Error);
+		process.exit(1);
+	}
+}
+
+async function configSet(key: string, value: string): Promise<void> {
 	if (!key || !value) {
 		logger.error('Both key and value are required', undefined, {
 			usage: 'iotctl config set <key> <value>'
 		});
 		process.exit(1);
 	}
-	
-	const config = loadConfig();
 	
 	// Try to parse as JSON (for numbers, booleans, objects)
 	let parsedValue: any = value;
@@ -312,13 +292,20 @@ function configSet(key: string, value: string): void {
 		// Keep as string if not valid JSON
 	}
 	
-	config[key] = parsedValue;
-	saveConfig(config);
-	
-	logger.info('Configuration updated', { key, value: parsedValue });
+	try {
+		await apiRequest(`${DEVICE_API_V1}/config`, {
+			method: 'POST',
+			body: JSON.stringify({ [key]: parsedValue })
+		});
+		
+		logger.info('Configuration updated', { key, value: parsedValue });
+	} catch (error) {
+		logger.error('Failed to update configuration', error as Error);
+		process.exit(1);
+	}
 }
 
-function configGet(key: string): void {
+async function configGet(key: string): Promise<void> {
 	if (!key) {
 		logger.error('Key is required', undefined, {
 			usage: 'iotctl config get <key>'
@@ -326,34 +313,58 @@ function configGet(key: string): void {
 		process.exit(1);
 	}
 	
-	const config = loadConfig();
-	
-	if (key in config) {
-		logger.info('Configuration value', { key, value: config[key] });
-	} else {
-		logger.warn('Configuration key not found', { key });
+	try {
+		const deviceState = await apiRequest(`${DEVICE_API_V1}/device`);
+		const config = deviceState.config || {};
+		
+		if (key in config) {
+			logger.info('Configuration value', { key, value: config[key] });
+		} else {
+			logger.warn('Configuration key not found', { key });
+		}
+	} catch (error) {
+		logger.error('Failed to retrieve configuration', error as Error);
+		process.exit(1);
 	}
 }
 
-function configShow(): void {
-	const config = loadConfig();
-	
-	if (Object.keys(config).length === 0) {
-		logger.warn('No configuration found', {
-			hint: 'Use "iotctl config set-api <url>" to get started'
+async function configShow(): Promise<void> {
+	try {
+		// Get device state from API
+		const deviceState = await apiRequest(`${DEVICE_API_V1}/device`);
+		
+		// Get provision status for additional config
+		const provisionStatus = await apiRequest(`${DEVICE_API_V1}/provision/status`);
+		
+		const config = {
+			uuid: deviceState.uuid,
+			deviceId: provisionStatus.deviceId || 'not assigned',
+			deviceName: provisionStatus.deviceName || 'not set',
+			cloudApiEndpoint: provisionStatus.apiEndpoint || 'not configured',
+			mqttConfigured: provisionStatus.mqttConfigured || false,
+			provisioned: provisionStatus.provisioned || false,
+			online: deviceState.is_online || false,
+			version: deviceState.version || 0
+		};
+		
+		logger.info('Device Configuration', config);
+	} catch (error) {
+		logger.error('Failed to retrieve configuration', error as Error, {
+			hint: 'Ensure the agent is running'
 		});
-		return;
 	}
-	
-	logger.info('Device Configuration', { config, file: CONFIG_FILE });
 }
 
-function configReset(): void {
-	if (existsSync(CONFIG_FILE)) {
-		unlinkSync(CONFIG_FILE);
-		logger.info('Configuration reset to defaults');
-	} else {
-		logger.warn('No configuration file found');
+async function configReset(): Promise<void> {
+	try {
+		await apiRequest(`${DEVICE_API_V1}/factory-reset`, {
+			method: 'POST'
+		});
+		logger.info('Configuration reset to factory defaults');
+		logger.warn('Device needs to be re-provisioned');
+	} catch (error) {
+		logger.error('Failed to reset configuration', error as Error);
+		process.exit(1);
 	}
 }
 
@@ -386,13 +397,17 @@ async function showStatusEnhanced(): Promise<void> {
 			runningServices: runningCount
 		});
 		
-		// Check cloud connection
-		const config = loadConfig();
-		if (config.cloudApiEndpoint) {
-			logger.info('Cloud connection', {
-				endpoint: config.cloudApiEndpoint,
-				status: deviceState.is_online ? 'Connected' : 'Disconnected'
-			});
+		// Cloud connection info from provision status
+		try {
+			const provisionStatus = await apiRequest(`${DEVICE_API_V1}/provision/status`);
+			if (provisionStatus.apiEndpoint) {
+				logger.info('Cloud connection', {
+					endpoint: provisionStatus.apiEndpoint,
+					status: deviceState.is_online ? 'Connected' : 'Disconnected'
+				});
+			}
+		} catch {
+			// Ignore if provision status unavailable
 		}
 		
 		// Database size
@@ -410,14 +425,7 @@ async function showStatusEnhanced(): Promise<void> {
 
 function showStatus(): void {
 	logger.info('Device Status');
-	
-	// Check if config exists
-	const config = loadConfig();
-	if (config.cloudApiEndpoint) {
-		logger.info('API Endpoint configured', { endpoint: config.cloudApiEndpoint });
-	} else {
-		logger.warn('API Endpoint not configured');
-	}
+	logger.warn('API Endpoint not configured');
 	
 	// Check if database exists
 	if (existsSync(DB_PATH)) {
@@ -425,13 +433,6 @@ function showStatus(): void {
 		logger.info('Database found', { size_kb: (stats.size / 1024).toFixed(2) });
 	} else {
 		logger.warn('Database not initialized');
-	}
-	
-	// Check config file
-	if (existsSync(CONFIG_FILE)) {
-		logger.info('Config file found', { path: CONFIG_FILE });
-	} else {
-		logger.warn('Config file not found');
 	}
 	
 	logger.info('Tip: Use "iotctl logs --follow" to monitor device activity');
@@ -823,7 +824,7 @@ async function factoryReset(): Promise<void> {
 // Main CLI Parser
 // ============================================================================
 
-function main(): void {
+async function main(): Promise<void> {
 	const args = process.argv.slice(2);
 	
 	if (args.length === 0) {
@@ -861,22 +862,22 @@ function main(): void {
 		case 'config':
 			switch (subcommand) {
 				case 'set-api':
-					configSetApi(arg1);
+					await configSetApi(arg1);
 					break;
 				case 'get-api':
-					configGetApi();
+					await configGetApi();
 					break;
 				case 'set':
-					configSet(arg1, arg2);
+					await configSet(arg1, arg2);
 					break;
 				case 'get':
-					configGet(arg1);
+					await configGet(arg1);
 					break;
 				case 'show':
-					configShow();
+					await configShow();
 					break;
 				case 'reset':
-					configReset();
+					await configReset();
 					break;
 				default:
 					logger.error('Unknown config command', undefined, {

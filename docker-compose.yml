@@ -38,6 +38,10 @@ services:
                 - METRICS_INTERVAL_MS=20000
                 - LOG_COMPRESSION=true
                 - PROVISIONING_API_KEY=708b51cbc9b5b515151fbb943ba9788ab6885d037455424b290f97d2077ae8c0
+                # API Security (change to test different modes)
+                # Options: LOCALHOST_ONLY (default), LOCAL_NETWORK, API_KEY, OPEN
+                - API_SECURITY_MODE=${API_SECURITY_MODE:-LOCALHOST_ONLY}
+                - API_KEY=${API_KEY:-}
                 # Memory monitoring (edge-appropriate thresholds)
                 - MEMORY_CHECK_INTERVAL_MS=30000
                 - MEMORY_THRESHOLD_MB=15
