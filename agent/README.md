@@ -174,16 +174,9 @@ npx tsx quick-start.ts
 # Visit http://localhost:8080
 ```
 
-### Documentation
-
-- **[DOCKER-SUMMARY.md](./DOCKER-SUMMARY.md)** - Quick overview & examples
-- **[DOCKER-QUICKSTART.md](./DOCKER-QUICKSTART.md)** - Quick reference guide
-- **[DOCKER-GUIDE.md](./DOCKER-GUIDE.md)** - Complete API documentation
-- **[SIMPLE-MANAGER-README.md](./SIMPLE-MANAGER-README.md)** - Core concepts
-
 ### Features
 
-✅ **Real Docker Integration** - Uses dockerode for actual Docker operations  
+✅ **Docker Integration** - Uses dockerode for actual Docker operations  
 ✅ **State Reconciliation** - Automatically calculates and applies changes  
 ✅ **Multi-Container Apps** - Deploy complex stacks (like docker-compose)  
 ✅ **Rolling Updates** - Zero-downtime container updates  
@@ -191,18 +184,6 @@ npx tsx quick-start.ts
 ✅ **Simulated Mode** - Test without Docker  
 
 ---
-
-## Overview
-
-This package provides two application managers:
-
-1. **ContainerManager** (`src/container-manager.ts`) - **RECOMMENDED**
-   - Clean, simplified design without commit logic
-   - Real Docker support with `new ContainerManager(true)`
-   - State reconciliation (current → target)
-   - REST API available (`api/server.ts`)
-   - **Start here!** See examples in `examples/docker-integration.ts`
-
 
 
 ## Project Structure
