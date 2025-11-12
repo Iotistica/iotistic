@@ -849,82 +849,38 @@ async function servicesInfo(serviceId: string): Promise<void> {
 // System Commands
 // ============================================================================
 
-function restart(): void {
-	logger.info('Restarting device agent...');
-	
-	// Try systemctl first (for systemd systems)
+async function restart(): Promise<void> {
 	try {
-		const result = spawn('systemctl', ['restart', 'device-agent'], {
-			stdio: 'inherit',
-			shell: true
+		logger.info('Restarting device agent...');
+		
+		await apiRequest(`${DEVICE_API_V1}/reboot`, {
+			method: 'POST'
 		});
 		
-		result.on('error', (error) => {
-			logger.warn('Failed to restart via systemctl, trying Docker restart');
-			
-			// Fallback to docker restart
-			const dockerResult = spawn('docker', ['restart', 'agent'], {
-				stdio: 'inherit',
-				shell: true
-			});
-			
-			dockerResult.on('error', (err) => {
-				logger.error('Failed to restart agent', err, {
-					hint_systemctl: 'sudo systemctl restart device-agent',
-					hint_docker: 'docker restart agent'
-				});
-				process.exit(1);
-			});
+		logger.info('Agent restarting', {
+			note: 'Process will exit and container will restart automatically'
 		});
-		
-		logger.info('Restart command sent');
 	} catch (error) {
-		logger.error('Failed to restart agent', error as Error);
+		logger.error('Failed to restart agent', error as Error, {
+			hint: 'From host, run: docker restart agent-1'
+		});
 		process.exit(1);
 	}
 }
 
 function showLogs(follow: boolean = false, lines: number = 50): void {
-	logger.info('Device Logs', { following: follow, lines });
-	
-	// Try journalctl first (for systemd systems)
-	const journalArgs = ['-u', 'device-agent'];
-	if (follow) {
-		journalArgs.push('-f');
-	} else {
-		journalArgs.push('-n', lines.toString());
-	}
-	
-	const journal = spawn('journalctl', journalArgs, {
-		stdio: 'inherit',
-		shell: true
+	// Agent logs are not accessible from inside the container
+	// User must run docker logs from the host
+	logger.error('Agent logs not available from inside container', undefined, {
+		note: 'Run from host machine instead',
+		hint_docker: follow 
+			? 'docker logs -f agent-1' 
+			: `docker logs --tail ${lines} agent-1`,
+		hint_compose: follow
+			? 'docker-compose logs -f agent-1'
+			: `docker-compose logs --tail=${lines} agent-1`
 	});
-	
-	journal.on('error', (error) => {
-		logger.warn('journalctl not available, trying Docker logs');
-		
-		// Fallback to docker logs
-		const dockerArgs = ['logs'];
-		if (follow) {
-			dockerArgs.push('-f');
-		} else {
-			dockerArgs.push('--tail', lines.toString());
-		}
-		dockerArgs.push('agent');
-		
-		const docker = spawn('docker', dockerArgs, {
-			stdio: 'inherit',
-			shell: true
-		});
-		
-		docker.on('error', (err) => {
-			logger.error('Failed to get logs', err, {
-				hint_systemd: 'sudo journalctl -u device-agent -f',
-				hint_docker: 'docker logs -f agent'
-			});
-			process.exit(1);
-		});
-	});
+	process.exit(1);
 }
 
 function showVersion(): void {
@@ -1207,7 +1163,7 @@ async function main(): Promise<void> {
 			break;
 			
 		case 'restart':
-			restart();
+			await restart();
 			break;
 			
 		case 'logs':

@@ -601,49 +601,31 @@ export class DeviceManager {
 		// Import db connection
 		const { models } = await import('../db/connection.js');
 		
-		// Delete all state snapshots
-		await models('stateSnapshot').delete();
-		this.logger?.infoSync('Deleted state snapshots', {
-			component: LogComponents.deviceManager,
-			operation: 'factoryReset',
-		});
+		// Helper to safely delete from table (ignore if table doesn't exist)
+		const safeDelete = async (tableName: string) => {
+			try {
+				await models(tableName).delete();
+				this.logger?.infoSync(`Deleted ${tableName}`, {
+					component: LogComponents.deviceManager,
+					operation: 'factoryReset',
+				});
+			} catch (error: any) {
+				// Table doesn't exist or is empty - this is fine
+				this.logger?.debugSync(`Table ${tableName} not found or already empty`, {
+					component: LogComponents.deviceManager,
+					operation: 'factoryReset',
+					error: error.message,
+				});
+			}
+		};
 		
-		// Delete all services
-		await models('service').delete();
-		this.logger?.infoSync('Deleted services', {
-			component: LogComponents.deviceManager,
-			operation: 'factoryReset',
-		});
-		
-		// Delete all apps
-		await models('app').delete();
-		this.logger?.infoSync('Deleted apps', {
-			component: LogComponents.deviceManager,
-			operation: 'factoryReset',
-		});
-		
-		// Delete all images metadata
-		await models('image').delete();
-		this.logger?.infoSync('Deleted image metadata', {
-			component: LogComponents.deviceManager,
-			operation: 'factoryReset',
-		});
-		
-		// Delete sensor data (if tables exist)
-		try {
-			await models('sensor_outputs').delete();
-			await models('sensors').delete();
-			this.logger?.infoSync('Deleted sensor data', {
-				component: LogComponents.deviceManager,
-				operation: 'factoryReset',
-			});
-		} catch (error) {
-			// Tables might not exist, ignore error
-			this.logger?.debugSync('Sensor tables not found or already empty', {
-				component: LogComponents.deviceManager,
-				operation: 'factoryReset',
-			});
-		}
+		// Delete all data tables (ignore if they don't exist)
+		await safeDelete('stateSnapshot');
+		await safeDelete('service');
+		await safeDelete('app');
+		await safeDelete('image');
+		await safeDelete('sensor_outputs');
+		await safeDelete('sensors');
 		
 		// Reset device info but preserve UUID for hardware identification
 		const preservedUuid = this.deviceInfo.uuid;

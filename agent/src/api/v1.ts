@@ -129,17 +129,25 @@ router.post('/v1/purge', async (req: Request, res: Response, next: NextFunction)
 
 /**
  * POST /v1/reboot
- * Reboot the device (placeholder - requires platform-specific implementation)
+ * Reboot the agent (graceful restart via process.exit)
  */
 router.post('/v1/reboot', async (req: Request, res: Response, next: NextFunction) => {
 	try {
-		console.log('Reboot requested');
-		// This would need platform-specific implementation
-		// For now, just return success
-		return res.status(202).json({ 
-			Data: 'Reboot scheduled', 
+		console.log('Agent reboot requested - exiting process for restart');
+		
+		// Send response before exiting
+		res.status(202).json({ 
+			Data: 'Agent restarting', 
 			Error: null 
 		});
+		
+		// Close the response and exit (Docker/systemd will restart the container/process)
+		res.end();
+		
+		// Give time for response to be sent
+		setTimeout(() => {
+			process.exit(0);
+		}, 1000);
 	} catch (error) {
 		next(error);
 	}

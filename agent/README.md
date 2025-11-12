@@ -10,16 +10,33 @@ The agent includes a powerful CLI tool for device management:
 
 ```bash
 # Inside the Docker container
-iotctl status                     # Device health and status
-iotctl provision <key>            # Provision with cloud
+
+# Provisioning commands
+iotctl provision <key>            # Provision with cloud (--api, --name, --type options)
 iotctl provision status           # Check provisioning state
-iotctl config show                # Show device configuration
+iotctl deprovision                # Remove cloud registration (keeps UUID/deviceApiKey)
+iotctl factory-reset              # WARNING: Complete wipe! Deletes everything
+
+# Configuration commands
+iotctl config show                # Show all configuration
+iotctl config set-api <url>       # Update cloud API endpoint
+iotctl config get-api             # Show current API endpoint
+iotctl config set <key> <value>   # Set any config value
+iotctl config get <key>           # Get specific config value
+iotctl config reset               # Reset to defaults
+
+# Device management
+iotctl status                     # Device health and status
+iotctl restart                    # Restart the agent
+iotctl logs --follow              # View agent logs (use from host: docker logs -f agent-1)
+iotctl logs -n 50                 # Show last 50 log lines
 
 # Application-level commands (manage entire stacks)
 iotctl apps list                  # List all apps and services
 iotctl apps start 1001            # Start all services in app
 iotctl apps stop 1001             # Stop all services in app
 iotctl apps restart 1001          # Restart entire app stack
+iotctl apps info 1001             # Show app details
 iotctl apps purge 1001            # Remove app + volumes
 
 # Service-level commands (manage individual containers)
@@ -31,9 +48,9 @@ iotctl services restart db-1      # Restart one container
 iotctl services logs web-1 -f     # Follow container logs
 iotctl services info web-1        # Detailed service info
 
-# System commands
-iotctl system restart             # Restart the agent
-iotctl logs --tail 50             # View recent logs
+# System
+iotctl help                       # Show all commands
+iotctl version                    # Show CLI version
 ```
 
 **Key Features:**
