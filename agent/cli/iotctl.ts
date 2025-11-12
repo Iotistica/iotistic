@@ -24,7 +24,7 @@ import { spawn } from 'child_process';
 
 // Configuration paths
 const CONFIG_DIR = process.env.CONFIG_DIR || '/app/data';
-const DB_PATH = join(CONFIG_DIR, 'device.db');
+const DB_PATH = join(CONFIG_DIR, 'device.sqlite');
 
 // Device API endpoint - construct from DEVICE_API_PORT or fall back to DEVICE_API_URL
 const DEVICE_API_PORT = process.env.DEVICE_API_PORT || '48484';
@@ -952,7 +952,56 @@ async function runDiagnostics(): Promise<void> {
 		};
 	}
 	
-	// 4. Check Cloud API connection (if provisioned)
+	// 4. Check Internet connectivity
+	try {
+		const testUrls = [
+			'https://www.google.com',
+			'https://1.1.1.1', // Cloudflare DNS
+			'https://8.8.8.8'  // Google DNS
+		];
+		
+		let connected = false;
+		let successUrl = '';
+		
+		for (const url of testUrls) {
+			try {
+				const response = await fetch(url, {
+					method: 'HEAD',
+					signal: AbortSignal.timeout(3000)
+				});
+				if (response.ok || response.status < 500) {
+					connected = true;
+					successUrl = url;
+					break;
+				}
+			} catch {
+				// Try next URL
+				continue;
+			}
+		}
+		
+		if (connected) {
+			results['Internet'] = {
+				status: '✓ OK',
+				message: 'Internet connection available',
+				details: { testedUrl: successUrl }
+			};
+		} else {
+			results['Internet'] = {
+				status: '✗ FAIL',
+				message: 'No internet connectivity detected',
+				details: { note: 'Tested Google, Cloudflare, and Google DNS' }
+			};
+		}
+	} catch (error: any) {
+		results['Internet'] = {
+			status: '✗ FAIL',
+			message: 'Internet check failed',
+			details: { error: error.message }
+		};
+	}
+	
+	// 5. Check Cloud API connection (if provisioned)
 	if (results['Provisioning']?.details?.apiEndpoint) {
 		const cloudEndpoint = results['Provisioning'].details.apiEndpoint;
 		try {
@@ -986,7 +1035,7 @@ async function runDiagnostics(): Promise<void> {
 		};
 	}
 	
-	// 5. Check MQTT connection (if provisioned)
+	// 6. Check MQTT connection (if provisioned)
 	if (results['Provisioning']?.details?.mqttBroker) {
 		const mqttBroker = results['Provisioning'].details.mqttBroker;
 		// We can't easily test MQTT connection from CLI without mqtt library
@@ -1003,7 +1052,7 @@ async function runDiagnostics(): Promise<void> {
 		};
 	}
 	
-	// 6. Check environment variables
+	// 7. Check environment variables
 	const envVars = {
 		DEVICE_API_PORT: process.env.DEVICE_API_PORT || '(default: 48484)',
 		CLOUD_API_ENDPOINT: process.env.CLOUD_API_ENDPOINT || '(not set)',
