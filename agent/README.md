@@ -158,9 +158,9 @@ SIMULATION_CONFIG='{"scenarios":{"anomaly_injection":{"enabled":true,"metrics":[
 - UI/dashboard development without hardware
 - CI/CD integration testing
 
-## 🐳 Docker Integration - NEW!
+## 🐳 Docker Integration
 
-This manager now has **REAL Docker support**! Deploy, update, and manage containers just like Balena does.
+Deploy, update, and manage containers with full Docker and Kubernetes support.
 
 ### Quick Start (30 seconds)
 
