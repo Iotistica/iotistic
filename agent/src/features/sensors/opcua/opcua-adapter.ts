@@ -70,8 +70,8 @@ import {
   ClientMonitoredItem,
   DataType,
 } from 'node-opcua-client';
-import { BaseProtocolAdapter, GenericDeviceConfig } from '../common/base-adapter.js';
-import { SensorDataPoint, Logger } from '../common/types.js';
+import { BaseProtocolAdapter, GenericDeviceConfig } from '../base.js';
+import { SensorDataPoint, Logger } from '../types.js';
 import { ConsoleLogger } from '../common/logger.js';
 import {
   OPCUADeviceConfig,

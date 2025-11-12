@@ -23,9 +23,9 @@ import type {
 } from './types';
 import { buildApiEndpoint } from '../utils/api-utils';
 import type { AgentLogger } from '../logging/agent-logger';
-import { HttpClient, FetchHttpClient } from '../http/client';
-import { DatabaseClient, KnexDatabaseClient } from './database-client';
-import { WireGuardManager } from '../vpn/wireguard-manager';
+import { HttpClient, FetchHttpClient } from '../lib/http-client';
+import { DatabaseClient, KnexDatabaseClient } from '../db/client';
+import { WireGuardManager } from '../network/vpn/wireguard-manager';
 
 /**
  * UUID Generator Interface for dependency injection

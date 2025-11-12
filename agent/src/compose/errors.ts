@@ -2,6 +2,13 @@
  * Compose-specific errors
  */
 
+export class InvalidNetworkNameError extends Error {
+	constructor(name: string) {
+		super(`Invalid network name: ${name}`);
+		this.name = 'InvalidNetworkNameError';
+	}
+}
+
 export class ResourceRecreationAttemptError extends Error {
 	constructor(resourceType: string, resourceName: string) {
 		super(

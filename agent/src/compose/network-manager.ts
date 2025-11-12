@@ -6,7 +6,7 @@ import { isNotFoundError } from '../lib/errors';
 
 import * as logger from '../logging';
 import { Network } from './network';
-import { ResourceRecreationAttemptError } from '../errors';
+import { ResourceRecreationAttemptError } from './errors';
 
 export async function getAll(): Promise<Network[]> {
 	const networks = await getWithBothLabels();

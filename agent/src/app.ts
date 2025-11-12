@@ -13,7 +13,7 @@ import process from 'process';
 import DeviceAgent from './agent';
 
 // Start the device agent
-const supervisor = new DeviceAgent();
+const agent = new DeviceAgent();
 
 // Track if shutdown is in progress
 let shuttingDown = false;
@@ -30,7 +30,7 @@ async function gracefulShutdown(signal: string) {
 
 	try {
 		// Stop the agent (closes Device API, MQTT, etc.)
-		await supervisor.stop();
+		await agent.stop();
 		console.log('Device agent stopped successfully');
 		process.exit(0);
 	} catch (error) {
@@ -51,7 +51,7 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 // Start the device agent
-supervisor.init().catch((error) => {
+agent.init().catch((error) => {
 	console.error('Failed to initialize device agent:', error);
 	process.exit(1);
 });

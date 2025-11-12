@@ -1,4 +1,4 @@
-import { Logger } from './types';
+import { Logger } from '../types.js';
 
 /**
  * Console Logger implementation

@@ -18,4 +18,4 @@
  * ```
  */
 
-export { MqttManager } from './mqtt-manager';
+export { MqttManager } from './manager';

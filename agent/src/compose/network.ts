@@ -12,7 +12,7 @@ import type {
 	Network as NetworkIface,
 } from './types';
 
-import { InvalidNetworkNameError } from '../errors';
+import { InvalidNetworkNameError } from './errors';
 import { InternalInconsistencyError } from '../lib/errors';
 
 export type Network = NetworkIface;

@@ -10,7 +10,7 @@
  */
 
 import { EventEmitter } from 'events';
-import { MqttManager } from '../mqtt/mqtt-manager.js';
+import { MqttManager } from '../mqtt/manager.js';
 import { AgentLogger } from '../logging/agent-logger.js';
 
 export interface FeatureConfig {

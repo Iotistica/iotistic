@@ -21,7 +21,7 @@
 import axios, { AxiosInstance } from 'axios';
 import { BaseFeature, FeatureConfig } from '../../../features/base-feature.js';
 import { AgentLogger } from '../../../logging/agent-logger.js';
-import { MqttManager } from '../../../mqtt/mqtt-manager.js';
+import { MqttManager } from '../../../mqtt/manager.js';
 import { JobEngine } from './job-engine.js';
 import { JobDocument, JobStatus, JobExecutionData } from './types.js';
 import { normalizeApiEndpoint, getApiVersion } from '../../../utils/api-utils.js';

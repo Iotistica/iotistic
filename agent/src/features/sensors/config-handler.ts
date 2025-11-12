@@ -12,7 +12,7 @@
  */
 
 import { BaseConfigHandler, type ConfigHandlerOptions } from '../../config/handlers/base-handler.js';
-import type { ConfigChangeEvent } from '../../config/config-manager.js';
+import type { ConfigChangeEvent } from '../../config/manager.js';
 
 export interface ProtocolAdapterDevice {
 	name: string;

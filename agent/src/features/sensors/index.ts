@@ -15,26 +15,23 @@
 
 import { BaseFeature, FeatureConfig } from '../index.js';
 import { AgentLogger } from '../../logging/agent-logger.js';
-import { ModbusAdapter } from './modbus/modbus-adapter.js';
+import { ModbusAdapter } from './modbus/adapter.js';
 import { ModbusAdapterConfig } from './modbus/types.js';
-import { ConfigLoader } from './modbus/config-loader.js';
 import { SocketServer } from './common/socket-server.js';
-import { SensorDataPoint, SocketOutput } from './common/types.js';
+import { SensorDataPoint, SocketOutput } from './types.js';
+import { SensorOutputModel } from '../../models/sensor-outputs.model.js';
 import { DeviceSensorModel } from '../../models/sensors.model.js';
 
 export interface SensorConfig extends FeatureConfig {
   modbus?: {
     enabled: boolean;
-    configPath?: string;
-    config?: ModbusAdapterConfig;
+    config?: ModbusAdapterConfig; // Optional: provide config directly, otherwise load from database
   };
   can?: {
     enabled: boolean;
-    configPath?: string;
   };
   opcua?: {
     enabled: boolean;
-    configPath?: string;
   };
 }
 
@@ -109,32 +106,49 @@ export class SensorsFeature extends BaseFeature {
       let modbusConfig: ModbusAdapterConfig;
       let outputConfig: SocketOutput;
 
-      // Load adapter config and output config from database or file
-      if (this.config.modbus!.configPath) {
-        this.logger.info(`Loading Modbus config from: ${this.config.modbus!.configPath}`);
-        const fullConfig = ConfigLoader.loadFromFile(this.config.modbus!.configPath);
-        modbusConfig = { devices: fullConfig.devices, logging: fullConfig.logging };
-        outputConfig = fullConfig.output!; // Standalone mode requires output config
-      } else if (this.config.modbus!.config) {
+      // Load config from provided config object or database
+      if (this.config.modbus!.config) {
+        // Use provided config
         modbusConfig = this.config.modbus!.config;
-        // Load output config from database when running as agent feature
-        const dbOutput = await DeviceSensorModel.getOutput('modbus');
-        if (!dbOutput) {
-          throw new Error('Modbus output configuration not found in database');
-        }
-        outputConfig = {
-          socketPath: dbOutput.socket_path,
-          dataFormat: dbOutput.data_format as 'json' | 'csv',
-          delimiter: dbOutput.delimiter,
-          includeTimestamp: dbOutput.include_timestamp,
-          includeDeviceName: dbOutput.include_device_name
-        };
       } else {
-        // Load both adapter and output config from database
-        const fullConfig = await ConfigLoader.loadFromDatabase();
-        modbusConfig = { devices: fullConfig.devices, logging: fullConfig.logging };
-        outputConfig = fullConfig.output!;
+        // Load devices from database
+        const dbDevices = await DeviceSensorModel.getEnabled('modbus');
+        if (dbDevices.length === 0) {
+          this.logger.warn('No Modbus devices found in database');
+          return;
+        }
+        
+        // Convert database format to ModbusAdapterConfig
+        // Database stores the full ModbusDevice config in connection and data_points fields
+        modbusConfig = {
+          devices: dbDevices.map(d => ({
+            name: d.name,
+            enabled: d.enabled,
+            slaveId: d.connection.slaveId || 1,
+            connection: d.connection as any, // Connection config stored in database
+            pollInterval: d.poll_interval,
+            registers: d.data_points || []
+          }) as any), // Type assertion - database stores full ModbusDevice config
+          logging: {
+            level: 'info',
+            enableConsole: false,
+            enableFile: false
+          }
+        };
       }
+
+      // Load output config from database
+      const dbOutput = await SensorOutputModel.getOutput('modbus');
+      if (!dbOutput) {
+        throw new Error('Modbus output configuration not found in database');
+      }
+      outputConfig = {
+        socketPath: dbOutput.socket_path,
+        dataFormat: dbOutput.data_format as 'json' | 'csv',
+        delimiter: dbOutput.delimiter,
+        includeTimestamp: dbOutput.include_timestamp,
+        includeDeviceName: dbOutput.include_device_name
+      };
 
       // Create socket server for Modbus protocol
       const modbusSocket = new SocketServer(outputConfig, this.logger);

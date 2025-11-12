@@ -1,0 +1,14 @@
+/**
+ * Data Models
+ * ===========
+ * 
+ * Database models for sensors and outputs
+ */
+
+// Sensor device models (CRUD operations)
+export { DeviceSensorModel } from './sensors.model';
+export type { DeviceSensor } from './sensors.model';
+
+// Sensor output configuration (protocol adapter outputs)
+export { SensorOutputModel } from './sensor-outputs.model';
+export type { DeviceSensorOutput } from './sensor-outputs.model';

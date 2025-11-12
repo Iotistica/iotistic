@@ -1,10 +1,10 @@
 /**
- * Protocol Adapter Device Model
- * Manages Modbus, CAN, OPC-UA device configurations in SQLite
+ * Sensor Device Model
+ * Manages protocol adapter device configurations (Modbus, CAN, OPC-UA) in SQLite
  */
 
-import { models, getKnex } from '../db';
-import type { Knex } from 'knex';
+import { models, getKnex } from '../db/connection';
+import { SensorOutputModel } from './sensor-outputs.model';
 
 export interface DeviceSensor {
   id?: number;
@@ -19,22 +19,8 @@ export interface DeviceSensor {
   updated_at?: Date;
 }
 
-export interface DeviceSensorOutput {
-  id?: number;
-  protocol: 'modbus' | 'can' | 'opcua';
-  socket_path: string;
-  data_format: string;
-  delimiter: string;
-  include_timestamp: boolean;
-  include_device_name: boolean;
-  logging?: Record<string, any>;
-  created_at?: Date;
-  updated_at?: Date;
-}
-
 export class DeviceSensorModel {
   private static table = 'sensors';
-  private static outputTable = 'sensor_outputs';
 
   /**
    * Get all protocol adapter devices
@@ -126,41 +112,6 @@ export class DeviceSensorModel {
   }
 
   /**
-   * Get output configuration for a protocol
-   */
-  static async getOutput(protocol: string): Promise<DeviceSensorOutput | null> {
-    const output = await models(this.outputTable)
-      .where('protocol', protocol)
-      .first();
-    return output || null;
-  }
-
-  /**
-   * Set output configuration for a protocol
-   */
-  static async setOutput(output: DeviceSensorOutput): Promise<DeviceSensorOutput | null> {
-    const existing = await this.getOutput(output.protocol);
-
-    const outputData = {
-      ...output,
-      logging: output.logging ? JSON.stringify(output.logging) : null,
-    };
-
-    if (existing) {
-      await models(this.outputTable)
-        .where('protocol', output.protocol)
-        .update({
-          ...outputData,
-          updated_at: new Date(),
-        });
-    } else {
-      await models(this.outputTable).insert(outputData);
-    }
-
-    return await this.getOutput(output.protocol);
-  }
-
-  /**
    * Import devices from JSON config (migration helper)
    */
   static async importFromJson(protocol: string, config: any): Promise<void> {
@@ -186,19 +137,19 @@ export class DeviceSensorModel {
         }
       }
 
-      // Import output config
+      // Import output config (using SensorOutputModel)
       if (config.output) {
-        const existingOutput = await trx(this.outputTable).where('protocol', protocol).first();
+        const existingOutput = await SensorOutputModel.getOutput(protocol);
         
         if (!existingOutput) {
-          await trx(this.outputTable).insert({
-            protocol,
+          await SensorOutputModel.setOutput({
+            protocol: protocol as 'modbus' | 'can' | 'opcua',
             socket_path: config.output.socketPath || config.output.socket_path,
             data_format: config.output.dataFormat || 'json',
             delimiter: config.output.delimiter || '\n',
             include_timestamp: config.output.includeTimestamp !== false,
             include_device_name: config.output.includeDeviceName !== false,
-            logging: config.output.logging ? JSON.stringify(config.output.logging) : null,
+            logging: config.output.logging,
           });
         }
       }

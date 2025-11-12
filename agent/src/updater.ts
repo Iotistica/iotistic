@@ -9,7 +9,7 @@ import { existsSync } from 'fs';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { AgentLogger } from './logging/agent-logger.js';
-import { MqttManager } from './mqtt/mqtt-manager.js';
+import { MqttManager } from './mqtt/manager.js';
 
 const execAsync = promisify(exec);
 

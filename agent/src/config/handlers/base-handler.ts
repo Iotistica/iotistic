@@ -5,7 +5,7 @@
  * Promotes consistent architecture across features.
  */
 
-import type { ConfigManager, ConfigChangeEvent } from '../config-manager.js';
+import type { ConfigManager, ConfigChangeEvent } from '../manager.js';
 import type { AgentLogger } from '../../logging/agent-logger.js';
 
 export interface ConfigHandlerOptions {

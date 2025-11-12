@@ -9,17 +9,17 @@
  * - Logging
  */
 
-import { StateReconciler } from "./orchestrator/state-reconciler.js";
-import type { DeviceState } from "./orchestrator/state-reconciler.js";
+import { StateReconciler } from "./drivers/state-reconciler.js";
+import type { DeviceState } from "./drivers/state-reconciler.js";
 import ContainerManager from "./compose/container-manager.js";
 import { DeviceManager } from "./provisioning/index.js";
 import type { DeviceInfo } from "./provisioning/types.js";
-import { DeviceAPI } from "./device-api/index.js";
-import { router as v1Router } from "./device-api/v1.js";
-import { router as v2Router } from "./device-api/v2.js";
-import * as deviceActions from "./device-api/actions.js";
-import { ApiBinder } from "./sync-state.js";
-import * as db from "./db.js";
+import { DeviceAPI } from "./api/index.js";
+import { router as v1Router } from "./api/v1.js";
+import { router as v2Router } from "./api/v2.js";
+import * as deviceActions from "./api/actions.js";
+import { ApiBinder } from "./sync/index.js";
+import * as db from "./db/connection.js";
 import { LocalLogBackend } from "./logging/local-backend.js";
 import { CloudLogBackend } from "./logging/cloud-backend.js";
 import { ContainerLogMonitor } from "./logging/monitor.js";
@@ -28,12 +28,12 @@ import type { LogBackend } from "./logging/types.js";
 import { JobsFeature } from "./features/jobs/src/jobs-feature.js";
 import { SensorPublishFeature } from "./features/sensor-publish/index.js";
 import { SensorConfigHandler } from "./features/sensor-publish/config-handler.js";
-import { MqttManager } from "./mqtt/mqtt-manager.js";
+import { MqttManager } from "./mqtt/manager.js";
 import {
   SensorsFeature as SensorsFeature,
   SensorConfig,
 } from "./features/sensors/index.js";
-import { AgentFirewall } from "./security/firewall.js";
+import { AgentFirewall } from "./network/firewall.js";
 import { AgentUpdater } from "./updater.js";
 import { readFileSync } from "fs";
 import { join } from "path";
@@ -251,7 +251,7 @@ export default class DeviceAgent {
       try {
         // Auto-detect system information if not provided via env vars
         const { getMacAddress, getOsVersion } = await import(
-          "./system-metrics.js"
+          "./system/metrics.js"
         );
         const macAddress = process.env.MAC_ADDRESS || (await getMacAddress());
         const osVersion = process.env.OS_VERSION || (await getOsVersion());
