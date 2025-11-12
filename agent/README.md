@@ -1,6 +1,6 @@
-﻿# Standalone Application Manager
+﻿# Iotistic Agent
 
-A standalone application manager service extracted from the Balena Supervisor. This package provides container orchestration capabilities for managing Docker-based applications.
+Edge device agent for the Iotistic IoT platform. Provides container orchestration, cloud synchronization, device provisioning, and real-time monitoring for IoT devices running on Raspberry Pi, x86_64, and other edge hardware.
 
 ## 🎯 Quick Start
 
