@@ -92,7 +92,9 @@ export class SimulationOrchestrator {
 			const scenario = new SensorDataSimulation(
 				sensorConfig,
 				this.dependencies.anomalyService,
-				this.logger
+				this.logger,
+				this.dependencies.mqttManager,
+				this.dependencies.deviceUuid
 			);
 			this.scenarios.set('sensor_data', scenario);
 		}

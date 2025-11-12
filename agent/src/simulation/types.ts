@@ -8,6 +8,7 @@
 
 import type { AgentLogger } from '../logging/agent-logger';
 import type { AnomalyDetectionService } from '../ai/anomaly';
+import type { MqttManager } from '../mqtt/manager';
 
 /**
  * Simulation pattern types
@@ -150,6 +151,7 @@ export interface SimulationScenarioStatus {
 export interface SimulationDependencies {
 	logger?: AgentLogger;
 	anomalyService?: AnomalyDetectionService;
+	mqttManager?: MqttManager;
 	deviceUuid?: string;
 }
 

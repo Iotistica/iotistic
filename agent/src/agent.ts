@@ -658,6 +658,7 @@ export default class DeviceAgent {
       this.simulationOrchestrator = new SimulationOrchestrator(config, {
         logger: this.agentLogger,
         anomalyService: this.anomalyService,
+        mqttManager: MqttManager.getInstance(),
         deviceUuid: this.deviceInfo.uuid,
       });
       

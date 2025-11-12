@@ -8,6 +8,7 @@
 import type { AgentLogger } from '../../logging/agent-logger';
 import { LogComponents } from '../../logging/types';
 import type { AnomalyDetectionService } from '../../ai/anomaly';
+import type { MqttManager } from '../../mqtt/manager';
 import type {
 	SimulationScenario,
 	SimulationScenarioStatus,
@@ -17,15 +18,21 @@ import type {
 
 /**
  * Sensor data simulation scenario
+ * 
+ * Generates synthetic sensor data matching the format of real sensor-publish feature:
+ * - MQTT Topic: iot/device/{deviceUuid}/sensor/{mqttTopic}
+ * - Payload: { sensor: "name", timestamp: "ISO", messages: ["data"] }
  */
 export class SensorDataSimulation implements SimulationScenario {
 	name = 'sensor_data';
-	description = 'Generates synthetic sensor data';
+	description = 'Generates synthetic sensor data (MQTT + anomaly detection)';
 	enabled = false;
 	
 	private config: SensorDataSimulationConfig;
 	private logger?: AgentLogger;
 	private anomalyService?: AnomalyDetectionService;
+	private mqttManager?: MqttManager;
+	private deviceUuid?: string;
 	private running = false;
 	private startedAt?: number;
 	private publishInterval?: NodeJS.Timeout;
@@ -36,11 +43,15 @@ export class SensorDataSimulation implements SimulationScenario {
 	constructor(
 		config: SensorDataSimulationConfig,
 		anomalyService?: AnomalyDetectionService,
-		logger?: AgentLogger
+		logger?: AgentLogger,
+		mqttManager?: MqttManager,
+		deviceUuid?: string
 	) {
 		this.config = config;
 		this.anomalyService = anomalyService;
 		this.logger = logger;
+		this.mqttManager = mqttManager;
+		this.deviceUuid = deviceUuid;
 		this.enabled = config.enabled;
 		
 		// Initialize drift offsets
@@ -128,12 +139,50 @@ export class SensorDataSimulation implements SimulationScenario {
 	
 	/**
 	 * Publish sensor data for all configured sensors
+	 * 
+	 * Matches the real sensor-publish format:
+	 * - Topic: iot/device/{deviceUuid}/sensor/{mqttTopic}
+	 * - Payload: { sensor: "name", timestamp: "ISO", messages: [data] }
 	 */
-	private publishSensorData(): void {
+	private async publishSensorData(): Promise<void> {
 		for (const sensor of this.config.sensors) {
 			const value = this.generateSensorValue(sensor);
 			
-			// Feed to anomaly detection if available
+			// 1. Publish to MQTT (matching sensor-publish format)
+			if (this.mqttManager && this.deviceUuid) {
+				try {
+					const topic = `iot/device/${this.deviceUuid}/sensor/${sensor.metric}`;
+					const payload = JSON.stringify({
+						sensor: sensor.metric,
+						timestamp: new Date().toISOString(),
+						messages: [
+							JSON.stringify({
+								value: parseFloat(value.toFixed(2)),
+								unit: sensor.unit,
+								timestamp: Date.now(),
+								simulation: true
+							})
+						]
+					});
+					
+					await this.mqttManager.publish(topic, payload, { qos: 1 });
+					
+					this.logger?.debugSync('Simulated sensor MQTT published', {
+						component: LogComponents.metrics,
+						topic,
+						sensor: sensor.metric,
+						value: value.toFixed(2),
+					});
+				} catch (error) {
+					this.logger?.errorSync(
+						'Failed to publish simulated sensor data to MQTT',
+						error instanceof Error ? error : new Error(String(error)),
+						{ sensor: sensor.metric }
+					);
+				}
+			}
+			
+			// 2. Feed to anomaly detection if available (for testing detection)
 			if (this.anomalyService) {
 				const dataPoint = {
 					source: 'sensor' as const,
