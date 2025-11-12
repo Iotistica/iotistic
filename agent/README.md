@@ -399,9 +399,6 @@ This standalone version is a simplified extraction that:
 - Lacks full error handling
 - Requires additional work to be production-ready
 
-## Original Source
-
-Container orchestration patterns inspired by modern IoT platforms. Built specifically for the Iotistic multi-tenant SaaS architecture.
 
 ## License
 
