@@ -3,6 +3,14 @@
  */
 
 import type { Request, Response, NextFunction } from 'express';
+import type { AgentLogger } from '../../logging/agent-logger';
+import { LogComponents } from '../../logging/types';
+
+let logger: AgentLogger | undefined;
+
+export function setLogger(agentLogger?: AgentLogger) {
+	logger = agentLogger;
+}
 
 export default function errors(
 	err: Error,
@@ -10,7 +18,15 @@ export default function errors(
 	res: Response,
 	next: NextFunction
 ) {
-	console.error('API Error:', err);
+	if (logger) {
+		logger.errorSync('API Error', err, {
+			component: LogComponents.deviceApi,
+			method: req.method,
+			path: req.path
+		});
+	} else {
+		console.error('API Error:', err);
+	}
 
 	// Check if response already sent
 	if (res.headersSent) {

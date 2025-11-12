@@ -30,6 +30,12 @@ export class DeviceAPI {
 		this.healthchecks = healthchecks;
 		this.logger = logger;
 
+		// Set logger for middleware
+		if (logger) {
+			middleware.setLoggingLogger(logger);
+			middleware.setErrorsLogger(logger);
+		}
+
 		this.api.disable('x-powered-by');
 		this.api.use(middleware.logging);
 

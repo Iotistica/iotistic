@@ -163,4 +163,53 @@ router.post('/v1/shutdown', async (req: Request, res: Response, next: NextFuncti
 	}
 });
 
+/**
+ * POST /v1/test/anomaly
+ * Inject test data to simulate anomalies (for testing only)
+ * Body: { metric: 'cpu_usage', value: 95, count: 5 }
+ */
+router.post('/v1/test/anomaly', async (req: Request, res: Response, next: NextFunction) => {
+	try {
+		const { metric = 'cpu_usage', value, count = 1 } = req.body;
+		
+		if (value === undefined) {
+			return res.status(400).json({ error: 'Missing value parameter' });
+		}
+		
+		const anomalyService = (actions as any).getAnomalyService?.();
+		if (!anomalyService) {
+			return res.status(503).json({ error: 'Anomaly detection service not available' });
+		}
+		
+		// Inject test data points
+		const injectedPoints = [];
+		for (let i = 0; i < count; i++) {
+			const dataPoint = {
+				source: 'test' as const,
+				metric,
+				value: typeof value === 'number' ? value : parseFloat(value),
+				unit: metric === 'cpu_usage' || metric === 'memory_percent' ? '%' : '°C',
+				timestamp: Date.now() + (i * 1000), // Spread over time
+				quality: 'GOOD' as const
+			};
+			
+			anomalyService.processDataPoint(dataPoint);
+			injectedPoints.push(dataPoint);
+		}
+		
+		// Get current stats
+		const stats = anomalyService.getStats();
+		const alerts = anomalyService.getAlerts();
+		
+		return res.status(200).json({
+			message: `Injected ${count} test data point(s)`,
+			injectedPoints,
+			currentStats: stats,
+			recentAlerts: alerts.slice(0, 10)
+		});
+	} catch (error) {
+		next(error);
+	}
+});
+
 export default router;

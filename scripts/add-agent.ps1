@@ -142,6 +142,7 @@ $template = @"
                 - LEAK_RATE_MB=50
                 - LEAK_INTERVAL_MS=2000
                 - LEAK_MAX_MB=30
+                - ANOMALY_DETECTION_ENABLED=true
                 
                 
             depends_on:

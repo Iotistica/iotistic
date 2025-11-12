@@ -38,18 +38,13 @@ export class AnomalyDetectionService {
 			config.alerts.cooldownMs
 		);
 		
-		// Initialize buffers for configured metrics
-		for (const metricConfig of config.metrics) {
-			if (metricConfig.enabled) {
-				const buffer = createBuffer(metricConfig.windowSize);
-				this.buffers.set(metricConfig.name, buffer);
-			}
-		}
+		// Buffers are created lazily when data is first received (more efficient)
+		// This ensures metricsTracked reflects only actively monitored metrics
 		
 		this.logger?.infoSync('Anomaly detection service initialized', {
 			component: LogComponents.metrics,
 			enabled: this.enabled,
-			metricsCount: config.metrics.filter(m => m.enabled).length,
+			metricsConfigured: config.metrics.filter(m => m.enabled).length,
 			methods: this.getUniqueDetectionMethods(),
 		});
 	}

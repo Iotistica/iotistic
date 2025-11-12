@@ -44,6 +44,8 @@ import {
   stopMemoryLeakSimulation,
   getSimulationStatus
 } from "./system/memory.js";
+import { AnomalyDetectionService } from "./ai/anomaly/index.js";
+import { loadConfigFromEnv } from "./ai/anomaly/utils.js";
 import { readFileSync } from "fs";
 import { join } from "path";
 
@@ -75,6 +77,7 @@ export default class DeviceAgent {
   private sensorPublish?: SensorPublishFeature;
   private sensors?: SensorsFeature;
   private sensorConfigHandler?: SensorConfigHandler;
+  private anomalyService?: AnomalyDetectionService; // Anomaly detection for metrics
 
   // Cached target state (updated when target state changes)
   private cachedTargetState: any = null;
@@ -197,7 +200,10 @@ export default class DeviceAgent {
         await Promise.all(featurePromises);
       }
 
-      // 10. Initialize API Binder (AFTER features are initialized so it can access sensor health)
+      // 10. Initialize Anomaly Detection Service (BEFORE API Binder so it can be passed to CloudSync)
+      this.initializeAnomalyDetection();
+
+      // 11. Initialize API Binder (AFTER features are initialized so it can access sensor health)
       await this.initializeDeviceSync(configSettings);
 
       // 11-13. Parallelize final setup tasks
@@ -567,7 +573,7 @@ export default class DeviceAgent {
     });
 
     // Initialize device actions with managers
-    deviceActions.initialize(this.containerManager, this.deviceManager, undefined, this.agentLogger);
+    deviceActions.initialize(this.containerManager, this.deviceManager, undefined, this.agentLogger, undefined);
 
     // Health checks
     const healthchecks = [
@@ -600,6 +606,34 @@ export default class DeviceAgent {
       component: LogComponents.agent,
       port: this.DEVICE_API_PORT,
     });
+  }
+
+  private initializeAnomalyDetection(): void {
+    this.agentLogger?.infoSync("Initializing Anomaly Detection Service", {
+      component: LogComponents.agent,
+    });
+
+    try {
+      // Load configuration from environment variables
+      const config = loadConfigFromEnv();
+      
+      // Create anomaly detection service
+      this.anomalyService = new AnomalyDetectionService(config, this.agentLogger);
+      
+      this.agentLogger?.infoSync("Anomaly Detection Service initialized", {
+        component: LogComponents.agent,
+        enabled: config.enabled,
+        metricsCount: config.metrics.filter(m => m.enabled).length,
+      });
+    } catch (error) {
+      this.agentLogger?.errorSync(
+        "Failed to initialize Anomaly Detection Service",
+        error as Error,
+        { component: LogComponents.agent }
+      );
+      // Don't fail startup - anomaly detection is optional
+      this.anomalyService = undefined;
+    }
   }
 
   private async initializeDeviceSync(
@@ -658,7 +692,9 @@ export default class DeviceAgent {
       this.agentLogger, // Pass the agent logger
       this.sensorPublish, // Pass sensor-publish for health reporting
       this.sensors, // Pass protocol-adapters for health reporting
-      MqttManager.getInstance() // Pass MQTT manager singleton for state reporting (optional)
+      MqttManager.getInstance(), // Pass MQTT manager singleton for state reporting (optional)
+      undefined, // Use default HTTP client
+      this.anomalyService // Pass anomaly detection service for metrics reporting
     );
 
     // Reinitialize device actions with cloudSync for connection health endpoint
@@ -666,7 +702,8 @@ export default class DeviceAgent {
       this.containerManager,
       this.deviceManager,
       this.cloudSync,
-      this.agentLogger
+      this.agentLogger,
+      this.anomalyService
     );
 
     // Config updates are now handled automatically by ConfigManager

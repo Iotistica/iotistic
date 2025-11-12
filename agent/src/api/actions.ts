@@ -7,18 +7,34 @@ import ContainerManager from '../compose/container-manager';
 import type { DeviceManager } from '../provisioning';
 import type { CloudSync } from '../sync';
 import type { AgentLogger } from '../logging/agent-logger';
+import type { AnomalyDetectionService } from '../ai/anomaly';
 import { LogComponents } from '../logging/types';
 
 let containerManager: ContainerManager;
 let deviceManager: DeviceManager;
 let cloudSync: CloudSync | undefined;
 let logger: AgentLogger | undefined;
+let anomalyService: AnomalyDetectionService | undefined;
 
-export function initialize(cm: ContainerManager, dm: DeviceManager, ab?: CloudSync, agentLogger?: AgentLogger) {
+export function initialize(
+	cm: ContainerManager, 
+	dm: DeviceManager, 
+	ab?: CloudSync, 
+	agentLogger?: AgentLogger,
+	anomaly?: AnomalyDetectionService
+) {
 	containerManager = cm;
 	deviceManager = dm;
 	cloudSync = ab;
 	logger = agentLogger;
+	anomalyService = anomaly;
+}
+
+/**
+ * Get anomaly detection service (for testing endpoints)
+ */
+export function getAnomalyService(): AnomalyDetectionService | undefined {
+	return anomalyService;
 }
 
 /**

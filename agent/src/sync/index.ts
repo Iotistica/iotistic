@@ -748,6 +748,52 @@ export class CloudSync extends EventEmitter {
 					this.lastLocalIp = currentIp;
 				}
 				
+				// Feed metrics to anomaly detection service
+				if (this.anomalyService) {
+					try {
+						// CPU usage
+						if (metrics.cpu_usage !== undefined) {
+							this.anomalyService.processDataPoint({
+								source: 'system',
+								metric: 'cpu_usage',
+								value: metrics.cpu_usage,
+								unit: '%',
+								timestamp: Date.now(),
+								quality: 'GOOD'
+							});
+						}
+						
+						// Memory usage (as percentage)
+						if (metrics.memory_usage !== undefined && metrics.memory_total !== undefined) {
+							const memoryPercent = (metrics.memory_usage / metrics.memory_total) * 100;
+							this.anomalyService.processDataPoint({
+								source: 'system',
+								metric: 'memory_percent',
+								value: memoryPercent,
+								unit: '%',
+								timestamp: Date.now(),
+								quality: 'GOOD'
+							});
+						}
+						
+						// CPU temperature
+						if (metrics.cpu_temp !== undefined) {
+							this.anomalyService.processDataPoint({
+								source: 'system',
+								metric: 'cpu_temp',
+								value: metrics.cpu_temp,
+								unit: '°C',
+								timestamp: Date.now(),
+								quality: 'GOOD'
+							});
+						}
+					} catch (anomalyError) {
+						this.logger?.debugSync('Failed to process metrics for anomaly detection', {
+							component: LogComponents.cloudSync,
+							error: anomalyError instanceof Error ? anomalyError.message : String(anomalyError)
+						});
+					}
+				}
 			
 			this.lastMetricsTime = now;
 		} catch (error) {
@@ -798,14 +844,6 @@ export class CloudSync extends EventEmitter {
 				const anomalySummary = this.anomalyService.getSummaryForReport(10);
 				if (anomalySummary) {
 					(stateReport[deviceInfo.uuid] as any).anomaly_detection = anomalySummary;
-					
-					this.logger?.debugSync('Anomaly detection data included in report', {
-						component: LogComponents.cloudSync,
-						operation: 'collect-anomaly-stats',
-						alertCount: anomalySummary.stats.totalAlerts,
-						criticalCount: anomalySummary.stats.criticalCount,
-						warningCount: anomalySummary.stats.warningCount,
-					});
 				}
 			} catch (error) {
 				this.logger?.warnSync('Failed to collect anomaly detection stats', {
@@ -814,6 +852,14 @@ export class CloudSync extends EventEmitter {
 					error: error instanceof Error ? error.message : String(error)
 				});
 			}
+		}
+		
+		// Log complete metrics report if metrics were collected
+		if (includeMetrics) {
+			this.logger?.infoSync('Metrics Report', {
+				component: LogComponents.metrics,
+				report: stateReport[deviceInfo.uuid],
+			});
 		}
 	}	// Build state-only report for diff comparison (without metrics)
 	const stateOnlyReport: DeviceStateReport = {
