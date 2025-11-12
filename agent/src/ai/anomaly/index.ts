@@ -6,8 +6,8 @@
  */
 
 import { randomUUID } from 'crypto';
-import type { AgentLogger } from '../logging/agent-logger';
-import { LogComponents } from '../logging/types';
+import type { AgentLogger } from '../../logging/agent-logger';
+import { LogComponents } from '../../logging/types';
 import type {
 	DataPoint,
 	AnomalyConfig,
