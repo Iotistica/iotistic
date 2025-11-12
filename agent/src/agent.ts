@@ -46,6 +46,7 @@ import {
 } from "./system/memory.js";
 import { AnomalyDetectionService } from "./ai/anomaly/index.js";
 import { loadConfigFromEnv } from "./ai/anomaly/utils.js";
+import { SimulationOrchestrator, loadSimulationConfig } from "./simulation/index.js";
 import { readFileSync } from "fs";
 import { join } from "path";
 
@@ -78,6 +79,7 @@ export default class DeviceAgent {
   private sensors?: SensorsFeature;
   private sensorConfigHandler?: SensorConfigHandler;
   private anomalyService?: AnomalyDetectionService; // Anomaly detection for metrics
+  private simulationOrchestrator?: SimulationOrchestrator; // Simulation framework for testing
 
   // Cached target state (updated when target state changes)
   private cachedTargetState: any = null;
@@ -202,6 +204,9 @@ export default class DeviceAgent {
 
       // 10. Initialize Anomaly Detection Service (BEFORE API Binder so it can be passed to CloudSync)
       this.initializeAnomalyDetection();
+
+      // 10.5. Initialize Simulation Orchestrator (AFTER Anomaly Detection, used for testing)
+      await this.initializeSimulationMode();
 
       // 11. Initialize API Binder (AFTER features are initialized so it can access sensor health)
       await this.initializeDeviceSync(configSettings);
@@ -573,7 +578,7 @@ export default class DeviceAgent {
     });
 
     // Initialize device actions with managers
-    deviceActions.initialize(this.containerManager, this.deviceManager, undefined, this.agentLogger, undefined);
+    deviceActions.initialize(this.containerManager, this.deviceManager, undefined, this.agentLogger, undefined, undefined);
 
     // Health checks
     const healthchecks = [
@@ -633,6 +638,40 @@ export default class DeviceAgent {
       );
       // Don't fail startup - anomaly detection is optional
       this.anomalyService = undefined;
+    }
+  }
+
+  private async initializeSimulationMode(): Promise<void> {
+    try {
+      // Load simulation configuration from environment
+      const config = loadSimulationConfig();
+      
+      if (!config.enabled) {
+        return; // Simulation mode disabled
+      }
+      
+      this.agentLogger?.warnSync("Initializing Simulation Mode - FOR TESTING ONLY", {
+        component: LogComponents.agent,
+      });
+      
+      // Create simulation orchestrator
+      this.simulationOrchestrator = new SimulationOrchestrator(config, {
+        logger: this.agentLogger,
+        anomalyService: this.anomalyService,
+        deviceUuid: this.deviceInfo.uuid,
+      });
+      
+      // Start all enabled scenarios
+      await this.simulationOrchestrator.start();
+      
+    } catch (error) {
+      this.agentLogger?.errorSync(
+        "Failed to initialize Simulation Mode",
+        error as Error,
+        { component: LogComponents.agent }
+      );
+      // Don't fail startup - simulation is optional
+      this.simulationOrchestrator = undefined;
     }
   }
 
@@ -703,7 +742,8 @@ export default class DeviceAgent {
       this.deviceManager,
       this.cloudSync,
       this.agentLogger,
-      this.anomalyService
+      this.anomalyService,
+      this.simulationOrchestrator
     );
 
     // Config updates are now handled automatically by ConfigManager
@@ -1323,7 +1363,15 @@ export default class DeviceAgent {
         component: LogComponents.agent,
       });
 
-      // Stop memory leak simulation if running
+      // Stop simulation orchestrator if running
+      if (this.simulationOrchestrator) {
+        await this.simulationOrchestrator.stop();
+        this.agentLogger?.infoSync("Simulation orchestrator stopped", {
+          component: LogComponents.agent,
+        });
+      }
+
+      // Stop memory leak simulation if running (backward compatibility)
       stopMemoryLeakSimulation();
       this.agentLogger?.infoSync("Memory leak simulation stopped", {
         component: LogComponents.agent,

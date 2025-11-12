@@ -212,4 +212,98 @@ router.post('/v1/test/anomaly', async (req: Request, res: Response, next: NextFu
 	}
 });
 
+/**
+ * GET /v1/simulation/status
+ * Get simulation orchestrator status
+ */
+router.get('/v1/simulation/status', async (req: Request, res: Response, next: NextFunction) => {
+	try {
+		const simulationOrchestrator = (actions as any).getSimulationOrchestrator?.();
+		if (!simulationOrchestrator) {
+			return res.status(404).json({ 
+				error: 'Simulation mode not available',
+				hint: 'Set SIMULATION_MODE=true to enable'
+			});
+		}
+		
+		const status = simulationOrchestrator.getStatus();
+		return res.status(200).json(status);
+	} catch (error) {
+		next(error);
+	}
+});
+
+/**
+ * POST /v1/simulation/scenarios/:scenario/start
+ * Start a specific simulation scenario
+ */
+router.post('/v1/simulation/scenarios/:scenario/start', async (req: Request, res: Response, next: NextFunction) => {
+	try {
+		const { scenario } = req.params;
+		
+		const simulationOrchestrator = (actions as any).getSimulationOrchestrator?.();
+		if (!simulationOrchestrator) {
+			return res.status(404).json({ error: 'Simulation mode not available' });
+		}
+		
+		await simulationOrchestrator.startScenario(scenario);
+		const status = simulationOrchestrator.getStatus();
+		
+		return res.status(200).json({
+			message: `Scenario ${scenario} started`,
+			status
+		});
+	} catch (error) {
+		next(error);
+	}
+});
+
+/**
+ * POST /v1/simulation/scenarios/:scenario/stop
+ * Stop a specific simulation scenario
+ */
+router.post('/v1/simulation/scenarios/:scenario/stop', async (req: Request, res: Response, next: NextFunction) => {
+	try {
+		const { scenario } = req.params;
+		
+		const simulationOrchestrator = (actions as any).getSimulationOrchestrator?.();
+		if (!simulationOrchestrator) {
+			return res.status(404).json({ error: 'Simulation mode not available' });
+		}
+		
+		await simulationOrchestrator.stopScenario(scenario);
+		const status = simulationOrchestrator.getStatus();
+		
+		return res.status(200).json({
+			message: `Scenario ${scenario} stopped`,
+			status
+		});
+	} catch (error) {
+		next(error);
+	}
+});
+
+/**
+ * POST /v1/simulation/stop-all
+ * Stop all running simulation scenarios
+ */
+router.post('/v1/simulation/stop-all', async (req: Request, res: Response, next: NextFunction) => {
+	try {
+		const simulationOrchestrator = (actions as any).getSimulationOrchestrator?.();
+		if (!simulationOrchestrator) {
+			return res.status(404).json({ error: 'Simulation mode not available' });
+		}
+		
+		await simulationOrchestrator.stop();
+		const status = simulationOrchestrator.getStatus();
+		
+		return res.status(200).json({
+			message: 'All simulations stopped',
+			status
+		});
+	} catch (error) {
+		next(error);
+	}
+});
+
 export default router;

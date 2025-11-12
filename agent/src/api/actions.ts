@@ -8,6 +8,7 @@ import type { DeviceManager } from '../provisioning';
 import type { CloudSync } from '../sync';
 import type { AgentLogger } from '../logging/agent-logger';
 import type { AnomalyDetectionService } from '../ai/anomaly';
+import type { SimulationOrchestrator } from '../simulation';
 import { LogComponents } from '../logging/types';
 
 let containerManager: ContainerManager;
@@ -15,19 +16,22 @@ let deviceManager: DeviceManager;
 let cloudSync: CloudSync | undefined;
 let logger: AgentLogger | undefined;
 let anomalyService: AnomalyDetectionService | undefined;
+let simulationOrchestrator: SimulationOrchestrator | undefined;
 
 export function initialize(
 	cm: ContainerManager, 
 	dm: DeviceManager, 
 	ab?: CloudSync, 
 	agentLogger?: AgentLogger,
-	anomaly?: AnomalyDetectionService
+	anomaly?: AnomalyDetectionService,
+	simulation?: SimulationOrchestrator
 ) {
 	containerManager = cm;
 	deviceManager = dm;
 	cloudSync = ab;
 	logger = agentLogger;
 	anomalyService = anomaly;
+	simulationOrchestrator = simulation;
 }
 
 /**
@@ -35,6 +39,13 @@ export function initialize(
  */
 export function getAnomalyService(): AnomalyDetectionService | undefined {
 	return anomalyService;
+}
+
+/**
+ * Get simulation orchestrator (for testing endpoints)
+ */
+export function getSimulationOrchestrator(): SimulationOrchestrator | undefined {
+	return simulationOrchestrator;
 }
 
 /**
