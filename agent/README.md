@@ -27,6 +27,8 @@ iotctl config reset               # Reset to defaults
 
 # Device management
 iotctl status                     # Device health and status
+iotctl diagnostics                # Run full system diagnostics (API, DB, MQTT, cloud)
+iotctl diag                       # Short alias for diagnostics
 iotctl restart                    # Restart the agent
 iotctl logs --follow              # View agent logs (use from host: docker logs -f agent-1)
 iotctl logs -n 50                 # Show last 50 log lines

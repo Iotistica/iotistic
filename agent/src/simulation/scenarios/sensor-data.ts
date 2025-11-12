@@ -83,12 +83,16 @@ export class SensorDataSimulation implements SimulationScenario {
 		this.startedAt = Date.now();
 		this.publishCount = 0;
 		
-		// Publish immediately on start
-		this.publishSensorData();
+		// Publish immediately on start (but don't await to avoid blocking)
+		this.publishSensorData().catch(() => {
+			// Ignore errors on start - likely MQTT not connected
+		});
 		
 		// Then publish on interval
 		this.publishInterval = setInterval(() => {
-			this.publishSensorData();
+			this.publishSensorData().catch(() => {
+				// Ignore errors - likely MQTT not connected
+			});
 		}, this.config.publishIntervalMs);
 	}
 	
@@ -149,7 +153,8 @@ export class SensorDataSimulation implements SimulationScenario {
 			const value = this.generateSensorValue(sensor);
 			
 			// 1. Publish to MQTT (matching sensor-publish format)
-			if (this.mqttManager && this.deviceUuid) {
+			// Skip if MQTT not connected (e.g., device not provisioned)
+			if (this.mqttManager && this.deviceUuid && this.mqttManager.isConnected()) {
 				try {
 					const topic = `iot/device/${this.deviceUuid}/sensor/${sensor.metric}`;
 					const payload = JSON.stringify({
@@ -174,11 +179,8 @@ export class SensorDataSimulation implements SimulationScenario {
 						value: value.toFixed(2),
 					});
 				} catch (error) {
-					this.logger?.errorSync(
-						'Failed to publish simulated sensor data to MQTT',
-						error instanceof Error ? error : new Error(String(error)),
-						{ sensor: sensor.metric }
-					);
+					// Silently skip MQTT errors when not connected
+					// This is normal when device is not provisioned
 				}
 			}
 			

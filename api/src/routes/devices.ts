@@ -26,6 +26,7 @@ import {
 import { EventPublisher } from '../services/event-sourcing';
 import logger from '../utils/logger';
 import { SystemConfig } from '../config/system-config';
+import deviceAuth from '../middleware/device-auth';
 
 export const router = express.Router();
 
@@ -504,10 +505,11 @@ router.patch('/devices/:uuid/active', async (req, res) => {
 });
 
 /**
- * Delete device
+ * Delete device (deprovision/factory reset)
  * DELETE /api/v1/devices/:uuid
+ * Requires device authentication - device must send its API key
  */
-router.delete('/devices/:uuid', async (req, res) => {
+router.delete('/devices/:uuid', deviceAuth, async (req, res) => {
   try {
     const { uuid } = req.params;
 
@@ -521,7 +523,10 @@ router.delete('/devices/:uuid', async (req, res) => {
 
     await DeviceModel.delete(uuid);
 
-    logger.info('Device deleted', { deviceId: uuid.substring(0, 8) });
+    logger.info('Device deleted (deprovisioned)', { 
+      deviceId: uuid.substring(0, 8),
+      deviceName: req.device?.deviceName 
+    });
 
     res.json({
       status: 'ok',

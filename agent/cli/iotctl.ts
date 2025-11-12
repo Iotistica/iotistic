@@ -209,6 +209,8 @@ CONTAINER/APPLICATION MANAGEMENT:
 
 SYSTEM:
 
+  diagnostics, diag                 Run system diagnostics (API, database, MQTT, cloud)
+
   help                              Show this help message
 
   version                           Show CLI version
@@ -868,6 +870,180 @@ async function restart(): Promise<void> {
 	}
 }
 
+async function runDiagnostics(): Promise<void> {
+	logger.info('Running system diagnostics...');
+	
+	const results: { [key: string]: { status: string; message: string; details?: any } } = {};
+	
+	// 1. Check Device API connection
+	try {
+		const response = await fetch(`${DEVICE_API_V1}/device`);
+		if (response.ok) {
+			const data: any = await response.json();
+			results['Device API'] = {
+				status: '✓ OK',
+				message: `Connected to ${DEVICE_API_BASE}`,
+				details: { uuid: data.Data?.uuid, provisioned: data.Data?.provisioned }
+			};
+		} else {
+			results['Device API'] = {
+				status: '✗ FAIL',
+				message: `HTTP ${response.status}`,
+				details: { endpoint: DEVICE_API_BASE }
+			};
+		}
+	} catch (error: any) {
+		results['Device API'] = {
+			status: '✗ FAIL',
+			message: error.message,
+			details: { endpoint: DEVICE_API_BASE }
+		};
+	}
+	
+	// 2. Check database file
+	try {
+		if (existsSync(DB_PATH)) {
+			const stats = statSync(DB_PATH);
+			results['Database'] = {
+				status: '✓ OK',
+				message: `SQLite database exists`,
+				details: { path: DB_PATH, size: `${(stats.size / 1024).toFixed(2)} KB` }
+			};
+		} else {
+			results['Database'] = {
+				status: '✗ FAIL',
+				message: 'Database file not found',
+				details: { path: DB_PATH }
+			};
+		}
+	} catch (error: any) {
+		results['Database'] = {
+			status: '✗ FAIL',
+			message: error.message,
+			details: { path: DB_PATH }
+		};
+	}
+	
+	// 3. Check provisioning status
+	try {
+		const response = await fetch(`${DEVICE_API_V1}/provision/status`);
+		if (response.ok) {
+			const data: any = await response.json();
+			const provisioned = data.Data?.provisioned;
+			results['Provisioning'] = {
+				status: provisioned ? '✓ OK' : '⚠ WARN',
+				message: provisioned ? 'Device is provisioned' : 'Device not provisioned',
+				details: {
+					apiEndpoint: data.Data?.apiEndpoint,
+					deviceId: data.Data?.deviceId,
+					mqttBroker: data.Data?.mqttBrokerUrl
+				}
+			};
+		} else {
+			results['Provisioning'] = {
+				status: '✗ FAIL',
+				message: `Cannot check status (HTTP ${response.status})`
+			};
+		}
+	} catch (error: any) {
+		results['Provisioning'] = {
+			status: '✗ FAIL',
+			message: error.message
+		};
+	}
+	
+	// 4. Check Cloud API connection (if provisioned)
+	if (results['Provisioning']?.details?.apiEndpoint) {
+		const cloudEndpoint = results['Provisioning'].details.apiEndpoint;
+		try {
+			const response = await fetch(`${cloudEndpoint}/health`, {
+				signal: AbortSignal.timeout(5000)
+			});
+			if (response.ok) {
+				results['Cloud API'] = {
+					status: '✓ OK',
+					message: 'Cloud API reachable',
+					details: { endpoint: cloudEndpoint }
+				};
+			} else {
+				results['Cloud API'] = {
+					status: '✗ FAIL',
+					message: `HTTP ${response.status}`,
+					details: { endpoint: cloudEndpoint }
+				};
+			}
+		} catch (error: any) {
+			results['Cloud API'] = {
+				status: '✗ FAIL',
+				message: error.message.includes('timeout') ? 'Connection timeout (5s)' : error.message,
+				details: { endpoint: cloudEndpoint }
+			};
+		}
+	} else {
+		results['Cloud API'] = {
+			status: '⊘ SKIP',
+			message: 'Not provisioned - skipping cloud check'
+		};
+	}
+	
+	// 5. Check MQTT connection (if provisioned)
+	if (results['Provisioning']?.details?.mqttBroker) {
+		const mqttBroker = results['Provisioning'].details.mqttBroker;
+		// We can't easily test MQTT connection from CLI without mqtt library
+		// Just show the configured broker
+		results['MQTT Broker'] = {
+			status: '⊘ INFO',
+			message: 'Configured broker',
+			details: { url: mqttBroker, note: 'Cannot test connection from CLI' }
+		};
+	} else {
+		results['MQTT Broker'] = {
+			status: '⊘ SKIP',
+			message: 'Not provisioned - no MQTT broker configured'
+		};
+	}
+	
+	// 6. Check environment variables
+	const envVars = {
+		DEVICE_API_PORT: process.env.DEVICE_API_PORT || '(default: 48484)',
+		CLOUD_API_ENDPOINT: process.env.CLOUD_API_ENDPOINT || '(not set)',
+		PROVISIONING_API_KEY: process.env.PROVISIONING_API_KEY ? '(set)' : '(not set)',
+		CONFIG_DIR: process.env.CONFIG_DIR || '/app/data'
+	};
+	results['Environment'] = {
+		status: '⊘ INFO',
+		message: 'Configuration variables',
+		details: envVars
+	};
+	
+	// Print results
+	console.log('\n╔═══════════════════════════════════════════════════════════════════╗');
+	console.log('║                    SYSTEM DIAGNOSTICS                             ║');
+	console.log('╚═══════════════════════════════════════════════════════════════════╝\n');
+	
+	for (const [component, result] of Object.entries(results)) {
+		console.log(`${result.status.padEnd(10)} ${component}`);
+		console.log(`           ${result.message}`);
+		if (result.details) {
+			console.log(`           ${JSON.stringify(result.details, null, 2).split('\n').join('\n           ')}`);
+		}
+		console.log();
+	}
+	
+	// Overall status
+	const failures = Object.values(results).filter(r => r.status.includes('✗')).length;
+	const warnings = Object.values(results).filter(r => r.status.includes('⚠')).length;
+	
+	if (failures > 0) {
+		console.log(`\n❌ Diagnostics completed with ${failures} failure(s) and ${warnings} warning(s)`);
+		process.exit(1);
+	} else if (warnings > 0) {
+		console.log(`\n⚠️  Diagnostics completed with ${warnings} warning(s)`);
+	} else {
+		console.log('\n✅ All diagnostics passed!');
+	}
+}
+
 function showLogs(follow: boolean = false, lines: number = 50): void {
 	// Agent logs are not accessible from inside the container
 	// User must run docker logs from the host
@@ -1160,6 +1336,11 @@ async function main(): Promise<void> {
 			
 		case 'status':
 			showStatusEnhanced();
+			break;
+		
+		case 'diagnostics':
+		case 'diag':
+			await runDiagnostics();
 			break;
 			
 		case 'restart':

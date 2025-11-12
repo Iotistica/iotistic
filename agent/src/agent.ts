@@ -650,8 +650,23 @@ export default class DeviceAgent {
         return; // Simulation mode disabled
       }
       
+      // Only run simulation if provisioned OR in standalone dev mode
+      // This prevents MQTT errors when device is not provisioned
+      const isProvisioned = this.deviceInfo.provisioned && this.deviceInfo.mqttBrokerUrl;
+      const isDevMode = process.env.NODE_ENV === 'development' || process.env.FORCE_SIMULATION === 'true';
+      
+      if (!isProvisioned && !isDevMode) {
+        this.agentLogger?.warnSync("Simulation Mode disabled - device not provisioned", {
+          component: LogComponents.agent,
+          note: "Provision device first, or set FORCE_SIMULATION=true for testing",
+        });
+        return;
+      }
+      
       this.agentLogger?.warnSync("Initializing Simulation Mode - FOR TESTING ONLY", {
         component: LogComponents.agent,
+        provisioned: isProvisioned,
+        devMode: isDevMode,
       });
       
       // Create simulation orchestrator
@@ -1093,6 +1108,28 @@ export default class DeviceAgent {
     if (firewallMode === 'disabled' || process.env.FIREWALL_ENABLED === 'false') {
       this.agentLogger?.infoSync('Firewall disabled by configuration', {
         component: LogComponents.agent,
+      });
+      return;
+    }
+    
+    // Check if running as root (required for iptables)
+    // getuid() may not exist on all platforms
+    const hasGetuid = typeof process.getuid === 'function';
+    
+    if (!hasGetuid) {
+      this.agentLogger?.warnSync('Firewall disabled - cannot detect root privileges', {
+        component: LogComponents.agent,
+        note: 'Set FIREWALL_ENABLED=false to suppress this warning',
+      });
+      return;
+    }
+    
+    const uid = process.getuid!();
+    if (uid !== 0) {
+      this.agentLogger?.warnSync('Firewall disabled - requires root privileges', {
+        component: LogComponents.agent,
+        note: 'Run container with --privileged or set FIREWALL_ENABLED=false',
+        uid,
       });
       return;
     }

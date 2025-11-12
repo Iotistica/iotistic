@@ -598,6 +598,47 @@ export class DeviceManager {
 			operation: 'factoryReset',
 		});
 
+		// First, deprovision from cloud if device is provisioned
+		// This notifies the cloud API so the device can be re-provisioned later
+		if (this.deviceInfo.provisioned && this.deviceInfo.apiEndpoint) {
+			try {
+				this.logger?.infoSync('Deprovisioning from cloud before factory reset', {
+					component: LogComponents.deviceManager,
+					operation: 'factoryReset',
+					apiEndpoint: this.deviceInfo.apiEndpoint,
+				});
+				
+				const response = await fetch(`${this.deviceInfo.apiEndpoint}/devices/${this.deviceInfo.uuid}`, {
+					method: 'DELETE',
+					headers: {
+						'Authorization': `Bearer ${this.deviceInfo.deviceApiKey}`,
+						'Content-Type': 'application/json',
+					},
+				});
+
+				if (!response.ok) {
+					this.logger?.warnSync('Cloud deprovision failed, continuing with local reset', {
+						component: LogComponents.deviceManager,
+						operation: 'factoryReset',
+						status: response.status,
+						note: 'Device will be reset locally. Cloud may still think device is provisioned.',
+					});
+				} else {
+					this.logger?.infoSync('Cloud deprovision successful', {
+						component: LogComponents.deviceManager,
+						operation: 'factoryReset',
+					});
+				}
+			} catch (error: any) {
+				this.logger?.warnSync('Cloud deprovision error, continuing with local reset', {
+					component: LogComponents.deviceManager,
+					operation: 'factoryReset',
+					error: error.message,
+					note: 'Device will be reset locally. Cloud may still think device is provisioned.',
+				});
+			}
+		}
+
 		// Import db connection
 		const { models } = await import('../db/connection.js');
 		
@@ -654,7 +695,7 @@ export class DeviceManager {
 			component: LogComponents.deviceManager,
 			operation: 'factoryReset',
 			uuid: preservedUuid,
-			note: 'Only UUID preserved. All apps, services, and data deleted.',
+			note: 'Only UUID preserved. All apps, services, and data deleted. Device can be re-provisioned.',
 		});
 	}
 }
