@@ -252,3 +252,98 @@ export const getConnectionHealth = async () => {
 	
 	return cloudSync.getConnectionHealth();
 };
+
+/**
+ * Provision device with provisioning key
+ * Used by: POST /v1/provision
+ */
+export const provisionDevice = async (config: {
+	provisioningApiKey: string;
+	deviceName?: string;
+	deviceType?: string;
+	apiEndpoint?: string;
+	applicationId?: number;
+}) => {
+	logger?.infoSync('Provisioning device', {
+		component: LogComponents.deviceManager,
+		operation: 'provision',
+		deviceName: config.deviceName,
+		apiEndpoint: config.apiEndpoint
+	});
+
+	const result = await deviceManager.provision(config);
+	
+	logger?.infoSync('Device provisioned successfully', {
+		component: LogComponents.deviceManager,
+		operation: 'provision',
+		uuid: result.uuid,
+		deviceId: result.deviceId,
+		provisioned: result.provisioned
+	});
+
+	return {
+		success: true,
+		device: {
+			uuid: result.uuid,
+			deviceId: result.deviceId,
+			deviceName: result.deviceName,
+			provisioned: result.provisioned,
+			mqttBrokerUrl: result.mqttBrokerUrl
+		}
+	};
+};
+
+/**
+ * Get provisioning status
+ * Used by: GET /v1/provision/status
+ */
+export const getProvisionStatus = async () => {
+	const deviceInfo = deviceManager.getDeviceInfo();
+	
+	return {
+		provisioned: deviceInfo.provisioned,
+		uuid: deviceInfo.uuid,
+		deviceId: deviceInfo.deviceId,
+		deviceName: deviceInfo.deviceName,
+		apiEndpoint: deviceInfo.apiEndpoint,
+		hasProvisioningKey: !!deviceInfo.provisioningApiKey,
+		mqttConfigured: !!(deviceInfo.mqttUsername && deviceInfo.mqttPassword)
+	};
+};
+
+/**
+ * Deprovision device
+ * Used by: POST /v1/deprovision
+ */
+export const deprovisionDevice = async () => {
+	logger?.infoSync('Deprovisioning device', {
+		component: LogComponents.deviceManager,
+		operation: 'deprovision'
+	});
+
+	await deviceManager.reset();
+	
+	logger?.infoSync('Device deprovisioned successfully', {
+		component: LogComponents.deviceManager,
+		operation: 'deprovision'
+	});
+};
+
+/**
+ * Factory reset device - complete data wipe
+ * Used by: POST /v1/factory-reset
+ */
+export const factoryResetDevice = async () => {
+	logger?.warnSync('Factory reset requested', {
+		component: LogComponents.deviceManager,
+		operation: 'factoryReset',
+		warning: 'This will delete all apps, services, and data'
+	});
+
+	await deviceManager.factoryReset();
+	
+	logger?.warnSync('Factory reset completed', {
+		component: LogComponents.deviceManager,
+		operation: 'factoryReset'
+	});
+};

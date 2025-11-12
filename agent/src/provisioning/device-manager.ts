@@ -552,13 +552,14 @@ export class DeviceManager {
 	/**
 	 * Reset device (unprovision)
 	 * Useful for testing or re-provisioning
-	 * Keeps UUID and deviceApiKey, clears server registration
+	 * Keeps UUID and deviceApiKey, clears server registration and MQTT credentials
 	 */
 	async reset(): Promise<void> {
 		if (!this.deviceInfo) {
 			throw new Error('Device manager not initialized');
 		}
 
+		// Clear server-assigned values
 		this.deviceInfo.deviceId = undefined;
 		this.deviceInfo.deviceName = undefined;
 		this.deviceInfo.provisioningApiKey = undefined;
@@ -567,13 +568,111 @@ export class DeviceManager {
 		this.deviceInfo.registeredAt = undefined;
 		this.deviceInfo.provisioned = false;
 		this.deviceInfo.applicationId = undefined;
+		
+		// Clear MQTT credentials (these are cloud-assigned)
+		this.deviceInfo.mqttUsername = undefined;
+		this.deviceInfo.mqttPassword = undefined;
+		this.deviceInfo.mqttBrokerUrl = undefined;
 
 		await this.saveDeviceInfo();
 
 		this.logger?.infoSync('Device reset (unprovisioned)', {
 			component: LogComponents.deviceManager,
 			operation: 'reset',
-			note: 'UUID and deviceApiKey preserved for re-registration',
+			note: 'UUID and deviceApiKey preserved for re-registration. MQTT credentials cleared.',
+		});
+	}
+	
+	/**
+	 * Factory reset - complete cleanup of all device data
+	 * WARNING: This will delete all apps, services, state snapshots, and sensor data
+	 * Only UUID will be preserved for hardware identification
+	 */
+	async factoryReset(): Promise<void> {
+		if (!this.deviceInfo) {
+			throw new Error('Device manager not initialized');
+		}
+
+		this.logger?.warnSync('Performing factory reset - all data will be deleted', {
+			component: LogComponents.deviceManager,
+			operation: 'factoryReset',
+		});
+
+		// Import db connection
+		const { models } = await import('../db/connection.js');
+		
+		// Delete all state snapshots
+		await models('stateSnapshot').delete();
+		this.logger?.infoSync('Deleted state snapshots', {
+			component: LogComponents.deviceManager,
+			operation: 'factoryReset',
+		});
+		
+		// Delete all services
+		await models('service').delete();
+		this.logger?.infoSync('Deleted services', {
+			component: LogComponents.deviceManager,
+			operation: 'factoryReset',
+		});
+		
+		// Delete all apps
+		await models('app').delete();
+		this.logger?.infoSync('Deleted apps', {
+			component: LogComponents.deviceManager,
+			operation: 'factoryReset',
+		});
+		
+		// Delete all images metadata
+		await models('image').delete();
+		this.logger?.infoSync('Deleted image metadata', {
+			component: LogComponents.deviceManager,
+			operation: 'factoryReset',
+		});
+		
+		// Delete sensor data (if tables exist)
+		try {
+			await models('sensor_outputs').delete();
+			await models('sensors').delete();
+			this.logger?.infoSync('Deleted sensor data', {
+				component: LogComponents.deviceManager,
+				operation: 'factoryReset',
+			});
+		} catch (error) {
+			// Tables might not exist, ignore error
+			this.logger?.debugSync('Sensor tables not found or already empty', {
+				component: LogComponents.deviceManager,
+				operation: 'factoryReset',
+			});
+		}
+		
+		// Reset device info but preserve UUID for hardware identification
+		const preservedUuid = this.deviceInfo.uuid;
+		
+		this.deviceInfo.deviceId = undefined;
+		this.deviceInfo.deviceName = undefined;
+		this.deviceInfo.deviceType = undefined;
+		this.deviceInfo.deviceApiKey = undefined; // Also clear device key for full reset
+		this.deviceInfo.provisioningApiKey = undefined;
+		this.deviceInfo.apiKey = undefined;
+		this.deviceInfo.apiEndpoint = undefined;
+		this.deviceInfo.registeredAt = undefined;
+		this.deviceInfo.provisioned = false;
+		this.deviceInfo.applicationId = undefined;
+		this.deviceInfo.macAddress = undefined;
+		this.deviceInfo.osVersion = undefined;
+		this.deviceInfo.agentVersion = undefined;
+		this.deviceInfo.mqttUsername = undefined;
+		this.deviceInfo.mqttPassword = undefined;
+		this.deviceInfo.mqttBrokerUrl = undefined;
+		this.deviceInfo.uuid = preservedUuid; // Restore UUID
+
+		await this.saveDeviceInfo();
+
+		this.logger?.warnSync('Factory reset complete - device returned to initial state', {
+			component: LogComponents.deviceManager,
+			operation: 'factoryReset',
+			uuid: preservedUuid,
+			note: 'Only UUID preserved. All apps, services, and data deleted.',
 		});
 	}
 }

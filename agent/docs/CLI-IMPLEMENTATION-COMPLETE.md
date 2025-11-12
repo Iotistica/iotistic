@@ -10,27 +10,27 @@ Created a comprehensive command-line interface (CLI) for device management with 
 
 | File | Purpose |
 |------|---------|
-| `cli/device-cli.ts` | **Main CLI implementation** - 376 lines, handles all commands |
+| `cli/iotctl.ts` | **Main CLI implementation** - 376 lines, handles all commands |
 | `src/config-loader.ts` | **Configuration loader** - Merges CLI + ENV + defaults |
-| `docs/DEVICE-CLI.md` | **Complete documentation** - Usage guide and examples |
+| `docs/iotctl.md` | **Complete documentation** - Usage guide and examples |
 
 ### Key Features
 
 ✅ **Configuration Management**
-- Set cloud API endpoint: `device-cli config set-api <url>`
-- Get current API: `device-cli config get-api`
-- Set any config value: `device-cli config set <key> <value>`
-- Show all config: `device-cli config show`
-- Reset config: `device-cli config reset`
+- Set cloud API endpoint: `iotctl config set-api <url>`
+- Get current API: `iotctl config get-api`
+- Set any config value: `iotctl config set <key> <value>`
+- Show all config: `iotctl config show`
+- Reset config: `iotctl config reset`
 
 ✅ **Device Operations**
-- Check status: `device-cli status`
-- Restart agent: `device-cli restart` (shows command)
-- View logs: `device-cli logs` (shows command)
+- Check status: `iotctl status`
+- Restart agent: `iotctl restart` (shows command)
+- View logs: `iotctl logs` (shows command)
 
 ✅ **Help & Utilities**
-- Full help system: `device-cli help`
-- Version info: `device-cli version`
+- Full help system: `iotctl help`
+- Version info: `iotctl version`
 
 ✅ **Extensible Architecture**
 - Easy to add new commands
@@ -59,13 +59,13 @@ npm run cli -- help
 npm run build
 
 # Create symlink
-sudo ln -s /home/iotistic/agent/dist/cli/device-cli.js /usr/local/bin/device-cli
-sudo chmod +x /home/iotistic/agent/dist/cli/device-cli.js
+sudo ln -s /home/iotistic/agent/dist/cli/iotctl.js /usr/local/bin/iotctl
+sudo chmod +x /home/iotistic/agent/dist/cli/iotctl.js
 
 # Use anywhere
-device-cli config set-api https://cloud.iotistic.ca
-device-cli config show
-device-cli status
+iotctl config set-api https://cloud.iotistic.ca
+iotctl config show
+iotctl status
 ```
 
 ## Configuration Priority System
@@ -74,7 +74,7 @@ The CLI implements a **3-layer configuration system**:
 
 ```
 ┌─────────────────────────────────┐
-│  1. CLI Config (highest)        │  ← device-cli config set ...
+│  1. CLI Config (highest)        │  ← iotctl config set ...
 ├─────────────────────────────────┤
 │  2. Environment Variables        │  ← CLOUD_API_ENDPOINT=...
 ├─────────────────────────────────┤
@@ -86,10 +86,10 @@ The CLI implements a **3-layer configuration system**:
 ```bash
 # CLI overrides environment
 export CLOUD_API_ENDPOINT=https://env.example.com
-device-cli config set-api https://cli.example.com
+iotctl config set-api https://cli.example.com
 
 # Result: CLI wins
-device-cli config get-api
+iotctl config get-api
 # Output: https://cli.example.com
 ```
 
@@ -173,17 +173,17 @@ class DeviceSupervisor {
 
 ```bash
 # Start with mock server
-device-cli config set-api https://567cea7e-66b6-4e92-a622-ac53067b271a.mock.pstmn.io
+iotctl config set-api https://567cea7e-66b6-4e92-a622-ac53067b271a.mock.pstmn.io
 sudo systemctl restart device-agent
 
 # Test with mock...
 
 # Switch to production
-device-cli config set-api https://cloud.iotistic.ca
+iotctl config set-api https://cloud.iotistic.ca
 sudo systemctl restart device-agent
 
 # Verify
-device-cli config show
+iotctl config show
 sudo journalctl -u device-agent -f
 ```
 
@@ -191,16 +191,16 @@ sudo journalctl -u device-agent -f
 
 ```bash
 # Fast polling (testing)
-device-cli config set pollInterval 10000
-device-cli config set reportInterval 5000
+iotctl config set pollInterval 10000
+iotctl config set reportInterval 5000
 
 # Normal polling (production)
-device-cli config set pollInterval 60000
-device-cli config set reportInterval 10000
+iotctl config set pollInterval 60000
+iotctl config set reportInterval 10000
 
 # Slow polling (battery saving)
-device-cli config set pollInterval 300000
-device-cli config set reportInterval 60000
+iotctl config set pollInterval 300000
+iotctl config set reportInterval 60000
 
 sudo systemctl restart device-agent
 ```
@@ -250,7 +250,7 @@ ENABLE_AUTO_UPDATE=false
 
 ### Adding a New Command
 
-1. **Add command handler** in `cli/device-cli.ts`:
+1. **Add command handler** in `cli/iotctl.ts`:
 
 ```typescript
 function myNewCommand(arg: string): void {
@@ -309,8 +309,8 @@ const defaults: DeviceConfig = {
 4. **Use it**:
 
 ```bash
-device-cli config set myNewOption "custom-value"
-device-cli config get myNewOption
+iotctl config set myNewOption "custom-value"
+iotctl config get myNewOption
 ```
 
 ## Testing
@@ -335,14 +335,14 @@ ssh iotistic@device-ip
 # Build and install
 cd /home/iotistic/agent
 npm run build
-sudo ln -sf $PWD/dist/cli/device-cli.js /usr/local/bin/device-cli
-sudo chmod +x dist/cli/device-cli.js
+sudo ln -sf $PWD/dist/cli/iotctl.js /usr/local/bin/iotctl
+sudo chmod +x dist/cli/iotctl.js
 
 # Test commands
-device-cli help
-device-cli config set-api https://cloud.iotistic.ca
-device-cli config show
-device-cli status
+iotctl help
+iotctl config set-api https://cloud.iotistic.ca
+iotctl config show
+iotctl status
 ```
 
 ## NPM Scripts Added
@@ -350,11 +350,11 @@ device-cli status
 ```json
 {
   "scripts": {
-    "cli": "tsx cli/device-cli.ts",
-    "cli:build": "tsc cli/device-cli.ts --outDir dist/cli"
+    "cli": "tsx cli/iotctl.ts",
+    "cli:build": "tsc cli/iotctl.ts --outDir dist/cli"
   },
   "bin": {
-    "device-cli": "./dist/cli/device-cli.js"
+    "iotctl": "./dist/cli/iotctl.js"
   }
 }
 ```
@@ -363,14 +363,14 @@ device-cli status
 
 Planned features (easy to add):
 
-- [ ] **Provisioning**: `device-cli provision <uuid>`
-- [ ] **Network diagnostics**: `device-cli network test`
-- [ ] **App management**: `device-cli apps list|restart <name>`
-- [ ] **Backup/restore**: `device-cli backup|restore`
+- [ ] **Provisioning**: `iotctl provision <uuid>`
+- [ ] **Network diagnostics**: `iotctl network test`
+- [ ] **App management**: `iotctl apps list|restart <name>`
+- [ ] **Backup/restore**: `iotctl backup|restore`
 - [ ] **Interactive mode**: Shell-like interface
 - [ ] **Tab completion**: Bash/Zsh autocomplete
-- [ ] **Remote execution**: `device-cli remote <device-id> <command>`
-- [ ] **Bulk operations**: `device-cli bulk --devices all config set-api <url>`
+- [ ] **Remote execution**: `iotctl remote <device-id> <command>`
+- [ ] **Bulk operations**: `iotctl bulk --devices all config set-api <url>`
 
 ## Architecture Benefits
 
@@ -409,13 +409,13 @@ cd /home/iotistic/agent
 npm run build
 
 # Create symlink
-sudo ln -sf $PWD/dist/cli/device-cli.js /usr/local/bin/device-cli
-sudo chmod +x dist/cli/device-cli.js
+sudo ln -sf $PWD/dist/cli/iotctl.js /usr/local/bin/iotctl
+sudo chmod +x dist/cli/iotctl.js
 
 # Verify
-if device-cli version &>/dev/null; then
+if iotctl version &>/dev/null; then
   echo "✅ Device CLI installed successfully"
-  device-cli help
+  iotctl help
 else
   echo "❌ Device CLI installation failed"
   exit 1
@@ -424,9 +424,9 @@ fi
 
 ## Documentation
 
-- **Complete Guide**: `agent/docs/DEVICE-CLI.md` (200+ lines)
+- **Complete Guide**: `agent/docs/iotctl.md` (200+ lines)
 - **This Summary**: `agent/docs/CLI-IMPLEMENTATION-COMPLETE.md`
-- **Inline Help**: `device-cli help`
+- **Inline Help**: `iotctl help`
 
 ---
 

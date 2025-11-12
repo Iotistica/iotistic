@@ -9,7 +9,7 @@ Complete CLI tool for managing device configuration and operations.
 npm run cli -- config set-api https://cloud.example.com
 
 # Production (compiled)
-device-cli config set-api https://cloud.example.com
+iotctl config set-api https://cloud.example.com
 ```
 
 ## Installation on Device
@@ -20,11 +20,11 @@ cd /home/iotistic/agent
 npm run build
 
 # Create symlink for easy access
-sudo ln -s /home/iotistic/agent/dist/cli/device-cli.js /usr/local/bin/device-cli
-sudo chmod +x /home/iotistic/agent/dist/cli/device-cli.js
+sudo ln -s /home/iotistic/agent/dist/cli/iotctl.js /usr/local/bin/iotctl
+sudo chmod +x /home/iotistic/agent/dist/cli/iotctl.js
 
 # Now you can use it system-wide
-device-cli help
+iotctl help
 ```
 
 ## Commands
@@ -34,13 +34,13 @@ device-cli help
 #### Set Cloud API Endpoint
 
 ```bash
-device-cli config set-api https://api.iotistic.ca
+iotctl config set-api https://api.iotistic.ca
 
 # With port
-device-cli config set-api https://api.iotistic.ca:3002
+iotctl config set-api https://api.iotistic.ca:3002
 
 # Local development
-device-cli config set-api http://localhost:3002
+iotctl config set-api http://localhost:3002
 ```
 
 **Output:**
@@ -53,7 +53,7 @@ device-cli config set-api http://localhost:3002
 #### Get Current API Endpoint
 
 ```bash
-device-cli config get-api
+iotctl config get-api
 ```
 
 **Output:**
@@ -65,22 +65,22 @@ device-cli config get-api
 
 ```bash
 # Set poll interval (60 seconds)
-device-cli config set pollInterval 60000
+iotctl config set pollInterval 60000
 
 # Set device name
-device-cli config set deviceName "Living Room Sensor"
+iotctl config set deviceName "Living Room Sensor"
 
 # Set boolean
-device-cli config set enableMetrics true
+iotctl config set enableMetrics true
 
 # Set JSON object
-device-cli config set customSettings '{"key":"value"}'
+iotctl config set customSettings '{"key":"value"}'
 ```
 
 #### Get Specific Configuration Value
 
 ```bash
-device-cli config get pollInterval
+iotctl config get pollInterval
 ```
 
 **Output:**
@@ -91,7 +91,7 @@ pollInterval: 60000
 #### Show All Configuration
 
 ```bash
-device-cli config show
+iotctl config show
 ```
 
 **Output:**
@@ -111,7 +111,7 @@ device-cli config show
 #### Reset Configuration
 
 ```bash
-device-cli config reset
+iotctl config reset
 ```
 
 ### Device Management
@@ -119,7 +119,7 @@ device-cli config reset
 #### Check Device Status
 
 ```bash
-device-cli status
+iotctl status
 ```
 
 **Output:**
@@ -130,13 +130,13 @@ device-cli status
 ✅ Database: 2.45 KB
 ✅ Config File: /app/data/device-config.json
 
-💡 Tip: Use "device-cli logs --follow" to monitor device activity
+💡 Tip: Use "iotctl logs --follow" to monitor device activity
 ```
 
 #### Restart Device Agent
 
 ```bash
-device-cli restart
+iotctl restart
 ```
 
 **Output:**
@@ -148,7 +148,7 @@ device-cli restart
 #### View Logs
 
 ```bash
-device-cli logs
+iotctl logs
 ```
 
 **Output:**
@@ -161,10 +161,10 @@ device-cli logs
 
 ```bash
 # Show help
-device-cli help
+iotctl help
 
 # Show version
-device-cli version
+iotctl version
 ```
 
 ## Configuration Priority
@@ -179,13 +179,13 @@ The CLI uses a **layered configuration system** with the following priority (hig
 
 ```bash
 # Set via CLI (highest priority)
-device-cli config set-api https://cli.example.com
+iotctl config set-api https://cli.example.com
 
 # Also set via environment variable (lower priority)
 export CLOUD_API_ENDPOINT=https://env.example.com
 
 # Result: CLI value wins
-device-cli config get-api
+iotctl config get-api
 # Output: https://cli.example.com
 ```
 
@@ -252,10 +252,10 @@ configLoader.watchConfig((newConfig) => {
 
 ```bash
 # Use mock server for testing
-device-cli config set-api https://567cea7e-66b6-4e92-a622-ac53067b271a.mock.pstmn.io
+iotctl config set-api https://567cea7e-66b6-4e92-a622-ac53067b271a.mock.pstmn.io
 
 # Switch to production
-device-cli config set-api https://cloud.iotistic.ca
+iotctl config set-api https://cloud.iotistic.ca
 
 # Restart to apply
 sudo systemctl restart device-agent
@@ -265,10 +265,10 @@ sudo systemctl restart device-agent
 
 ```bash
 # Poll every 30 seconds (more responsive)
-device-cli config set pollInterval 30000
+iotctl config set pollInterval 30000
 
 # Poll every 5 minutes (less bandwidth)
-device-cli config set pollInterval 300000
+iotctl config set pollInterval 300000
 
 sudo systemctl restart device-agent
 ```
@@ -276,14 +276,14 @@ sudo systemctl restart device-agent
 ### Setting Device Name
 
 ```bash
-device-cli config set deviceName "Kitchen Sensor #3"
+iotctl config set deviceName "Kitchen Sensor #3"
 sudo systemctl restart device-agent
 ```
 
 ### Disable Metrics Collection
 
 ```bash
-device-cli config set enableMetrics false
+iotctl config set enableMetrics false
 sudo systemctl restart device-agent
 ```
 
@@ -291,7 +291,7 @@ sudo systemctl restart device-agent
 
 ### Adding New Commands
 
-Edit `cli/device-cli.ts`:
+Edit `cli/iotctl.ts`:
 
 ```typescript
 // Add new command handler
@@ -343,8 +343,8 @@ const defaults: DeviceConfig = {
 4. Use in CLI:
 
 ```bash
-device-cli config set myNewOption "custom-value"
-device-cli config get myNewOption
+iotctl config set myNewOption "custom-value"
+iotctl config get myNewOption
 ```
 
 ## Troubleshooting
@@ -353,11 +353,11 @@ device-cli config get myNewOption
 
 ```bash
 # Check if symlink exists
-ls -la /usr/local/bin/device-cli
+ls -la /usr/local/bin/iotctl
 
 # Recreate symlink
-sudo ln -sf /home/iotistic/agent/dist/cli/device-cli.js /usr/local/bin/device-cli
-sudo chmod +x /home/iotistic/agent/dist/cli/device-cli.js
+sudo ln -sf /home/iotistic/agent/dist/cli/iotctl.js /usr/local/bin/iotctl
+sudo chmod +x /home/iotistic/agent/dist/cli/iotctl.js
 ```
 
 ### Configuration Not Applied
@@ -393,17 +393,17 @@ sudo chmod 755 /app/data
 
 Planned features for future versions:
 
-- [ ] `device-cli provision <uuid>` - Provision device with UUID
-- [ ] `device-cli deprovision` - Remove device provisioning
-- [ ] `device-cli logs --follow` - Actually follow logs (not just show command)
-- [ ] `device-cli restart --force` - Actually restart service with sudo
-- [ ] `device-cli update` - Trigger device agent update
-- [ ] `device-cli network` - Network diagnostics
-- [ ] `device-cli apps` - List running applications
-- [ ] `device-cli apps restart <app>` - Restart specific app
-- [ ] `device-cli backup` - Backup device configuration
-- [ ] `device-cli restore <backup>` - Restore from backup
-- [ ] Interactive mode: `device-cli interactive`
+- [ ] `iotctl provision <uuid>` - Provision device with UUID
+- [ ] `iotctl deprovision` - Remove device provisioning
+- [ ] `iotctl logs --follow` - Actually follow logs (not just show command)
+- [ ] `iotctl restart --force` - Actually restart service with sudo
+- [ ] `iotctl update` - Trigger device agent update
+- [ ] `iotctl network` - Network diagnostics
+- [ ] `iotctl apps` - List running applications
+- [ ] `iotctl apps restart <app>` - Restart specific app
+- [ ] `iotctl backup` - Backup device configuration
+- [ ] `iotctl restore <backup>` - Restore from backup
+- [ ] Interactive mode: `iotctl interactive`
 - [ ] Tab completion for bash/zsh
 
 ## Examples
@@ -412,20 +412,20 @@ Planned features for future versions:
 
 ```bash
 # 1. Check current status
-device-cli status
+iotctl status
 
 # 2. Show current config
-device-cli config show
+iotctl config show
 
 # 3. Set production API
-device-cli config set-api https://cloud.iotistic.ca
+iotctl config set-api https://cloud.iotistic.ca
 
 # 4. Adjust intervals for production
-device-cli config set pollInterval 60000
-device-cli config set reportInterval 10000
+iotctl config set pollInterval 60000
+iotctl config set reportInterval 10000
 
 # 5. Verify changes
-device-cli config show
+iotctl config show
 
 # 6. Restart agent
 sudo systemctl restart device-agent
@@ -438,13 +438,13 @@ sudo journalctl -u device-agent -f
 
 ```bash
 # Use mock server
-device-cli config set-api https://567cea7e-66b6-4e92-a622-ac53067b271a.mock.pstmn.io
+iotctl config set-api https://567cea7e-66b6-4e92-a622-ac53067b271a.mock.pstmn.io
 
 # Fast polling for testing
-device-cli config set pollInterval 10000
+iotctl config set pollInterval 10000
 
 # Enable debug logging
-device-cli config set logLevel debug
+iotctl config set logLevel debug
 
 # Restart and test
 sudo systemctl restart device-agent
@@ -454,5 +454,5 @@ sudo systemctl restart device-agent
 
 **Status**: ✅ Fully implemented and ready for use!
 
-**Location**: `agent/cli/device-cli.ts`  
+**Location**: `agent/cli/iotctl.ts`  
 **Config Loader**: `agent/src/config-loader.ts`

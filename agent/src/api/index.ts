@@ -33,11 +33,15 @@ export class DeviceAPI {
 		// Set logger for middleware
 		if (logger) {
 			middleware.setLoggingLogger(logger);
+			middleware.setNetworkSecurityLogger(logger);
 			middleware.setErrorsLogger(logger);
 		}
 
 		this.api.disable('x-powered-by');
 		this.api.use(middleware.logging);
+		
+		// Network-based security (enabled by default - localhost only)
+		this.api.use(middleware.networkSecurity);
 
 		// Health check endpoint
 		this.api.get('/v1/healthy', async (_req, res) => {

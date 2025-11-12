@@ -93,7 +93,7 @@ export class MqttManager extends EventEmitter {
     
     this.config = {
       brokerUrl: config.brokerUrl,
-      clientId: config.clientId || `api-mqtt-${Date.now()}`,
+      clientId: config.clientId || `api-data-processor`,
       username: config.username || '',
       password: config.password || '',
       reconnectPeriod: config.reconnectPeriod || 5000,

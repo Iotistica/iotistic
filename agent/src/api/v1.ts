@@ -306,4 +306,63 @@ router.post('/v1/simulation/stop-all', async (req: Request, res: Response, next:
 	}
 });
 
+/**
+ * POST /v1/provision
+ * Provision device with a provisioning key
+ * Body: { provisioningApiKey: string, deviceName?: string, deviceType?: string, apiEndpoint?: string }
+ */
+router.post('/v1/provision', async (req: Request, res: Response, next: NextFunction) => {
+	try {
+		const result = await actions.provisionDevice(req.body);
+		return res.status(200).json(result);
+	} catch (error) {
+		next(error);
+	}
+});
+
+/**
+ * GET /v1/provision/status
+ * Get provisioning status
+ */
+router.get('/v1/provision/status', async (req: Request, res: Response, next: NextFunction) => {
+	try {
+		const status = await actions.getProvisionStatus();
+		return res.status(200).json(status);
+	} catch (error) {
+		next(error);
+	}
+});
+
+/**
+ * POST /v1/deprovision
+ * Deprovision device (remove cloud registration, keep UUID and deviceApiKey)
+ */
+router.post('/v1/deprovision', async (req: Request, res: Response, next: NextFunction) => {
+	try {
+		await actions.deprovisionDevice();
+		return res.status(200).json({ 
+			message: 'Device deprovisioned successfully. UUID and deviceApiKey preserved for re-provisioning.',
+			status: 'deprovisioned'
+		});
+	} catch (error) {
+		next(error);
+	}
+});
+
+/**
+ * POST /v1/factory-reset
+ * Factory reset - complete data wipe (WARNING: deletes all apps, services, state, sensors)
+ */
+router.post('/v1/factory-reset', async (req: Request, res: Response, next: NextFunction) => {
+	try {
+		await actions.factoryResetDevice();
+		return res.status(200).json({ 
+			message: 'Factory reset complete. All data deleted. Only UUID preserved.',
+			status: 'factory-reset'
+		});
+	} catch (error) {
+		next(error);
+	}
+});
+
 export default router;
