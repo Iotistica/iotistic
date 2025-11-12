@@ -24,7 +24,7 @@ import { spawn } from 'child_process';
 
 // Configuration paths
 const CONFIG_DIR = process.env.CONFIG_DIR || '/app/data';
-const DB_PATH = join(CONFIG_DIR, 'database.sqlite');
+const DB_PATH = join(CONFIG_DIR, 'device.db');
 
 // Device API endpoint - construct from DEVICE_API_PORT or fall back to DEVICE_API_URL
 const DEVICE_API_PORT = process.env.DEVICE_API_PORT || '48484';
