@@ -7,7 +7,7 @@
  */
 
 import { stub } from 'sinon';
-import type { DatabaseClient, DeviceRecord } from '../../src/provisioning/database-client';
+import type { DatabaseClient, DeviceRecord } from '../../src/db/client';
 import type { UuidGenerator } from '../../src/provisioning/device-manager';
 
 export class MockDatabaseClient implements DatabaseClient {

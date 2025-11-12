@@ -334,7 +334,7 @@ export class ConfigManager extends EventEmitter {
 
 		// Save device to SQLite sensors table
 		try {
-			const { DeviceSensorModel: DeviceSensorModel } = await import('../models/sensors.model.js');
+			const { DeviceSensorModel: DeviceSensorModel } = await import('../db/models/sensors.model.js');
 			
 			// Handle both connectionString and connection formats
 			let connection: Record<string, any> = {};
@@ -427,7 +427,7 @@ export class ConfigManager extends EventEmitter {
 
 		// Update device in SQLite sensors table (or create if doesn't exist)
 		try {
-			const { DeviceSensorModel: DeviceSensorModel } = await import('../models/sensors.model.js');
+			const { DeviceSensorModel: DeviceSensorModel } = await import('../db/models/sensors.model.js');
 			
 			// Handle both connectionString and connection formats
 			let connection: Record<string, any> = {};
@@ -546,7 +546,7 @@ export class ConfigManager extends EventEmitter {
 		// Remove device from SQLite sensors table
 		if (device) {
 			try {
-				const { DeviceSensorModel: DeviceSensorModel } = await import('../models/sensors.model.js');
+				const { DeviceSensorModel: DeviceSensorModel } = await import('../db/models/sensors.model.js');
 				await DeviceSensorModel.delete(device.name);
 				
 				this.logger?.infoSync('Device removed from sensors table', {

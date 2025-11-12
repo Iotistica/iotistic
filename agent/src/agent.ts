@@ -543,6 +543,7 @@ export default class DeviceAgent {
 
     // Health checks
     const healthchecks = [
+      // Container manager health
       async () => {
         try {
           this.containerManager.getStatus();
@@ -550,6 +551,11 @@ export default class DeviceAgent {
         } catch {
           return false;
         }
+      },
+      // Agent process memory leak detection
+      async () => {
+        const { healthcheck } = await import('./system/memory.js');
+        return healthcheck();
       },
     ];
 

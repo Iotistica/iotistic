@@ -5,6 +5,10 @@
  * Database models for sensors and outputs
  */
 
+// Device model (provisioning and registration)
+export { DeviceModel } from './device.model';
+export type { Device } from './device.model';
+
 // Sensor device models (CRUD operations)
 export { DeviceSensorModel } from './sensors.model';
 export type { DeviceSensor } from './sensors.model';

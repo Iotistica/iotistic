@@ -116,9 +116,7 @@ export class ConnectionMonitor extends EventEmitter {
 				this.logger.infoSync('Connection restored (both poll and report successful)', {
 					component: LogComponents.connectionMonitor,
 				});
-			} else {
-				console.log('✅ Connection restored (both poll and report successful)');
-			}
+			} 
 			
 			this.emit('online');
 			this.emit('state-changed', this.getState());
@@ -157,9 +155,7 @@ export class ConnectionMonitor extends EventEmitter {
 				maxFailures,
 				wasOnline,
 			});
-		} else {
-			console.log(`[ConnectionMonitor] ${operation} failure #${operation === 'poll' ? this.state.consecutivePollFailures : this.state.consecutiveReportFailures} (poll: ${this.state.consecutivePollFailures}, report: ${this.state.consecutiveReportFailures}, maxFailures: ${maxFailures}, wasOnline: ${wasOnline})`);
-		}
+		} 
 		
 		// Check if we should mark as degraded (2+ failures on any operation)
 		if (maxFailures >= this.DEGRADED_THRESHOLD && 
@@ -171,7 +167,7 @@ export class ConnectionMonitor extends EventEmitter {
 					consecutiveFailures: maxFailures,
 				});
 			} else {
-				console.log(`⚠️  Connection degraded (${maxFailures} consecutive failures)`);
+				console.log(`Connection degraded (${maxFailures} consecutive failures)`);
 			}
 			
 			this.emit('degraded');
@@ -191,7 +187,7 @@ export class ConnectionMonitor extends EventEmitter {
 					lastSuccessfulReport: this.formatTimestamp(this.state.lastSuccessfulReport),
 				});
 			} else {
-				console.log(`❌ Connection lost (${maxFailures} consecutive failures)`);
+				console.log(`Connection lost (${maxFailures} consecutive failures)`);
 				console.log(`   Last successful poll: ${this.formatTimestamp(this.state.lastSuccessfulPoll)}`);
 				console.log(`   Last successful report: ${this.formatTimestamp(this.state.lastSuccessfulReport)}`);
 			}

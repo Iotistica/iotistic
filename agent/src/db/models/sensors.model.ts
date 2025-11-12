@@ -3,7 +3,7 @@
  * Manages protocol adapter device configurations (Modbus, CAN, OPC-UA) in SQLite
  */
 
-import { models, getKnex } from '../db/connection';
+import { models, getKnex } from '../connection';
 import { SensorOutputModel } from './sensor-outputs.model';
 
 export interface DeviceSensor {

@@ -369,6 +369,14 @@ alerts/environmental    # Threshold alerts
 - **Container Preservation**: pause/unpause preserves container ID; stop/start recreates container (Docker limitation)
 - **Orchestrator Abstraction**: Works with both Docker Compose and K3s drivers
 
+**StateReconciler Architecture** (agent/):
+- **Top-level orchestrator**: Coordinates `ContainerManager` and `ConfigManager`
+- **SQLite persistence**: Target state saved to database, survives agent restarts
+- **Unified interface**: Single entry point for both apps and device config
+- **Event-driven**: Emits `target-state-changed`, `state-applied`, `reconciliation-complete`
+- **Core pattern**: `setTarget()` → saves to DB → delegates to managers → reconcile → emit events
+- See `agent/src/drivers/state-reconciler.ts` for implementation
+
 **State Transition Behaviors**:
 | Transition | Command | Container ID | Speed | RAM | Trigger |
 |------------|---------|--------------|-------|-----|---------|
@@ -389,6 +397,193 @@ alerts/environmental    # Threshold alerts
 - `dashboard/src/pages/DigitalTwinPage.tsx` - Digital Twin UI
 - `dashboard/src/components/DigitalTwinGraph.tsx` - 3D visualization
 - `mosquitto/mosquitto.conf` - MQTT broker config
+
+### Agent Architecture Patterns
+- `agent/src/drivers/state-reconciler.ts` - Top-level state orchestrator (containers + config)
+- `agent/src/sync/index.ts` - CloudSync service (device ↔ cloud state synchronization)
+- `agent/src/network/connection-monitor.ts` - Connection health tracking (online/degraded/offline)
+- `agent/src/logging/agent-logger.ts` - Structured logging with log levels and components
+- `agent/src/logging/cloud-backend.ts` - Cloud log aggregation with sampling
+- `agent/src/updater.ts` - MQTT-triggered agent self-updates
+
+---
+
+## Testing Infrastructure
+
+### Agent Testing (Jest)
+
+**Test Types**:
+- **Unit tests**: `npm run test:unit` - Fast, isolated component tests
+- **Integration tests**: `npm run test:integration` - Docker interactions, database tests
+- **Coverage**: `npm run test:coverage` - Generate coverage reports
+
+**Test Structure**:
+```bash
+agent/
+├── jest.config.js           # Main config
+├── jest.config.unit.js      # Unit tests only
+├── jest.config.integration.js  # Integration tests only
+└── test/                    # Test files (*.test.ts)
+```
+
+**Running Tests**:
+```bash
+cd agent
+
+# All tests
+npm test
+
+# Unit tests only (fast)
+npm run test:unit
+
+# Integration tests (requires Docker)
+npm run test:integration
+
+# Watch mode (auto-rerun on changes)
+npm run test:watch:unit
+```
+
+### Dashboard Testing (Playwright)
+
+**E2E Tests**:
+```bash
+cd dashboard
+npm run test:e2e           # Run Playwright tests
+npm run test:e2e:ui        # Interactive UI mode
+```
+
+**Test Location**: `dashboard/e2e/` - End-to-end browser tests
+
+---
+
+## Logging Conventions
+
+### Agent Logging Pattern
+
+**Rule**: Use `AgentLogger` (NOT `console.log`) for all agent code
+
+**Correct**:
+```typescript
+import type { AgentLogger } from '../logging/agent-logger';
+import { LogComponents } from '../logging/types';
+
+class MyService {
+  constructor(private logger?: AgentLogger) {}
+  
+  async doWork() {
+    this.logger?.infoSync('Starting work', {
+      component: LogComponents.agent,
+      operation: 'doWork'
+    });
+    
+    this.logger?.errorSync('Work failed', {
+      component: LogComponents.agent,
+      error: err.message
+    });
+  }
+}
+```
+
+**Incorrect**:
+```typescript
+console.log('Starting work');  // ❌ Don't use in agent code
+```
+
+**Log Levels**:
+- `debugSync()` - Verbose debugging (disabled by default)
+- `infoSync()` - Informational messages
+- `warnSync()` - Warnings (non-fatal issues)
+- `errorSync()` - Errors (failures that need attention)
+
+**Log Components** (`LogComponents` enum):
+- `agent` - Main agent lifecycle
+- `containerManager` - Container orchestration
+- `stateReconciler` - State reconciliation
+- `cloudSync` - Cloud synchronization
+- `mqtt` - MQTT operations
+- `vpn` - VPN client
+- `provisioning` - Device provisioning
+
+**Dynamic Log Levels**:
+```typescript
+// Set log level via environment
+process.env.LOG_LEVEL = 'debug';  // or 'info', 'warn', 'error'
+
+// Or programmatically
+this.agentLogger.setLogLevel('debug');
+```
+
+**Cloud Log Backend**:
+- Logs uploaded to cloud API via NDJSON format (gzip optional)
+- Sampling rates configurable per level (100% errors, 100% warnings, 10% debug)
+- See `agent/src/logging/cloud-backend.ts` for implementation
+
+### API/Billing Logging
+
+**Rule**: Use `logger` instance (Winston-based) instead of `console.log`
+
+**Correct**:
+```typescript
+import { logger } from '../utils/logger';
+
+logger.info('Customer created', { customerId, email });
+logger.error('Deployment failed', { error: err.message, customerId });
+```
+
+---
+
+## CloudSync Pattern (Agent ↔ Cloud)
+
+### Pull-Based Synchronization
+
+**The "Why"**: Devices poll cloud API for target state changes, avoiding complex push infrastructure
+
+**Flow**:
+```
+Device (agent)              Cloud API
+┌────────────┐             ┌──────────┐
+│            │             │          │
+│  Poll for  ├────────────>│ Target   │
+│  changes   │  (ETag)     │ State    │
+│            │             │          │
+│            │<────────────┤ 304 or   │
+│            │  (state)    │ 200+data │
+│            │             │          │
+│  Report    ├────────────>│ Current  │
+│  state +   │  (PATCH)    │ State    │
+│  metrics   │             │          │
+└────────────┘             └──────────┘
+```
+
+**Key Files**:
+- `agent/src/sync/index.ts` - CloudSync service implementation
+- `agent/src/network/connection-monitor.ts` - Connection health tracking
+- `api/src/routes/cloud.ts` - Cloud API endpoints
+
+**Critical Patterns**:
+- **ETag caching**: Server returns ETag hash, device sends `If-None-Match` to avoid redundant downloads
+- **Connection monitoring**: Tracks consecutive failures, emits `online`/`degraded`/`offline` events
+- **Graceful degradation**: Device continues operating if cloud unreachable (uses last-known target state)
+- **Backoff strategy**: Exponential backoff on repeated failures (1s → 2s → 4s → 8s → max 60s)
+- **Metrics reporting**: Device sends CPU/memory/temperature/uptime with each state report
+
+**Environment Variables**:
+```bash
+# Agent
+CLOUD_API_URL=https://api.iotistic.ca
+POLL_INTERVAL_MS=30000        # How often to check for target state changes
+REPORT_INTERVAL_MS=60000      # How often to report current state + metrics
+```
+
+**Connection States**:
+- `online` - All operations succeeding
+- `degraded` - Some failures but still connected (2+ consecutive failures)
+- `offline` - Marked offline after 3 consecutive failures
+
+**MQTT Update Trigger**:
+- Cloud can publish to `agent/{uuid}/update` topic to trigger immediate poll
+- Used for real-time updates without waiting for next poll interval
+- See `agent/src/updater.ts` for MQTT-triggered agent self-updates
 
 ---
 
@@ -419,6 +614,10 @@ curl -sSL https://raw.githubusercontent.com/Iotistica/iotistic/master/bin/instal
 docker-compose -f docker-compose.dev.yml up -d
 cd agent && npm run dev
 
+# Run tests
+cd agent && npm run test:unit         # Fast unit tests
+cd agent && npm run test:integration  # Requires Docker
+
 # Ansible deployment
 cd ansible && ./run.sh
 ```
@@ -434,6 +633,21 @@ kubectl get namespaces -l managed-by=iotistic
 # Check customer deployment
 kubectl get pods -n customer-dc5fec42
 kubectl logs -n customer-dc5fec42 deployment/customer-dc5fec42-api
+```
+
+### Agent Development
+```bash
+# Start agent in dev mode (auto-reload)
+cd agent && npm run dev
+
+# Build agent
+npm run build
+
+# Run specific test file
+npm test -- container-manager.test.ts
+
+# Watch mode for TDD
+npm run test:watch:unit
 ```
 
 ---

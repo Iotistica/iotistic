@@ -19,8 +19,8 @@ import { ModbusAdapter } from './modbus/adapter.js';
 import { ModbusAdapterConfig } from './modbus/types.js';
 import { SocketServer } from './common/socket-server.js';
 import { SensorDataPoint, SocketOutput } from './types.js';
-import { SensorOutputModel } from '../../models/sensor-outputs.model.js';
-import { DeviceSensorModel } from '../../models/sensors.model.js';
+import { SensorOutputModel } from '../../db/models/sensor-outputs.model.js';
+import { DeviceSensorModel } from '../../db/models/sensors.model.js';
 
 export interface SensorConfig extends FeatureConfig {
   modbus?: {

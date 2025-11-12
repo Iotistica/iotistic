@@ -3,7 +3,7 @@
  * Manages output configurations for protocol adapters (Modbus, CAN, OPC-UA)
  */
 
-import { models } from '../db/connection';
+import { models } from '../connection';
 
 export interface DeviceSensorOutput {
   id?: number;

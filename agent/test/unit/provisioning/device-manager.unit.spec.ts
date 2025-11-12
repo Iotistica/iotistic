@@ -11,7 +11,7 @@
 import { DeviceManager } from '../../../src/provisioning/device-manager';
 import { MockHttpClient } from '../../helpers/mock-http-client';
 import { MockDatabaseClient, MockUuidGenerator } from '../../helpers/mock-database-client';
-import type { DeviceRecord } from '../../../src/provisioning/database-client';
+import type { DeviceRecord } from '../../../src/db/client';
 import type { ProvisionResponse } from '../../../src/provisioning/types';
 
 describe('DeviceManager - Refactored Testability', () => {
@@ -63,7 +63,7 @@ describe('DeviceManager - Refactored Testability', () => {
 				apiKey: null,
 				apiEndpoint: 'http://api:3002',
 				registeredAt: Date.now(),
-				provisioned: 1,
+				provisioned: true,
 				applicationId: 100,
 				macAddress: '00:11:22:33:44:55',
 				osVersion: 'Linux 5.10',
@@ -71,8 +71,8 @@ describe('DeviceManager - Refactored Testability', () => {
 				mqttUsername: 'device_test',
 				mqttPassword: 'test-password',
 				mqttBrokerUrl: 'mqtt://mosquitto:1883',
-				createdAt: new Date().toISOString(),
-				updatedAt: new Date().toISOString(),
+				createdAt: new Date(),
+				updatedAt: new Date(),
 			};
 
 			mockDbClient.mockExistingDevice(existingDevice);
@@ -262,7 +262,7 @@ describe('DeviceManager - Refactored Testability', () => {
 				uuid: 'test-uuid',
 				deviceId: 123,
 				deviceApiKey: 'api-key-123',
-				provisioned: 1,
+				provisioned: true,
 				deviceName: 'Test Device',
 				deviceType: 'sensor',
 				provisioningApiKey: null,
@@ -276,8 +276,8 @@ describe('DeviceManager - Refactored Testability', () => {
 				mqttUsername: null,
 				mqttPassword: null,
 				mqttBrokerUrl: null,
-				createdAt: new Date().toISOString(),
-				updatedAt: new Date().toISOString(),
+				createdAt: new Date(),
+				updatedAt: new Date(),
 			};
 
 			mockDbClient.mockExistingDevice(provisionedDevice);

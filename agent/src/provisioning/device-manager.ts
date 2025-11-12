@@ -129,7 +129,7 @@ export class DeviceManager {
 				apiKey: record.apiKey || undefined, // Legacy field
 				apiEndpoint: record.apiEndpoint || undefined,
 				registeredAt: record.registeredAt || undefined,
-				provisioned: record.provisioned === 1,
+				provisioned: !!record.provisioned,
 				applicationId: record.applicationId || undefined,
 				macAddress: record.macAddress || undefined,
 				osVersion: record.osVersion || undefined,
@@ -159,7 +159,7 @@ export class DeviceManager {
 			apiKey: this.deviceInfo.apiKey || null, // Legacy
 			apiEndpoint: this.deviceInfo.apiEndpoint || null,
 			registeredAt: this.deviceInfo.registeredAt || null,
-			provisioned: this.deviceInfo.provisioned ? 1 : 0,
+			provisioned: this.deviceInfo.provisioned,
 			applicationId: this.deviceInfo.applicationId || null,
 			macAddress: this.deviceInfo.macAddress || null,
 			osVersion: this.deviceInfo.osVersion || null,
