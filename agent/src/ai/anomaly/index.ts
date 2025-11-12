@@ -20,6 +20,8 @@ import type {
 import { createBuffer, addValue, getRecentValues, getTrend } from './buffer';
 import { getDetector } from './detectors';
 import { AlertManager } from './alert-manager';
+import { LinearPredictor } from './forecaster';
+import type { Prediction } from './forecaster';
 
 export class AnomalyDetectionService {
 	private config: AnomalyConfig;
@@ -27,6 +29,7 @@ export class AnomalyDetectionService {
 	private alertManager: AlertManager;
 	private logger?: AgentLogger;
 	private enabled: boolean = false;
+	private predictor: LinearPredictor;
 	
 	constructor(config: AnomalyConfig, logger?: AgentLogger) {
 		this.config = config;
@@ -37,6 +40,8 @@ export class AnomalyDetectionService {
 			config.alerts.maxQueueSize,
 			config.alerts.cooldownMs
 		);
+		
+		this.predictor = new LinearPredictor();
 		
 		// Buffers are created lazily when data is first received (more efficient)
 		// This ensures metricsTracked reflects only actively monitored metrics
@@ -241,7 +246,7 @@ export class AnomalyDetectionService {
 	
 	/**
 	 * Get summary for cloud reporting (lightweight)
-	 * Includes recent alerts and statistics
+	 * Includes recent alerts, statistics, and predictions
 	 */
 	getSummaryForReport(maxRecentAlerts: number = 10) {
 		if (!this.enabled) {
@@ -264,6 +269,9 @@ export class AnomalyDetectionService {
 			count: alert.count,
 		}));
 		
+		// Generate predictions for all tracked metrics
+		const predictions = this.generatePredictions();
+		
 		return {
 			enabled: true,
 			stats: {
@@ -274,7 +282,51 @@ export class AnomalyDetectionService {
 				infoCount: this.alertManager.getAlertsBySeverity('info').length,
 			},
 			recentAlerts: alertsForReport,
+			predictions,
 		};
+	}
+	
+	/**
+	 * Generate predictions for all tracked metrics
+	 */
+	private generatePredictions(): Record<string, Prediction> | undefined {
+		if (this.buffers.size === 0) {
+			return undefined;
+		}
+		
+		const predictions: Record<string, Prediction> = {};
+		
+		for (const [metricName, buffer] of this.buffers.entries()) {
+			const metricConfig = this.getMetricConfig(metricName);
+			if (!metricConfig) continue;
+			
+			// Generate prediction using linear predictor
+			const prediction = this.predictor.predict(buffer, 20); // Use 20-sample lookback window
+			if (!prediction) continue;
+			
+			// Add time-to-threshold if expected range is configured
+			if (metricConfig.expectedRange && metricConfig.expectedRange[1] !== undefined) {
+				const threshold = metricConfig.expectedRange[1]; // Upper bound
+				const samplingIntervalMs = 20000; // Default 20s interval (matches METRICS_INTERVAL_MS)
+				
+				const timeToThreshold = this.predictor.estimateTimeToThreshold(
+					buffer,
+					threshold,
+					samplingIntervalMs
+				);
+				
+				if (timeToThreshold) {
+					prediction.time_to_threshold = {
+						threshold,
+						...timeToThreshold,
+					};
+				}
+			}
+			
+			predictions[metricName] = prediction;
+		}
+		
+		return Object.keys(predictions).length > 0 ? predictions : undefined;
 	}
 	
 	/**
