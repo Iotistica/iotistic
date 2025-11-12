@@ -9,8 +9,7 @@
  * - Logging
  */
 
-import { StateReconciler } from "./drivers/state-reconciler.js";
-import type { DeviceState } from "./drivers/state-reconciler.js";
+import { StateReconciler, DeviceState } from "./drivers/state-reconciler.js";
 import ContainerManager from "./compose/container-manager.js";
 import { DeviceManager } from "./provisioning/index.js";
 import type { DeviceInfo } from "./provisioning/types.js";

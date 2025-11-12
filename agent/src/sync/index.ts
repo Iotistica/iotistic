@@ -126,6 +126,7 @@ export class CloudSync extends EventEmitter {
 	private sensorPublish?: any; // Optional sensor-publish feature for health reporting
 	private protocolAdapters?: any; // Optional protocol-adapters feature for health reporting
 	private mqttManager?: any; // Optional MQTT manager for state reporting
+	private anomalyService?: any; // Optional anomaly detection service for alert reporting
 	
 	// Event handlers (stored for proper cleanup)
 	private onlineHandler = () => {
@@ -170,7 +171,8 @@ export class CloudSync extends EventEmitter {
 		sensorPublish?: any,
 		protocolAdapters?: any,
 		mqttManager?: any,
-		httpClient?: HttpClient  // NEW: Inject HTTP client for testability
+		httpClient?: HttpClient,  // NEW: Inject HTTP client for testability
+		anomalyService?: any  // NEW: Anomaly detection service
 	) {
 		super();
 		this.stateReconciler = stateReconciler;
@@ -179,6 +181,7 @@ export class CloudSync extends EventEmitter {
 		this.sensorPublish = sensorPublish;
 		this.protocolAdapters = protocolAdapters;
 		this.mqttManager = mqttManager;
+		this.anomalyService = anomalyService;
 		this.httpClient = httpClient || new FetchHttpClient(); // Default to real fetch
 		
 		// Set defaults
@@ -784,6 +787,30 @@ export class CloudSync extends EventEmitter {
 				this.logger?.warnSync('Failed to collect protocol adapter stats', {
 					component: LogComponents.cloudSync,
 					operation: 'collect-adapter-stats',
+					error: error instanceof Error ? error.message : String(error)
+				});
+			}
+		}
+		
+		// Add anomaly detection data (if anomaly service is enabled)
+		if (this.anomalyService && includeMetrics) {
+			try {
+				const anomalySummary = this.anomalyService.getSummaryForReport(10);
+				if (anomalySummary) {
+					(stateReport[deviceInfo.uuid] as any).anomaly_detection = anomalySummary;
+					
+					this.logger?.debugSync('Anomaly detection data included in report', {
+						component: LogComponents.cloudSync,
+						operation: 'collect-anomaly-stats',
+						alertCount: anomalySummary.stats.totalAlerts,
+						criticalCount: anomalySummary.stats.criticalCount,
+						warningCount: anomalySummary.stats.warningCount,
+					});
+				}
+			} catch (error) {
+				this.logger?.warnSync('Failed to collect anomaly detection stats', {
+					component: LogComponents.cloudSync,
+					operation: 'collect-anomaly-stats',
 					error: error instanceof Error ? error.message : String(error)
 				});
 			}
