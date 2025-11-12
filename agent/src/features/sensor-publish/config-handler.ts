@@ -1,18 +1,5 @@
 import { SensorPublishFeature } from './sensor-publish-feature';
-
-// Simple logger interface
-interface SimpleLogger {
-  info(message: string, ...args: any[]): void;
-  debug(message: string, ...args: any[]): void;
-  error(message: string, ...args: any[]): void;
-}
-
-// Default console logger
-const consoleLogger: SimpleLogger = {
-  info: (message: string, ...args: any[]) => console.log(message, ...args),
-  debug: (message: string, ...args: any[]) => console.log(message, ...args),
-  error: (message: string, ...args: any[]) => console.error(message, ...args),
-};
+import { Logger } from './types';
 
 export interface SensorConfig {
   enabled: boolean;
@@ -33,13 +20,14 @@ export interface SensorConfigUpdate {
  * sensor configuration changes (enable/disable, intervals)
  */
 export class SensorConfigHandler {
-  private static readonly TAG = 'SensorConfigHandler';
-  
-  private logger: SimpleLogger = consoleLogger;
+  private logger?: Logger;
 
   constructor(
-    private sensorPublishFeature: SensorPublishFeature
-  ) {}
+    private sensorPublishFeature: SensorPublishFeature,
+    logger?: Logger
+  ) {
+    this.logger = logger;
+  }
   
   /**
    * Start listening for delta events
@@ -47,22 +35,22 @@ export class SensorConfigHandler {
   public start(): void {
 
     
-    this.logger.info(`${SensorConfigHandler.TAG}: Started listening for sensor config updates`);
+    this.logger?.info('Started listening for sensor config updates');
   }
   
   /**
    * Handle delta from cloud
    */
   private async handleDelta(delta: any): Promise<void> {
-    this.logger.info(`${SensorConfigHandler.TAG}: ☁️  Received configuration update from cloud`);
+    this.logger?.info('Received configuration update from cloud');
     
     try {
       if (!delta.sensors) {
-        this.logger.debug(`${SensorConfigHandler.TAG}: No sensor configuration changes in delta`);
+        this.logger?.debug('No sensor configuration changes in delta');
         return;
       }
       
-      this.logger.debug(`${SensorConfigHandler.TAG}: Delta contains sensor updates:`, JSON.stringify(delta.sensors));
+      this.logger?.debug('Delta contains sensor updates');
       
       // Validate configuration before applying
       this.validateSensorConfig(delta.sensors);
@@ -73,10 +61,10 @@ export class SensorConfigHandler {
       // Report back actual state
       const currentConfig = await this.getCurrentSensorConfig();
       
-      this.logger.info(`${SensorConfigHandler.TAG}: ✅ Sensor configuration applied and reported`);
+      this.logger?.info('Sensor configuration applied and reported');
       
     } catch (error) {
-      this.logger.error(`${SensorConfigHandler.TAG}: ❌ Failed to apply sensor configuration:`, error);
+      this.logger?.error('Failed to apply sensor configuration', error);
       
     }
   }
@@ -113,7 +101,7 @@ export class SensorConfigHandler {
       }
     }
     
-    this.logger.debug(`${SensorConfigHandler.TAG}: Configuration validation passed`);
+    this.logger?.debug('Configuration validation passed');
   }
   
   /**
@@ -129,17 +117,17 @@ export class SensorConfigHandler {
       if (sensorConfig.enabled !== undefined) {
         if (sensorConfig.enabled) {
           await this.sensorPublishFeature.enableSensor(sensorName);
-          this.logger.info(`${SensorConfigHandler.TAG}: ✅ Enabled sensor: ${sensorName}`);
+          this.logger?.info(`Enabled sensor: ${sensorName}`);
         } else {
           await this.sensorPublishFeature.disableSensor(sensorName);
-          this.logger.info(`${SensorConfigHandler.TAG}: ✅ Disabled sensor: ${sensorName}`);
+          this.logger?.info(`Disabled sensor: ${sensorName}`);
         }
       }
       
       // Update publish interval
       if (sensorConfig.publishInterval !== undefined) {
         await this.sensorPublishFeature.updateInterval(sensorName, sensorConfig.publishInterval);
-        this.logger.info(`${SensorConfigHandler.TAG}: ✅ Updated interval for ${sensorName}: ${sensorConfig.publishInterval}ms`);
+        this.logger?.info(`Updated interval for ${sensorName}: ${sensorConfig.publishInterval}ms`);
       }
     }
   }

@@ -73,6 +73,11 @@ export const LogComponents = {
   // Features
   jobEngine: 'JobEngine',
   jobs: 'Jobs',
+  sshTunnel: 'SSHTunnel',
+  remoteAccess: 'RemoteAccess',
+  sensor: 'Sensor',
+  sensorPublish: 'SensorPublish',
+  sensorConfigHandler: 'SensorConfigHandler',
 } as const;
 
 export type LogComponent = typeof LogComponents[keyof typeof LogComponents];

@@ -1,5 +1,6 @@
 import { BaseFeature } from '../index.js';
 import { AgentLogger } from '../../logging/agent-logger.js';
+import { LogComponents } from '../../logging/types.js';
 import {
   SensorPublishConfig,
   SensorConfig
@@ -11,7 +12,6 @@ import { Sensor } from './sensor.js';
  * Ported from AWS IoT Device Client SensorPublishFeature.cpp
  */
 export class SensorPublishFeature extends BaseFeature {
-  private static readonly NAME = 'SensorPublish';
   private static readonly MAX_SENSORS = 10;
   
   private sensors: Sensor[] = [];
@@ -24,7 +24,7 @@ export class SensorPublishFeature extends BaseFeature {
     super(
       config,
       agentLogger,
-      SensorPublishFeature.NAME,
+      LogComponents.sensorPublish,
       deviceUuid,
       true, // Requires MQTT
       'SENSOR_PUBLISH_DEBUG'
@@ -35,7 +35,7 @@ export class SensorPublishFeature extends BaseFeature {
    * Get feature name
    */
   public getName(): string {
-    return SensorPublishFeature.NAME;
+    return 'SensorPublish';
   }
 
   /**

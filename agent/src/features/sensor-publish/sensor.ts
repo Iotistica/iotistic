@@ -11,14 +11,11 @@ import {
 
 /**
  * Sensor - Manages connection to Unix domain socket and publishes sensor data
- * Ported from AWS IoT Device Client Sensor.cpp
  */
 export class Sensor extends EventEmitter {
-  private static readonly TAG = 'Sensor';
-  
   private config: SensorConfig;
   private mqttConnection: MqttConnection;
-  private logger: Logger;
+  private logger?: Logger;
   private deviceUuid: string;
   
   private state: SensorState = SensorState.DISCONNECTED;
@@ -51,7 +48,7 @@ export class Sensor extends EventEmitter {
   constructor(
     config: SensorConfig,
     mqttConnection: MqttConnection,
-    logger: Logger,
+    logger: Logger | undefined,
     deviceUuid: string
   ) {
     super();
@@ -73,11 +70,11 @@ export class Sensor extends EventEmitter {
    */
   public async start(): Promise<void> {
     if (!this.config.enabled) {
-      this.logger.info(`${Sensor.TAG}: Sensor '${this.getSensorName()}' is disabled`);
+      this.logger?.info(`Sensor '${this.getSensorName()}' is disabled`);
       return;
     }
 
-    this.logger.info(`${Sensor.TAG}: Starting sensor '${this.getSensorName()}'`);
+    this.logger?.info(`Starting sensor '${this.getSensorName()}'`);
     this.needStop = false;
     
     // Start heartbeat timer if configured
@@ -93,7 +90,7 @@ export class Sensor extends EventEmitter {
    * Stop the sensor
    */
   public async stop(): Promise<void> {
-    this.logger.info(`${Sensor.TAG}: Stopping sensor '${this.getSensorName()}'`);
+    this.logger?.info(`Stopping sensor '${this.getSensorName()}'`);
     this.needStop = true;
     
     // Clear all timers
@@ -138,7 +135,7 @@ export class Sensor extends EventEmitter {
     }
 
     this.config.publishInterval = intervalMs;
-    this.logger.info(`${Sensor.TAG}: Updated interval for '${this.getSensorName()}': ${intervalMs}ms`);
+    this.logger?.info(`Updated interval for '${this.getSensorName()}': ${intervalMs}ms`);
     
     // Note: This updates the config but doesn't restart timers
     // The interval is used when batching, not for periodic publishing
@@ -161,7 +158,7 @@ export class Sensor extends EventEmitter {
     }
 
     this.state = SensorState.CONNECTING;
-    this.logger.debug(`${Sensor.TAG}: Connecting to sensor '${this.getSensorName()}' at ${this.config.addr}`);
+    this.logger?.debug(`Connecting to sensor '${this.getSensorName()}' at ${this.config.addr}`);
     
     try {
       this.socket = net.createConnection(this.config.addr);
@@ -183,7 +180,7 @@ export class Sensor extends EventEmitter {
       });
       
     } catch (error) {
-      this.logger.error(`${Sensor.TAG}: Failed to create socket connection: ${error}`);
+      this.logger?.error('Failed to create socket connection', error);
       this.scheduleReconnect();
     }
   }
@@ -192,7 +189,7 @@ export class Sensor extends EventEmitter {
    * Handle socket connection
    */
   private onConnect(): void {
-    this.logger.info(`${Sensor.TAG}: Connected to sensor '${this.getSensorName()}'`);
+    this.logger?.info(`Connected to sensor '${this.getSensorName()}'`);
     this.state = SensorState.CONNECTED;
     this.stats.reconnectAttempts = 0;
     this.stats.lastConnectedTime = new Date();
@@ -212,14 +209,14 @@ export class Sensor extends EventEmitter {
    */
   private onData(data: Buffer): void {
     this.stats.bytesReceived += data.length;
-    this.logger.info(`${Sensor.TAG}: Received ${data.length} bytes from sensor '${this.getSensorName()}'`);
+    this.logger?.info(`Received ${data.length} bytes from sensor '${this.getSensorName()}'`);
     
     // Append to buffer
     this.buffer = Buffer.concat([this.buffer, data]);
     
     // Check if buffer capacity exceeded
     if (this.buffer.length > this.config.bufferCapacity) {
-      this.logger.warn(`${Sensor.TAG}: Buffer capacity exceeded for sensor '${this.getSensorName()}', publishing batch`);
+      this.logger?.warn(`Buffer capacity exceeded for sensor '${this.getSensorName()}', publishing batch`);
       this.publishBatch();
       return;
     }
@@ -256,7 +253,7 @@ export class Sensor extends EventEmitter {
   private addMessageToBatch(message: string): void {
     // Check if message exceeds buffer capacity
     if (Buffer.byteLength(message, 'utf8') > this.config.bufferCapacity) {
-      this.logger.error(`${Sensor.TAG}: Message size exceeds buffer capacity, discarding message from sensor '${this.getSensorName()}'`);
+      this.logger?.error('Message size exceeds buffer capacity, discarding message');
       return;
     }
     
@@ -290,7 +287,7 @@ export class Sensor extends EventEmitter {
     }
     
     if (!this.mqttConnection.isConnected()) {
-      this.logger.warn(`${Sensor.TAG}: MQTT not connected, cannot publish batch from sensor '${this.getSensorName()}'`);
+      this.logger?.warn(`MQTT not connected, cannot publish batch from sensor '${this.getSensorName()}'`);
       return;
     }
     
@@ -311,9 +308,8 @@ export class Sensor extends EventEmitter {
       this.stats.bytesPublished += this.messageBatch.totalBytes;
       this.stats.lastPublishTime = new Date();
       
-      this.logger.debug(
-        `${Sensor.TAG}: Published ${this.messageBatch.messages.length} messages ` +
-        `(${this.messageBatch.totalBytes} bytes) from sensor '${this.getSensorName()}' to ${topic}`
+      this.logger?.debug(
+        `Published ${this.messageBatch.messages.length} messages (${this.messageBatch.totalBytes} bytes) from sensor '${this.getSensorName()}'`
       );
       
       // Reset batch
@@ -324,7 +320,7 @@ export class Sensor extends EventEmitter {
       };
       
     } catch (error) {
-      this.logger.error(`${Sensor.TAG}: Failed to publish batch from sensor '${this.getSensorName()}': ${error}`);
+      this.logger?.error(`Failed to publish batch from sensor '${this.getSensorName()}'`, error);
     }
   }
 
@@ -332,7 +328,7 @@ export class Sensor extends EventEmitter {
    * Handle socket error
    */
   private onError(error: Error): void {
-    this.logger.error(`${Sensor.TAG}: Socket error for sensor '${this.getSensorName()}': ${error.message}`);
+    this.logger?.error(`Socket error for sensor '${this.getSensorName()}'`, error);
     this.state = SensorState.ERROR;
     this.stats.lastError = error.message;
     this.stats.lastErrorTime = new Date();
@@ -344,7 +340,7 @@ export class Sensor extends EventEmitter {
    * Handle socket close
    */
   private onClose(): void {
-    this.logger.info(`${Sensor.TAG}: Connection closed for sensor '${this.getSensorName()}'`);
+    this.logger?.info(`Connection closed for sensor '${this.getSensorName()}'`);
     this.state = SensorState.DISCONNECTED;
     this.socket = null;
     
@@ -368,7 +364,7 @@ export class Sensor extends EventEmitter {
     this.clearReconnectTimer();
     
     const pollInterval = this.config.addrPollSec * 1000;
-    this.logger.debug(`${Sensor.TAG}: Scheduling reconnect for sensor '${this.getSensorName()}' in ${this.config.addrPollSec}s`);
+    this.logger?.debug(`Scheduling reconnect for sensor '${this.getSensorName()}' in ${this.config.addrPollSec}s`);
     
     this.reconnectTimer = setTimeout(() => {
       this.stats.reconnectAttempts++;
@@ -432,10 +428,10 @@ export class Sensor extends EventEmitter {
       await this.mqttConnection.publish(topic, payload, { qos: 0 });
       
       this.stats.lastHeartbeatTime = new Date();
-      this.logger.debug(`${Sensor.TAG}: Published heartbeat for sensor '${this.getSensorName()}'`);
+      this.logger?.debug(`Published heartbeat for sensor '${this.getSensorName()}'`);
       
     } catch (error) {
-      this.logger.error(`${Sensor.TAG}: Failed to publish heartbeat for sensor '${this.getSensorName()}': ${error}`);
+      this.logger?.error(`Failed to publish heartbeat for sensor '${this.getSensorName()}'`, error);
     }
   }
 

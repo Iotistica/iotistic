@@ -1,6 +1,8 @@
 import { spawn, ChildProcess } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
+import type { AgentLogger } from '../../logging/agent-logger';
+import { LogComponents } from '../../logging/types';
 
 export interface SSHTunnelConfig {
   cloudHost: string;
@@ -17,13 +19,15 @@ export class SSHTunnelManager {
   private config: SSHTunnelConfig;
   private isConnecting: boolean = false;
   private reconnectTimer?: NodeJS.Timeout;
+  private logger?: AgentLogger;
 
-  constructor(config: SSHTunnelConfig) {
+  constructor(config: SSHTunnelConfig, logger?: AgentLogger) {
     this.config = {
       autoReconnect: true,
       reconnectDelay: 5000,
       ...config,
     };
+    this.logger = logger;
   }
 
   /**
@@ -32,12 +36,16 @@ export class SSHTunnelManager {
    */
   async connect(): Promise<void> {
     if (this.isConnecting) {
-      console.log('⏳ SSH tunnel connection already in progress...');
+      this.logger?.debugSync('SSH tunnel connection already in progress', {
+        component: LogComponents.sshTunnel
+      });
       return;
     }
 
     if (this.process) {
-      console.log('✅ SSH tunnel already connected');
+      this.logger?.debugSync('SSH tunnel already connected', {
+        component: LogComponents.sshTunnel
+      });
       return;
     }
 
@@ -50,9 +58,15 @@ export class SSHTunnelManager {
     const stats = fs.statSync(this.config.sshKeyPath);
     const mode = (stats.mode & parseInt('777', 8)).toString(8);
     if (mode !== '600') {
-      console.warn(`⚠️  SSH key has permissions ${mode}, should be 600`);
+      this.logger?.warnSync(`SSH key has permissions ${mode}, should be 600`, {
+        component: LogComponents.sshTunnel,
+        currentMode: mode,
+        expectedMode: '600'
+      });
       fs.chmodSync(this.config.sshKeyPath, 0o600);
-      console.log('✅ Fixed SSH key permissions to 600');
+      this.logger?.infoSync('Fixed SSH key permissions to 600', {
+        component: LogComponents.sshTunnel
+      });
     }
 
     this.isConnecting = true;
@@ -74,40 +88,63 @@ export class SSHTunnelManager {
     console.log(`   Cloud: ${this.config.cloudHost}:${this.config.cloudPort}`);
     console.log(`   Tunnel: cloud:${this.config.localPort} -> device:${this.config.localPort}`);
 
+    this.logger?.infoSync('Establishing SSH reverse tunnel', {
+      component: LogComponents.sshTunnel,
+      cloudHost: this.config.cloudHost,
+      cloudPort: this.config.cloudPort,
+      localPort: this.config.localPort
+    });
+
     this.process = spawn('ssh', args, {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 
     this.process.on('spawn', () => {
-      console.log('✅ SSH tunnel process started');
+      this.logger?.infoSync('SSH tunnel process started', {
+        component: LogComponents.sshTunnel
+      });
       this.isConnecting = false;
     });
 
     this.process.on('error', (error: Error) => {
-      console.error('❌ SSH tunnel spawn error:', error.message);
+      this.logger?.errorSync('SSH tunnel spawn error', error, {
+        component: LogComponents.sshTunnel
+      });
       this.isConnecting = false;
       this.process = undefined;
       this.scheduleReconnect();
     });
 
     this.process.on('close', (code: number | null, signal: string | null) => {
-      console.log(`⚠️  SSH tunnel closed (code: ${code}, signal: ${signal})`);
+      this.logger?.warnSync('SSH tunnel closed', {
+        component: LogComponents.sshTunnel,
+        exitCode: code,
+        signal
+      });
       this.isConnecting = false;
       this.process = undefined;
       this.scheduleReconnect();
     });
 
     this.process.stdout?.on('data', (data: Buffer) => {
-      console.log('SSH tunnel stdout:', data.toString().trim());
+      this.logger?.debugSync('SSH tunnel stdout', {
+        component: LogComponents.sshTunnel,
+        message: data.toString().trim()
+      });
     });
 
     this.process.stderr?.on('data', (data: Buffer) => {
       const message = data.toString().trim();
       // SSH uses stderr for normal messages too
       if (message.toLowerCase().includes('error') || message.toLowerCase().includes('failed')) {
-        console.error('SSH tunnel stderr:', message);
+        this.logger?.errorSync('SSH tunnel stderr', new Error(message), {
+          component: LogComponents.sshTunnel
+        });
       } else {
-        console.log('SSH tunnel info:', message);
+        this.logger?.debugSync('SSH tunnel info', {
+          component: LogComponents.sshTunnel,
+          message
+        });
       }
     });
 
@@ -118,14 +155,18 @@ export class SSHTunnelManager {
       throw new Error('SSH tunnel failed to establish');
     }
 
-    console.log('✅ SSH reverse tunnel established successfully');
+    this.logger?.infoSync('SSH reverse tunnel established successfully', {
+      component: LogComponents.sshTunnel
+    });
   }
 
   /**
    * Disconnect SSH tunnel
    */
   async disconnect(): Promise<void> {
-    console.log('🔌 Disconnecting SSH tunnel...');
+    this.logger?.infoSync('Disconnecting SSH tunnel', {
+      component: LogComponents.sshTunnel
+    });
 
     // Clear any pending reconnection
     if (this.reconnectTimer) {
@@ -144,7 +185,9 @@ export class SSHTunnelManager {
     }
 
     this.process = undefined;
-    console.log('✅ SSH tunnel disconnected');
+    this.logger?.infoSync('SSH tunnel disconnected', {
+      component: LogComponents.sshTunnel
+    });
   }
 
   /**
@@ -181,7 +224,9 @@ export class SSHTunnelManager {
    */
   private scheduleReconnect(): void {
     if (!this.config.autoReconnect) {
-      console.log('⚠️  Auto-reconnect disabled, not reconnecting');
+      this.logger?.warnSync('Auto-reconnect disabled, not reconnecting', {
+        component: LogComponents.sshTunnel
+      });
       return;
     }
 
@@ -190,13 +235,20 @@ export class SSHTunnelManager {
     }
 
     const delay = this.config.reconnectDelay || 5000;
-    console.log(`⏳ Scheduling SSH tunnel reconnection in ${delay}ms...`);
+    this.logger?.infoSync('Scheduling SSH tunnel reconnection', {
+      component: LogComponents.sshTunnel,
+      delayMs: delay
+    });
 
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = undefined;
-      console.log('🔄 Attempting to reconnect SSH tunnel...');
+      this.logger?.infoSync('Attempting to reconnect SSH tunnel', {
+        component: LogComponents.sshTunnel
+      });
       this.connect().catch(error => {
-        console.error('❌ Reconnection failed:', error.message);
+        this.logger?.errorSync('Reconnection failed', error as Error, {
+          component: LogComponents.sshTunnel
+        });
       });
     }, delay);
   }
@@ -218,7 +270,9 @@ export class SSHTunnelManager {
         return true;
       }
     } catch (error) {
-      console.error('SSH tunnel health check failed:', error);
+      this.logger?.errorSync('SSH tunnel health check failed', error as Error, {
+        component: LogComponents.sshTunnel
+      });
       return false;
     }
 
