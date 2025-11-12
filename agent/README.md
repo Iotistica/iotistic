@@ -203,10 +203,7 @@ This package provides two application managers:
    - REST API available (`api/server.ts`)
    - **Start here!** See examples in `examples/docker-integration.ts`
 
-2. **ApplicationManager** (`src/application-manager.ts`) - Legacy implementation
-   - Full commit tracking and state management
-   - More complex architecture
-   - Uses stubs for dependencies
+
 
 ## Project Structure
 
