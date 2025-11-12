@@ -49,6 +49,18 @@ export class MqttManager {
       return this.connectionPromise;
     }
 
+    // Clean up old client if exists (prevent listener leaks on reconnection)
+    if (this.client) {
+      this.debugLog('Cleaning up old MQTT client before reconnection');
+      this.client.removeAllListeners();
+      try {
+        this.client.end(true);
+      } catch (error) {
+        this.debugLog(`Error ending old client: ${error}`);
+      }
+      this.client = null;
+    }
+
     this.debugLog(`Connecting to MQTT broker: ${brokerUrl}`);
 
     this.connectionPromise = new Promise((resolve, reject) => {

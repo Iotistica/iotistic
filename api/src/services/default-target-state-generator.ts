@@ -86,6 +86,11 @@ interface TargetStateConfig {
     metricsIntervalMs: number;
     deviceReportIntervalMs: number;
     stateReportIntervalMs: number;
+    scheduledRestart: {
+        enabled: boolean,
+        intervalDays: number,
+        reason: string
+      }
   };
 }
 
@@ -114,6 +119,11 @@ export function generateDefaultTargetStateConfig(
       metricsIntervalMs: 60000, // 1 minute (starter plan)
       deviceReportIntervalMs: 30000, // 30 seconds
       stateReportIntervalMs: 10000, // 10 seconds
+       scheduledRestart: {
+        enabled: true,
+        intervalDays: 7,
+        reason: "heap_fragmentation_cleanup"
+      }
     },
   };
 

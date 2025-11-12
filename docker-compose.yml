@@ -20,6 +20,10 @@ services:
                 context: ./agent
                 dockerfile: Dockerfile
             restart: always
+            # Memory limits for edge device testing (Raspberry Pi 4 = 2-4GB total RAM)
+            # Allocate 512MB limit to simulate constrained environment
+            mem_limit: 512m
+            mem_reservation: 256m
             volumes:
                 - /var/run/docker.sock:/var/run/docker.sock
                 - agent-1-data:/app/data
@@ -34,11 +38,20 @@ services:
                 - METRICS_INTERVAL_MS=20000
                 - LOG_COMPRESSION=true
                 - PROVISIONING_API_KEY=708b51cbc9b5b515151fbb943ba9788ab6885d037455424b290f97d2077ae8c0
+                # Memory monitoring (edge-appropriate thresholds)
+                - MEMORY_CHECK_INTERVAL_MS=30000
+                - MEMORY_THRESHOLD_MB=15
                 # Data resilience (IoT best practices)
                 - LOG_FILE_PERSISTANCE=true
                 - LOG_MAX_AGE=86400000
                 - MAX_LOG_FILE_SIZE=52428800
                 - MAX_LOGS=10000
+                # Memory leak simulation (for testing - disabled by default)
+                - SIMULATE_MEMORY_LEAK=false
+                - LEAK_TYPE=sudden
+                - LEAK_RATE_MB=50
+                - LEAK_INTERVAL_MS=2000
+                - LEAK_MAX_MB=30
             depends_on:
                 api:
                     condition: service_healthy

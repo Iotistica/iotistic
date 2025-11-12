@@ -128,11 +128,20 @@ $template = @"
                 - LOG_COMPRESSION=true
                 - REQUIRE_PROVISIONING=false
                 - PROVISIONING_API_KEY={PROVISIONING_KEY}
+                # Memory monitoring (edge-appropriate thresholds)
+                - MEMORY_CHECK_INTERVAL_MS=30000
+                - MEMORY_THRESHOLD_MB=15
                 # Data resilience (IoT best practices)
                 - LOG_FILE_PERSISTANCE=true
                 - LOG_MAX_AGE=86400000
                 - MAX_LOG_FILE_SIZE=52428800
                 - MAX_LOGS=10000
+                # Memory leak simulation 
+                - SIMULATE_MEMORY_LEAK=false
+                - LEAK_TYPE=sudden
+                - LEAK_RATE_MB=50
+                - LEAK_INTERVAL_MS=2000
+                - LEAK_MAX_MB=30
                 
                 
             depends_on:

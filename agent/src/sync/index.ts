@@ -127,6 +127,41 @@ export class CloudSync extends EventEmitter {
 	private protocolAdapters?: any; // Optional protocol-adapters feature for health reporting
 	private mqttManager?: any; // Optional MQTT manager for state reporting
 	
+	// Event handlers (stored for proper cleanup)
+	private onlineHandler = () => {
+		this.logger?.infoSync('Connection restored - flushing offline queue', { 
+			component: LogComponents.cloudSync,
+			queueSize: this.reportQueue.size()
+		});
+		this.flushOfflineQueue().catch(error => {
+			this.logger?.errorSync('Failed to flush offline queue', error instanceof Error ? error : new Error(String(error)), {
+				component: LogComponents.cloudSync
+			});
+		});
+	};
+	
+	private offlineHandler = () => {
+		const health = this.connectionMonitor.getHealth();
+		this.logger?.errorSync('Connection lost', undefined, {
+			component: LogComponents.cloudSync,
+			offlineDurationSeconds: Math.floor(health.offlineDuration / 1000),
+			status: health.status,
+			pollSuccessRate: health.pollSuccessRate,
+			reportSuccessRate: health.reportSuccessRate,
+			note: 'Reports will be queued until connection is restored'
+		});
+	};
+	
+	private degradedHandler = () => {
+		this.logger?.warnSync('Connection degraded (experiencing failures)', {
+			component: LogComponents.cloudSync
+		});
+	};
+	
+	private reconciliationCompleteHandler = () => {
+		this.scheduleReport('state-change');
+	};
+	
 	constructor(
 		stateReconciler: StateReconciler,
 		deviceManager: DeviceManager,
@@ -169,35 +204,15 @@ export class CloudSync extends EventEmitter {
 	 * Setup connection event listeners
 	 */
 	private setupConnectionEventListeners(): void {
-		this.connectionMonitor.on('online', () => {
-			this.logger?.infoSync('Connection restored - flushing offline queue', { 
-				component: LogComponents.cloudSync,
-				queueSize: this.reportQueue.size()
-			});
-			this.flushOfflineQueue().catch(error => {
-				this.logger?.errorSync('Failed to flush offline queue', error instanceof Error ? error : new Error(String(error)), {
-					component: LogComponents.cloudSync
-				});
-			});
-		});
+		// Remove any existing listeners to prevent duplicates
+		this.connectionMonitor.removeListener('online', this.onlineHandler);
+		this.connectionMonitor.removeListener('offline', this.offlineHandler);
+		this.connectionMonitor.removeListener('degraded', this.degradedHandler);
 		
-		this.connectionMonitor.on('offline', () => {
-			const health = this.connectionMonitor.getHealth();
-			this.logger?.errorSync('Connection lost', undefined, {
-				component: LogComponents.cloudSync,
-				offlineDurationSeconds: Math.floor(health.offlineDuration / 1000),
-				status: health.status,
-				pollSuccessRate: health.pollSuccessRate,
-				reportSuccessRate: health.reportSuccessRate,
-				note: 'Reports will be queued until connection is restored'
-			});
-		});
-		
-		this.connectionMonitor.on('degraded', () => {
-			this.logger?.warnSync('Connection degraded (experiencing failures)', {
-				component: LogComponents.cloudSync
-			});
-		});
+		// Add listeners
+		this.connectionMonitor.on('online', this.onlineHandler);
+		this.connectionMonitor.on('offline', this.offlineHandler);
+		this.connectionMonitor.on('degraded', this.degradedHandler);
 	}
 	
 	/**
@@ -239,10 +254,9 @@ export class CloudSync extends EventEmitter {
 			intervalMs: this.config.reportInterval
 		});
 		
-		// Listen for state changes from reconciler
-		this.stateReconciler.on('reconciliation-complete', () => {
-			this.scheduleReport('state-change');
-		});
+		// Listen for state changes from reconciler (remove old listener first)
+		this.stateReconciler.removeListener('reconciliation-complete', this.reconciliationCompleteHandler);
+		this.stateReconciler.on('reconciliation-complete', this.reconciliationCompleteHandler);
 		
 		// Start reporting loop
 		await this.reportLoop();
@@ -254,17 +268,45 @@ export class CloudSync extends EventEmitter {
 	public async stop(): Promise<void> {
 		this.logger?.infoSync('Stopping API Binder', { component: LogComponents.cloudSync });
 		
-		this.isPolling = false;
-		this.isReporting = false;
-		
-		if (this.pollTimer) {
-			clearTimeout(this.pollTimer);
+		try {
+			// Clear timers FIRST to prevent new iterations
+			if (this.pollTimer) {
+				clearTimeout(this.pollTimer);
+				this.pollTimer = undefined;
+			}
+			if (this.reportTimer) {
+				clearTimeout(this.reportTimer);
+				this.reportTimer = undefined;
+			}
+			
+			// Then stop polling/reporting flags
+			this.isPolling = false;
+			this.isReporting = false;
+			
+			// Wait for current operations to finish (100ms grace period)
+			await new Promise(resolve => setTimeout(resolve, 100));
+			
+			// Remove all event listeners to prevent memory leaks
+			this.connectionMonitor.removeListener('online', this.onlineHandler);
+			this.connectionMonitor.removeListener('offline', this.offlineHandler);
+			this.connectionMonitor.removeListener('degraded', this.degradedHandler);
+			this.stateReconciler.removeListener('reconciliation-complete', this.reconciliationCompleteHandler);
+			
+			this.removeAllListeners();
+			
+			this.logger?.infoSync('API Binder stopped successfully', { component: LogComponents.cloudSync });
+		} catch (error) {
+			// Always clear timers even if error occurs
+			if (this.pollTimer) clearTimeout(this.pollTimer);
+			if (this.reportTimer) clearTimeout(this.reportTimer);
+			this.pollTimer = undefined;
+			this.reportTimer = undefined;
+			
+			this.logger?.errorSync('Error stopping API Binder', error instanceof Error ? error : new Error(String(error)), {
+				component: LogComponents.cloudSync
+			});
+			throw error;
 		}
-		if (this.reportTimer) {
-			clearTimeout(this.reportTimer);
-		}
-		
-		this.removeAllListeners();
 	}
 	
 	/**

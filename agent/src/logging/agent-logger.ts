@@ -19,6 +19,23 @@ export interface LogContext {
 	[key: string]: any;
 }
 
+// ANSI color codes for terminal output
+const COLORS = {
+	reset: '\x1b[0m',
+	bright: '\x1b[1m',
+	dim: '\x1b[2m',
+	
+	// Log level colors
+	debug: '\x1b[36m',    // Cyan
+	info: '\x1b[32m',     // Green
+	warn: '\x1b[33m',     // Yellow
+	error: '\x1b[31m',    // Red
+	
+	// Component colors
+	component: '\x1b[35m', // Magenta
+	timestamp: '\x1b[90m', // Gray
+};
+
 // Log level hierarchy for filtering
 const LOG_LEVELS: Record<LogLevel, number> = {
 	debug: 0,
@@ -158,7 +175,12 @@ export class AgentLogger {
 	private consoleLog(level: LogLevel, message: string, context?: LogContext): void {
 		const timestamp = new Date().toISOString();
 		const component = context?.component || 'agent';
-		const prefix = `${timestamp} [${level.toUpperCase()}] [${component}]`;
+		
+		// Color-coded output
+		const levelColor = COLORS[level];
+		const levelText = level.toUpperCase().padEnd(5); // Pad to align columns
+		
+		const prefix = `${COLORS.timestamp}${timestamp}${COLORS.reset} ${levelColor}[${levelText}]${COLORS.reset} ${COLORS.component}[${component}]${COLORS.reset}`;
 
 		// Format message
 		let output = `${prefix} ${message}`;
@@ -167,7 +189,7 @@ export class AgentLogger {
 		if (context && Object.keys(context).length > 0) {
 			const { component: _, ...otherContext } = context;
 			if (Object.keys(otherContext).length > 0) {
-				output += ` ${JSON.stringify(otherContext)}`;
+				output += ` ${COLORS.dim}${JSON.stringify(otherContext)}${COLORS.reset}`;
 			}
 		}
 

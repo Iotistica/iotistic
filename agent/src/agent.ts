@@ -36,7 +36,15 @@ import {
 import { AgentFirewall } from "./network/firewall.js";
 import { AgentUpdater } from "./updater.js";
 import { getMacAddress, getOsVersion } from "./system/metrics.js";
-import { healthcheck as memoryHealthcheck, setMemoryLogger } from "./system/memory.js";
+import { 
+  healthcheck as memoryHealthcheck, 
+  setMemoryLogger,
+  startMemoryMonitoring,
+  stopMemoryMonitoring,
+  startMemoryLeakSimulation,
+  stopMemoryLeakSimulation,
+  getSimulationStatus
+} from "./system/memory.js";
 import { readFileSync } from "fs";
 import { join } from "path";
 
@@ -74,6 +82,9 @@ export default class DeviceAgent {
 
   // System settings (config-driven with env var defaults)
   private reconciliationIntervalMs: number;
+  
+  // Scheduled restart timer (controlled from cloud config)
+  private scheduledRestartTimer?: NodeJS.Timeout;
 
   private readonly DEVICE_API_PORT = parseInt(
     process.env.DEVICE_API_PORT || "48484",
@@ -98,6 +109,14 @@ export default class DeviceAgent {
     // Default to localhost for host networking (most common edge device setup)
     return "http://localhost:3002";
   }
+
+  // Event handler for target state changes (stored for cleanup)
+  private targetStateChangeHandler = (newState: DeviceState) => {
+    this.updateCachedTargetState();
+    
+    // Check for scheduled restart config changes
+    this.handleScheduledRestartConfig();
+  };
 
   constructor() {
     // Initialize with default from env var
@@ -192,6 +211,12 @@ export default class DeviceAgent {
 
       // 14. Start auto-reconciliation
       this.startAutoReconciliation();
+
+      // 15. Start active memory monitoring (independent of healthcheck endpoint)
+      this.startMemoryMonitoring();
+
+      // 16. Handle scheduled restart configuration (cloud-controlled)
+      this.handleScheduledRestartConfig();
 
       //Final words
       const mode = this.deviceInfo.provisioned
@@ -525,13 +550,9 @@ export default class DeviceAgent {
 
     // Watch for target state changes to update cache
     // Note: Config handling is now done by ConfigManager inside StateReconciler
-    this.stateReconciler.on("target-state-changed", (newState: DeviceState) => {
-      // Update cached target state
-      this.updateCachedTargetState();
-
-      // Config is now handled by ConfigManager automatically
-      // No need for handleConfigUpdate here
-    });
+    // Remove any existing listener to prevent duplicates on re-initialization
+    this.stateReconciler.removeListener("target-state-changed", this.targetStateChangeHandler);
+    this.stateReconciler.on("target-state-changed", this.targetStateChangeHandler);
 
     // Initialize cache with current target state
     this.updateCachedTargetState();
@@ -1046,6 +1067,159 @@ export default class DeviceAgent {
     });
   }
 
+  /**
+   * Start active memory monitoring (independent of /ping healthcheck)
+   */
+  private startMemoryMonitoring(): void {
+    const memoryCheckInterval = parseInt(
+      process.env.MEMORY_CHECK_INTERVAL_MS || "30000",
+      10
+    );
+    const memoryThreshold = parseInt(
+      process.env.MEMORY_THRESHOLD_MB || "15",
+      10
+    ) * 1024 * 1024; // Convert MB to bytes
+
+    setMemoryLogger(this.agentLogger);
+    
+    // Start monitoring with callback for threshold breach
+    startMemoryMonitoring(
+      memoryCheckInterval,
+      memoryThreshold,
+      () => {
+        // Callback when memory threshold is breached
+        this.agentLogger?.errorSync(
+          'Memory threshold breached - agent may need restart',
+          undefined,
+          {
+            component: LogComponents.agent,
+            thresholdMB: memoryThreshold / (1024 * 1024),
+            action: 'Consider restarting agent or investigating memory leak'
+          }
+        );
+
+        // Optional: Trigger graceful shutdown or restart
+        // Uncomment if you want automatic restart on memory leak
+        // process.exit(1);
+      }
+    );
+
+    this.agentLogger?.infoSync("Active memory monitoring started", {
+      component: LogComponents.agent,
+      intervalMs: memoryCheckInterval,
+      thresholdMB: memoryThreshold / (1024 * 1024)
+    });
+
+    // Start memory leak simulation if enabled (for testing only)
+    if (process.env.SIMULATE_MEMORY_LEAK === 'true') {
+      this.agentLogger?.warnSync("MEMORY LEAK SIMULATION ENABLED - FOR TESTING ONLY", {
+        component: LogComponents.agent,
+        leakType: process.env.LEAK_TYPE || 'gradual',
+        leakRateMB: process.env.LEAK_RATE_MB || '1',
+        leakIntervalMs: process.env.LEAK_INTERVAL_MS || '5000',
+        leakMaxMB: process.env.LEAK_MAX_MB || '50'
+      });
+      
+      // Wait 30 seconds after startup before starting simulation
+      // This allows baseline memory to be established
+      setTimeout(() => {
+        startMemoryLeakSimulation();
+      }, 30000);
+    }
+  }
+
+  /**
+   * Handle scheduled restart configuration from cloud
+   * Controlled via target state config.settings.scheduledRestart
+   */
+  private handleScheduledRestartConfig(): void {
+    const configSettings = this.getConfigSettings();
+    const restartConfig = configSettings.scheduledRestart;
+
+    // Clear existing timer if present
+    if (this.scheduledRestartTimer) {
+      clearTimeout(this.scheduledRestartTimer);
+      this.scheduledRestartTimer = undefined;
+      this.agentLogger?.infoSync("Cleared existing scheduled restart timer", {
+        component: LogComponents.agent,
+      });
+    }
+
+    // Check if scheduled restart is enabled
+    if (!restartConfig || !restartConfig.enabled) {
+      this.agentLogger?.debugSync("Scheduled restart disabled or not configured", {
+        component: LogComponents.agent,
+        config: restartConfig || "not set"
+      });
+      return;
+    }
+
+    // Validate configuration
+    const intervalDays = parseInt(restartConfig.intervalDays, 10);
+    if (isNaN(intervalDays) || intervalDays < 1 || intervalDays > 90) {
+      this.agentLogger?.warnSync("Invalid scheduled restart intervalDays, must be 1-90", {
+        component: LogComponents.agent,
+        providedValue: restartConfig.intervalDays,
+        using: "disabled"
+      });
+      return;
+    }
+
+    // Calculate restart time
+    const restartTimeMs = intervalDays * 24 * 60 * 60 * 1000;
+    const restartAt = new Date(Date.now() + restartTimeMs);
+
+    this.agentLogger?.infoSync("Scheduled restart configured from cloud", {
+      component: LogComponents.agent,
+      enabled: true,
+      intervalDays,
+      restartAtISO: restartAt.toISOString(),
+      restartAtLocal: restartAt.toLocaleString(),
+      reason: restartConfig.reason || "heap_fragmentation_cleanup",
+      configSource: "cloud_target_state"
+    });
+
+    // Schedule the restart
+    this.scheduledRestartTimer = setTimeout(async () => {
+      this.agentLogger?.infoSync("Initiating scheduled restart", {
+        component: LogComponents.agent,
+        trigger: "scheduled_timer",
+        intervalDays,
+        reason: restartConfig.reason || "heap_fragmentation_cleanup",
+        uptimeDays: intervalDays,
+        memoryUsage: process.memoryUsage(),
+        timestamp: new Date().toISOString()
+      });
+
+      try {
+        // Graceful shutdown
+        await this.stop();
+        
+        this.agentLogger?.infoSync("Graceful shutdown complete, exiting for restart", {
+          component: LogComponents.agent,
+          exitCode: 0
+        });
+        
+        // Exit with code 0 (Docker/systemd will restart automatically)
+        process.exit(0);
+      } catch (error) {
+        this.agentLogger?.errorSync(
+          "Error during scheduled restart shutdown",
+          error instanceof Error ? error : new Error(String(error)),
+          {
+            component: LogComponents.agent,
+            action: "forcing_exit"
+          }
+        );
+        
+        // Force exit even if graceful shutdown fails
+        process.exit(1);
+      }
+    }, restartTimeMs);
+
+    // Don't prevent graceful shutdown
+    this.scheduledRestartTimer.unref();
+  }
 
   public async stop(): Promise<void> {
     this.agentLogger?.infoSync("Stopping Device Agent", { component: LogComponents.agent });
@@ -1107,6 +1281,18 @@ export default class DeviceAgent {
         });
       }
 
+      // Stop active memory monitoring
+      stopMemoryMonitoring();
+      this.agentLogger?.infoSync("Memory monitoring stopped", {
+        component: LogComponents.agent,
+      });
+
+      // Stop memory leak simulation if running
+      stopMemoryLeakSimulation();
+      this.agentLogger?.infoSync("Memory leak simulation stopped", {
+        component: LogComponents.agent,
+      });
+
       // Stop log backends (flush buffers, clear timers)
       this.agentLogger?.infoSync("Stopping log backends", {
         component: LogComponents.agent,
@@ -1153,6 +1339,23 @@ export default class DeviceAgent {
       if (this.containerManager) {
         this.containerManager.stopAutoReconciliation();
         this.agentLogger?.infoSync("Container manager stopped", {
+          component: LogComponents.agent,
+        });
+      }
+
+      // Clear scheduled restart timer
+      if (this.scheduledRestartTimer) {
+        clearTimeout(this.scheduledRestartTimer);
+        this.scheduledRestartTimer = undefined;
+        this.agentLogger?.infoSync("Scheduled restart timer cleared", {
+          component: LogComponents.agent,
+        });
+      }
+
+      // Remove all StateReconciler event listeners
+      if (this.stateReconciler) {
+        this.stateReconciler.removeListener("target-state-changed", this.targetStateChangeHandler);
+        this.agentLogger?.infoSync("StateReconciler event listeners removed", {
           component: LogComponents.agent,
         });
       }
