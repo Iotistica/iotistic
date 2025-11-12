@@ -1,11 +1,10 @@
 # ---- Build stage ----
-FROM node:20-slim AS builder
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Install build tools for native deps and SQLite3
-RUN apt-get update && apt-get install -y python3 make g++ sqlite3 libsqlite3-dev \
-    && rm -rf /var/lib/apt/lists/*
+# Install build tools for native deps (Alpine uses apk)
+RUN apk add --no-cache make g++ sqlite-dev
 
 COPY package*.json tsconfig.json tsconfig.build.json ./
 
@@ -18,20 +17,42 @@ COPY src ./src
 RUN npx tsc --project tsconfig.build.json && npm run copy:migrations
 
 # ---- Production stage ------
-FROM node:20-slim AS runtime
+FROM node:20-alpine AS runtime
 
 WORKDIR /app
 
+# Install runtime dependencies in single layer
+RUN apk add --no-cache \
+    sqlite-libs \
+    iptables \
+    curl \
+    jq \
+    procps
+
 COPY package*.json package-lock.json ./
 
-
-# Install only production deps, then remove build tools in same layer
-RUN apt-get update \
-    && apt-get install -y python3 make g++ curl jq procps sqlite3 libsqlite3-dev \
-    && apt-get install -y openvpn iproute2 iptables net-tools iputils-ping \
-    && npm ci --omit=dev --legacy-peer-deps \
-    && apt-get purge -y --auto-remove python3 make g++ \
-    && rm -rf /var/lib/apt/lists/*
+# Install production deps only, then aggressively clean
+RUN npm ci --omit=dev --legacy-peer-deps \
+    && npm cache clean --force \
+    # Remove entire unnecessary packages
+    && rm -rf node_modules/prettier \
+    && rm -rf node_modules/node-opcua-generator \
+    && rm -rf node_modules/node-gyp \
+    # Remove unnecessary files from node_modules
+    && find node_modules -type f -name '*.md' -delete \
+    && find node_modules -type f -name '*.txt' -delete \
+    && find node_modules -type f -name 'LICENSE*' -delete \
+    && find node_modules -type f -name 'CHANGELOG*' -delete \
+    && find node_modules -type d -name 'test' -exec rm -rf {} + 2>/dev/null || true \
+    && find node_modules -type d -name 'tests' -exec rm -rf {} + 2>/dev/null || true \
+    && find node_modules -type d -name 'docs' -exec rm -rf {} + 2>/dev/null || true \
+    && find node_modules -type d -name 'examples' -exec rm -rf {} + 2>/dev/null || true \
+    && find node_modules -type d -name 'coverage' -exec rm -rf {} + 2>/dev/null || true \
+    && find node_modules -type d -name '.github' -exec rm -rf {} + 2>/dev/null || true \
+    && find node_modules -type d -name 'source' -exec rm -rf {} + 2>/dev/null || true \
+    # Remove source maps and TypeScript source files (keep .d.ts for types)
+    && find node_modules -type f -name '*.map' -delete \
+    && find node_modules -type f -name '*.ts' ! -name '*.d.ts' -delete
 
 # Copy built app
 COPY --from=builder /app/dist ./dist
@@ -45,10 +66,7 @@ RUN chmod +x /app/bin/update-agent-docker.sh /app/bin/update-agent-systemd.sh
 RUN mkdir -p /app/data/vpn
 VOLUME ["/app/data"]
 
-# Set capabilities for OpenVPN (if running with appropriate Docker/K8s setup)
-# Note: These capabilities must be granted at runtime by Docker/Kubernetes
-# RUN setcap cap_net_admin+ep /usr/sbin/openvpn (requires privileged container)
-
 EXPOSE 3002
 
-CMD ["npm", "run", "start:device"]
+# Use node directly instead of npm run to avoid npm overhead
+CMD ["node", "dist/app.js"]

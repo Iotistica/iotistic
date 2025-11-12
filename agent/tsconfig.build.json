@@ -12,6 +12,7 @@
     "dist",
     "test",
     "cli",
-    "src/jobs/examples"
+    "src/jobs/examples",
+    "src/features/sensors/opcua"
   ]
 }

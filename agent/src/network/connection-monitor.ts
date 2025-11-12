@@ -79,16 +79,12 @@ export class ConnectionMonitor extends EventEmitter {
 		
 		// Debug logging
 		if (failureCount > 0) {
-			if (this.logger) {
-				this.logger.debugSync(`${operation} success after ${failureCount} failures`, {
-					component: LogComponents.connectionMonitor,
-					operation,
-					failureCount,
-					wasOffline,
-				});
-			} else {
-				console.log(`[ConnectionMonitor] ${operation} success after ${failureCount} failures (wasOffline: ${wasOffline})`);
-			}
+			this.logger?.debugSync(`${operation} success after ${failureCount} failures`, {
+				component: LogComponents.connectionMonitor,
+				operation,
+				failureCount,
+				wasOffline,
+			});
 		}
 		
 		// Reset failure counter for this specific operation
@@ -161,14 +157,10 @@ export class ConnectionMonitor extends EventEmitter {
 		if (maxFailures >= this.DEGRADED_THRESHOLD && 
 		    maxFailures < this.FAILURE_THRESHOLD && 
 		    wasOnline) {
-			if (this.logger) {
-				this.logger.warnSync('Connection degraded', {
-					component: LogComponents.connectionMonitor,
-					consecutiveFailures: maxFailures,
-				});
-			} else {
-				console.log(`Connection degraded (${maxFailures} consecutive failures)`);
-			}
+			this.logger?.warnSync('Connection degraded', {
+				component: LogComponents.connectionMonitor,
+				consecutiveFailures: maxFailures,
+			});
 			
 			this.emit('degraded');
 			this.emit('state-changed', this.getState());
@@ -179,18 +171,12 @@ export class ConnectionMonitor extends EventEmitter {
 			this.state.isOnline = false;
 			this.state.offlineSince = Date.now();
 			
-			if (this.logger) {
-				this.logger.errorSync('Connection lost', undefined, {
-					component: LogComponents.connectionMonitor,
-					consecutiveFailures: maxFailures,
-					lastSuccessfulPoll: this.formatTimestamp(this.state.lastSuccessfulPoll),
-					lastSuccessfulReport: this.formatTimestamp(this.state.lastSuccessfulReport),
-				});
-			} else {
-				console.log(`Connection lost (${maxFailures} consecutive failures)`);
-				console.log(`   Last successful poll: ${this.formatTimestamp(this.state.lastSuccessfulPoll)}`);
-				console.log(`   Last successful report: ${this.formatTimestamp(this.state.lastSuccessfulReport)}`);
-			}
+			this.logger?.errorSync('Connection lost', undefined, {
+				component: LogComponents.connectionMonitor,
+				consecutiveFailures: maxFailures,
+				lastSuccessfulPoll: this.formatTimestamp(this.state.lastSuccessfulPoll),
+				lastSuccessfulReport: this.formatTimestamp(this.state.lastSuccessfulReport),
+			});
 			
 			this.emit('offline');
 			this.emit('state-changed', this.getState());

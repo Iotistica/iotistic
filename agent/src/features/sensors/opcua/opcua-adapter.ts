@@ -55,6 +55,7 @@
  */
 
 import { EventEmitter } from 'events';
+// @ts-ignore - Optional dependency: node-opcua-client may not be installed
 import {
   OPCUAClient,
   ClientSession,

@@ -3,7 +3,6 @@
  * =================================
  * 
  * Monitors the agent process's own memory usage to detect memory leaks.
- * Based on Balena Supervisor's memory healthcheck pattern.
  * 
  * How it works:
  * 1. Waits 20 seconds after startup to establish baseline
@@ -13,19 +12,23 @@
  */
 
 import { memoryUsage } from 'process';
+import type { AgentLogger } from '../logging/agent-logger';
+import { LogComponents } from '../logging/types';
 
 export let initialMemory: number = 0;
 let lastMemoryCheck: number = 0;
+let logger: AgentLogger | undefined;
 
 // Exported for tests only, as process.uptime cannot be stubbed
 export const processUptime = () => Math.floor(process.uptime());
 
-const secondsToHumanReadable = (seconds: number) => {
-	const hours = Math.floor(seconds / 3600);
-	const minutes = Math.floor((seconds - hours * 3600) / 60);
-	const secondsRemainder = seconds - hours * 3600 - minutes * 60;
-	return `${hours}h ${minutes}m ${secondsRemainder}s`;
-};
+/**
+ * Set logger for memory monitoring
+ */
+export function setMemoryLogger(agentLogger: AgentLogger | undefined): void {
+	logger = agentLogger;
+}
+
 
 const bytesToMB = (bytes: number) => (bytes / (1024 * 1024)).toFixed(2);
 
@@ -53,9 +56,11 @@ export async function healthcheck(
 	if (initialMemory === 0) {
 		initialMemory = currentMemory;
 		lastMemoryCheck = currentMemory;
-		console.log(
-			`[Memory Monitor] Baseline established: ${bytesToMB(initialMemory)}MB after ${secondsToHumanReadable(processUptime())}`
-		);
+		logger?.infoSync('Memory baseline established', {
+			component: LogComponents.metrics,
+			baselineMB: bytesToMB(initialMemory),
+			uptimeSeconds: processUptime()
+		});
 		return true;
 	}
 
@@ -64,24 +69,26 @@ export async function healthcheck(
 	
 	// Fail healthcheck if memory usage is above threshold
 	if (memoryGrowth > thresholdBytes) {
-		console.error(
-			`[Memory Monitor] FAILED - memory growth ${bytesToMB(memoryGrowth)}MB exceeds threshold ${bytesToMB(thresholdBytes)}MB after ${secondsToHumanReadable(processUptime())}`,
-			{
-				initial: `${bytesToMB(initialMemory)}MB`,
-				current: `${bytesToMB(currentMemory)}MB`,
-				growth: `${bytesToMB(memoryGrowth)}MB`,
-				threshold: `${bytesToMB(thresholdBytes)}MB`,
-			}
-		);
+		logger?.errorSync('Memory growth exceeds threshold', undefined, {
+			component: LogComponents.metrics,
+			initialMB: bytesToMB(initialMemory),
+			currentMB: bytesToMB(currentMemory),
+			growthMB: bytesToMB(memoryGrowth),
+			thresholdMB: bytesToMB(thresholdBytes),
+			uptimeSeconds: processUptime()
+		});
 		return false;
 	}
 
 	// Log significant memory changes (> 5MB)
 	const changeSinceLastCheck = Math.abs(currentMemory - lastMemoryCheck);
 	if (changeSinceLastCheck > 5 * 1024 * 1024) {
-		console.log(
-			`[Memory Monitor] Memory change detected: ${bytesToMB(lastMemoryCheck)}MB -> ${bytesToMB(currentMemory)}MB (${bytesToMB(memoryGrowth)}MB growth from baseline)`
-		);
+		logger?.infoSync('Memory change detected', {
+			component: LogComponents.metrics,
+			previousMB: bytesToMB(lastMemoryCheck),
+			currentMB: bytesToMB(currentMemory),
+			growthMB: bytesToMB(memoryGrowth)
+		});
 		lastMemoryCheck = currentMemory;
 	}
 

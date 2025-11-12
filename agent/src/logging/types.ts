@@ -42,6 +42,7 @@ export const LogComponents = {
   modbus: 'Modbus',
   modbusRtu: 'ModbusRTU',
   modbusTcp: 'ModbusTCP',
+  mqtt: 'MQTT',
   
   // Logging System
   logMonitor: 'LogMonitor',

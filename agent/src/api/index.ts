@@ -8,22 +8,27 @@ import express from 'express';
 import type { Server } from 'http';
 import * as middleware from './middleware';
 import * as actions from './actions';
+import type { AgentLogger } from '../logging/agent-logger';
+import { LogComponents } from '../logging/types';
 
 interface DeviceAPIConstructOpts {
 	routers: express.Router[];
 	healthchecks?: Array<() => Promise<boolean>>;
+	logger?: AgentLogger;
 }
 
 export class DeviceAPI {
 	private routers: express.Router[];
 	private healthchecks: Array<() => Promise<boolean>>;
+	private logger?: AgentLogger;
 
 	private api = express();
 	private server: Server | null = null;
 
-	public constructor({ routers, healthchecks = [] }: DeviceAPIConstructOpts) {
+	public constructor({ routers, healthchecks = [], logger }: DeviceAPIConstructOpts) {
 		this.routers = routers;
 		this.healthchecks = healthchecks;
+		this.logger = logger;
 
 		this.api.disable('x-powered-by');
 		this.api.use(middleware.logging);
@@ -62,7 +67,10 @@ export class DeviceAPI {
 	public async listen(port: number, timeout: number = 300000): Promise<void> {
 		return new Promise((resolve) => {
 			this.server = this.api.listen(port, () => {
-				console.log(`Device API successfully started on port ${port}`);
+				this.logger?.infoSync('Device API successfully started', {
+					component: LogComponents.agent,
+					port
+				});
 				if (this.server) {
 					this.server.timeout = timeout;
 				}
@@ -81,13 +89,17 @@ export class DeviceAPI {
 						this.server = server;
 						return reject(err);
 					} else {
-						console.log('Stopped Device API');
+						this.logger?.infoSync('Stopped Device API', {
+							component: LogComponents.agent
+						});
 						return resolve();
 					}
 				});
 			});
 		} else {
-			console.warn('Device API already stopped, ignoring further requests');
+			this.logger?.warnSync('Device API already stopped, ignoring further requests', {
+				component: LogComponents.agent
+			});
 		}
 	}
 

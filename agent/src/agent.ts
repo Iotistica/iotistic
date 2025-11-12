@@ -35,6 +35,8 @@ import {
 } from "./features/sensors/index.js";
 import { AgentFirewall } from "./network/firewall.js";
 import { AgentUpdater } from "./updater.js";
+import { getMacAddress, getOsVersion } from "./system/metrics.js";
+import { healthcheck as memoryHealthcheck, setMemoryLogger } from "./system/memory.js";
 import { readFileSync } from "fs";
 import { join } from "path";
 
@@ -113,11 +115,13 @@ export default class DeviceAgent {
       // 3. Initialize device provisioning
       await this.initializeDeviceManager();
 
-      // 4. Initialize MQTT Manager (before any features that use MQTT)
-      await this.initializeMqttManager();
-
-      // 5. Initialize container manager
-      await this.initializeContainerManager();
+      // 4-5. Parallelize independent initializations (MQTT and Container Manager)
+      // These don't depend on each other, so run them concurrently
+      await Promise.all([
+        this.initializeMqttManager(),      // ~300-500ms
+        this.initializeContainerManager()  // ~500-800ms
+      ]);
+      // Saves ~300-500ms compared to sequential execution
 
       // 6. Initialize device API
       await this.initializeDeviceAPI();
@@ -151,34 +155,42 @@ export default class DeviceAgent {
       // Update instance variable with config value
       this.reconciliationIntervalMs = reconciliationIntervalMs;
 
-      // 10. Initialize Jobs Feature (MQTT primary + HTTP fallback)
+      // 7-9. Parallelize optional feature initialization
+      // These features are independent and can start concurrently
+      const featurePromises: Promise<void>[] = [];
+      
+      // 7. Initialize Jobs Feature (MQTT primary + HTTP fallback)
       if (enableJobs) {
-        await this.initializeJobs(configSettings);
+        featurePromises.push(this.initializeJobs(configSettings));
       }
 
-      // 11. Initialize Sensor Publish Feature (if enabled by config)
+      // 8. Initialize Sensor Publish Feature (if enabled by config)
       if (enableSensorPublish) {
-        await this.initializeSensorPublish();
+        featurePromises.push(this.initializeSensorPublish());
       }
 
+      // 9. Initialize Protocol Adapters Feature (if enabled by config)
       if (hasSensors) {
-        // 12. Initialize Protocol Adapters Feature (if enabled by config)
-        await this.initializeDeviceSensors(configFeatures);
+        featurePromises.push(this.initializeDeviceSensors(configFeatures));
       }
 
-      // 13. Initialize API Binder (AFTER features are initialized so it can access sensor health)
+      // Wait for all optional features to initialize
+      if (featurePromises.length > 0) {
+        await Promise.all(featurePromises);
+      }
+
+      // 10. Initialize API Binder (AFTER features are initialized so it can access sensor health)
       await this.initializeDeviceSync(configSettings);
 
-      // 14. Initialize Sensor Config Handler (if Sensor Publish enabled)
-      await this.initializeSensorConfigHandler();
+      // 11-13. Parallelize final setup tasks
+      // These are lightweight and independent
+      await Promise.all([
+        this.initializeSensorConfigHandler(),  // Sensor config handler
+        this.initializeAgentUpdater(),         // Agent updater
+        this.initializeFirewall(configSettings) // Firewall
+      ]);
 
-      // 15. Initialize Agent Updater (if MQTT enabled)
-      await this.initializeAgentUpdater();
-
-      // 16. Initialize Firewall (if enabled)
-      await this.initializeFirewall(configSettings);
-
-      // 17. Start auto-reconciliation
+      // 14. Start auto-reconciliation
       this.startAutoReconciliation();
 
       //Final words
@@ -225,8 +237,7 @@ export default class DeviceAgent {
   }
 
   private async initializeDatabase(): Promise<void> {
-    await db.initialized();
-    this.agentLogger.infoSync("Database initialized", { component: LogComponents.agent });
+    await db.initialized(this.agentLogger);
   }
 
   private async initializeDeviceManager(): Promise<void> {
@@ -250,9 +261,6 @@ export default class DeviceAgent {
       );
       try {
         // Auto-detect system information if not provided via env vars
-        const { getMacAddress, getOsVersion } = await import(
-          "./system/metrics.js"
-        );
         const macAddress = process.env.MAC_ADDRESS || (await getMacAddress());
         const osVersion = process.env.OS_VERSION || (await getOsVersion());
 
@@ -539,7 +547,7 @@ export default class DeviceAgent {
     });
 
     // Initialize device actions with managers
-    deviceActions.initialize(this.containerManager, this.deviceManager);
+    deviceActions.initialize(this.containerManager, this.deviceManager, undefined, this.agentLogger);
 
     // Health checks
     const healthchecks = [
@@ -554,8 +562,8 @@ export default class DeviceAgent {
       },
       // Agent process memory leak detection
       async () => {
-        const { healthcheck } = await import('./system/memory.js');
-        return healthcheck();
+        setMemoryLogger(this.agentLogger);
+        return memoryHealthcheck();
       },
     ];
 
@@ -563,6 +571,7 @@ export default class DeviceAgent {
     this.deviceAPI = new DeviceAPI({
       routers: [v1Router],
       healthchecks,
+      logger: this.agentLogger,
     });
 
     // Start listening
@@ -636,7 +645,8 @@ export default class DeviceAgent {
     deviceActions.initialize(
       this.containerManager,
       this.deviceManager,
-      this.cloudSync
+      this.cloudSync,
+      this.agentLogger
     );
 
     // Config updates are now handled automatically by ConfigManager

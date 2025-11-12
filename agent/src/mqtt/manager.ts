@@ -1,4 +1,6 @@
 import mqtt, { MqttClient, IClientOptions, IClientPublishOptions } from 'mqtt';
+import type { AgentLogger } from '../logging/agent-logger';
+import { LogComponents } from '../logging/types';
 
 /**
  * Centralized MQTT Manager - Singleton
@@ -13,6 +15,7 @@ export class MqttManager {
   private messageHandlers: Map<string, Set<(topic: string, payload: Buffer) => void>> = new Map();
   private connectionPromise: Promise<void> | null = null;
   private debug = false;
+  private logger?: AgentLogger;
 
   private constructor() {}
 
@@ -21,6 +24,13 @@ export class MqttManager {
       MqttManager.instance = new MqttManager();
     }
     return MqttManager.instance;
+  }
+
+  /**
+   * Set logger for the MQTT manager (singleton pattern)
+   */
+  public setLogger(logger: AgentLogger | undefined): void {
+    this.logger = logger;
   }
 
   /**
@@ -274,7 +284,9 @@ export class MqttManager {
 
   private debugLog(message: string): void {
     if (this.debug) {
-      console.log(`[MqttManager] ${message}`);
+      this.logger?.debugSync(message, {
+        component: LogComponents.mqtt
+      });
     }
   }
 }

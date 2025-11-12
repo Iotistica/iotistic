@@ -2,6 +2,8 @@ import type { Knex } from 'knex';
 import { knex } from 'knex';
 import path from 'path';
 import * as fs from 'fs';
+import type { AgentLogger } from '../logging/agent-logger';
+import { LogComponents } from '../logging/types';
 
 type DBTransactionCallback = (trx: Knex.Transaction) => void;
 
@@ -28,7 +30,7 @@ const db = knex({
  * Initialize the database and run migrations
  * Should be called once at application startup
  */
-export const initialized = async (): Promise<void> => {
+export const initialized = async (logger?: AgentLogger): Promise<void> => {
 	try {
 		// Release any stale migration locks
 		await db('knex_migrations_lock').update({ is_locked: 0 });
@@ -41,7 +43,10 @@ export const initialized = async (): Promise<void> => {
 		directory: path.join(__dirname, 'migrations'),
 	});
 	
-	console.log('Database initialized at:', databasePath);
+	logger?.infoSync('Database initialized', {
+		component: LogComponents.database,
+		path: databasePath
+	});
 };
 
 /**

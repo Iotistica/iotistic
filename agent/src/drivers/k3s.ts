@@ -72,7 +72,8 @@ export class K3sDriver extends BaseOrchestratorDriver {
 		});
 
 		try {
-			// Dynamic import to handle CommonJS/ESM compatibility
+			// Dynamic import to handle optional @kubernetes/client-node dependency
+			// @ts-ignore - Package may not be installed
 			const k8s = await import('@kubernetes/client-node');
 			
 			// Initialize kubeconfig

@@ -6,15 +6,19 @@
 import ContainerManager from '../compose/container-manager';
 import type { DeviceManager } from '../provisioning';
 import type { CloudSync } from '../sync';
+import type { AgentLogger } from '../logging/agent-logger';
+import { LogComponents } from '../logging/types';
 
 let containerManager: ContainerManager;
 let deviceManager: DeviceManager;
 let cloudSync: CloudSync | undefined;
+let logger: AgentLogger | undefined;
 
-export function initialize(cm: ContainerManager, dm: DeviceManager, ab?: CloudSync) {
+export function initialize(cm: ContainerManager, dm: DeviceManager, ab?: CloudSync, agentLogger?: AgentLogger) {
 	containerManager = cm;
 	deviceManager = dm;
 	cloudSync = ab;
+	logger = agentLogger;
 }
 
 /**
@@ -31,8 +35,10 @@ export const runHealthchecks = async (
 		if (checks.some((check) => !check)) {
 			throw new Error(HEALTHCHECK_FAILURE);
 		}
-	} catch {
-		console.error(HEALTHCHECK_FAILURE);
+	} catch (error) {
+		logger?.errorSync(HEALTHCHECK_FAILURE, error instanceof Error ? error : new Error(String(error)), {
+			component: LogComponents.agent
+		});
 		return false;
 	}
 
@@ -182,7 +188,10 @@ export const purgeApp = async (appId: number, force: boolean = false) => {
 		throw new Error(`Application with ID ${appId} not found`);
 	}
 
-	console.log(`Purging data for app ${appId}`);
+	logger?.infoSync('Purging data for app', {
+		component: LogComponents.agent,
+		appId
+	});
 
 	// Remove app from target state
 	const targetState = containerManager.getTargetState();
@@ -196,7 +205,10 @@ export const purgeApp = async (appId: number, force: boolean = false) => {
 	targetState.apps[appId] = app;
 	await containerManager.setTarget(targetState);
 	
-	console.log(`Purge complete for app ${appId}`);
+	logger?.infoSync('Purge complete for app', {
+		component: LogComponents.agent,
+		appId
+	});
 };
 
 /**
