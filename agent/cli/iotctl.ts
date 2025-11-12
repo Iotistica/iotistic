@@ -181,17 +181,30 @@ DEVICE MANAGEMENT:
 
 CONTAINER/APPLICATION MANAGEMENT:
 
-  apps list                         List all applications and containers
+  apps list                         List all applications and their services
 
-  apps start <appId>                Start an application
+  apps start <appId>                Start all services in an application
 
-  apps stop <appId>                 Stop an application
+  apps stop <appId>                 Stop all services in an application
 
-  apps restart <appId>              Restart an application
+  apps restart <appId>              Restart all services in an application
 
   apps info <appId>                 Show application details
 
   apps purge <appId>                Purge application data (volumes)
+
+  services list [<appId>]           List all services (optionally filtered by app)
+
+  services start <serviceId>        Start a specific service container
+
+  services stop <serviceId>         Stop a specific service container
+
+  services restart <serviceId>      Restart a specific service container
+
+  services logs <serviceId> [-f]    View logs from a specific service
+                                    -f, --follow : Follow log output
+
+  services info <serviceId>         Show detailed service information
 
 
 SYSTEM:
@@ -212,13 +225,25 @@ EXAMPLES:
   # Check device status
   iotctl status
 
-  # List all running applications
+  # List all running applications and services
   iotctl apps list
 
-  # Restart an application
-  iotctl apps restart 1001
+  # Start/stop entire application stack
+  iotctl apps start 1001
+  iotctl apps stop 1001
 
-  # Follow logs in real-time
+  # List all services (containers)
+  iotctl services list
+
+  # List services for specific app
+  iotctl services list 1001
+
+  # Manage individual service container
+  iotctl services start myapp-web-1
+  iotctl services restart myapp-api-2
+  iotctl services logs myapp-web-1 -f
+
+  # Follow agent logs in real-time
   iotctl logs --follow
 
   # Set custom poll interval (60 seconds)
@@ -592,6 +617,235 @@ async function appsPurge(appId: string): Promise<void> {
 }
 
 // ============================================================================
+// Service/Container Commands
+// ============================================================================
+
+async function servicesList(appId?: string): Promise<void> {
+	try {
+		const deviceState = await apiRequest(`${DEVICE_API_V1}/device`);
+		const apps = deviceState.apps || {};
+		
+		let totalServices = 0;
+		
+		for (const currentAppId in apps) {
+			// Filter by appId if provided
+			if (appId && currentAppId !== appId) {
+				continue;
+			}
+			
+			const app = apps[currentAppId];
+			const services = app.services || [];
+			
+			if (services.length === 0) {
+				continue;
+			}
+			
+			logger.info(`App ${currentAppId} (${app.appName || 'Unknown'})`, {
+				serviceCount: services.length
+			});
+			
+			for (const service of services) {
+				logger.info(`  Service: ${service.serviceName}`, {
+					serviceId: service.serviceId,
+					status: service.status,
+					containerId: service.containerId?.substring(0, 12),
+					image: service.imageName,
+					state: service.state || 'running'
+				});
+				totalServices++;
+			}
+		}
+		
+		if (totalServices === 0) {
+			if (appId) {
+				logger.info('No services found for application', { appId });
+			} else {
+				logger.info('No services configured');
+			}
+		} else {
+			logger.info(`Total services: ${totalServices}`);
+		}
+	} catch (error) {
+		logger.error('Failed to list services', error as Error);
+		process.exit(1);
+	}
+}
+
+async function servicesStart(serviceId: string): Promise<void> {
+	if (!serviceId) {
+		logger.error('Service ID is required', undefined, {
+			usage: 'iotctl services start <serviceId>'
+		});
+		process.exit(1);
+	}
+	
+	try {
+		logger.info('Starting service', { serviceId });
+		const result = await apiRequest(`${DEVICE_API_V1}/services/${serviceId}/start`, {
+			method: 'POST'
+		});
+		
+		logger.info('Service started', {
+			serviceId,
+			containerId: result.containerId,
+			status: result.status
+		});
+	} catch (error) {
+		logger.error('Failed to start service', error as Error, { serviceId });
+		process.exit(1);
+	}
+}
+
+async function servicesStop(serviceId: string): Promise<void> {
+	if (!serviceId) {
+		logger.error('Service ID is required', undefined, {
+			usage: 'iotctl services stop <serviceId>'
+		});
+		process.exit(1);
+	}
+	
+	try {
+		logger.info('Stopping service', { serviceId });
+		const result = await apiRequest(`${DEVICE_API_V1}/services/${serviceId}/stop`, {
+			method: 'POST'
+		});
+		
+		logger.info('Service stopped', {
+			serviceId,
+			containerId: result.containerId,
+			status: result.status
+		});
+	} catch (error) {
+		logger.error('Failed to stop service', error as Error, { serviceId });
+		process.exit(1);
+	}
+}
+
+async function servicesRestart(serviceId: string): Promise<void> {
+	if (!serviceId) {
+		logger.error('Service ID is required', undefined, {
+			usage: 'iotctl services restart <serviceId>'
+		});
+		process.exit(1);
+	}
+	
+	try {
+		logger.info('Restarting service', { serviceId });
+		const result = await apiRequest(`${DEVICE_API_V1}/services/${serviceId}/restart`, {
+			method: 'POST'
+		});
+		
+		logger.info('Service restarted', {
+			serviceId,
+			containerId: result.containerId,
+			status: result.status
+		});
+	} catch (error) {
+		logger.error('Failed to restart service', error as Error, { serviceId });
+		process.exit(1);
+	}
+}
+
+async function servicesLogs(serviceId: string, follow: boolean = false): Promise<void> {
+	if (!serviceId) {
+		logger.error('Service ID is required', undefined, {
+			usage: 'iotctl services logs <serviceId> [-f]'
+		});
+		process.exit(1);
+	}
+	
+	try {
+		// Get service info to find container ID
+		const deviceState = await apiRequest(`${DEVICE_API_V1}/device`);
+		const apps = deviceState.apps || {};
+		
+		let containerId: string | undefined;
+		for (const appId in apps) {
+			const services = apps[appId].services || [];
+			const service = services.find((s: any) => s.serviceId === serviceId);
+			if (service) {
+				containerId = service.containerId;
+				break;
+			}
+		}
+		
+		if (!containerId) {
+			logger.error('Service not found', undefined, { serviceId });
+			process.exit(1);
+		}
+		
+		logger.info('Service logs', { serviceId, containerId: containerId.substring(0, 12) });
+		
+		// Use docker logs command
+		const args = ['logs'];
+		if (follow) {
+			args.push('-f');
+		} else {
+			args.push('--tail', '100');
+		}
+		args.push(containerId);
+		
+		const docker = spawn('docker', args, {
+			stdio: 'inherit',
+			shell: true
+		});
+		
+		docker.on('error', (err) => {
+			logger.error('Failed to get service logs', err, {
+				hint: `docker logs ${containerId}`
+			});
+			process.exit(1);
+		});
+	} catch (error) {
+		logger.error('Failed to retrieve service logs', error as Error, { serviceId });
+		process.exit(1);
+	}
+}
+
+async function servicesInfo(serviceId: string): Promise<void> {
+	if (!serviceId) {
+		logger.error('Service ID is required', undefined, {
+			usage: 'iotctl services info <serviceId>'
+		});
+		process.exit(1);
+	}
+	
+	try {
+		const deviceState = await apiRequest(`${DEVICE_API_V1}/device`);
+		const apps = deviceState.apps || {};
+		
+		for (const appId in apps) {
+			const app = apps[appId];
+			const services = app.services || [];
+			const service = services.find((s: any) => s.serviceId === serviceId);
+			
+			if (service) {
+				logger.info('Service details', {
+					serviceId: service.serviceId,
+					serviceName: service.serviceName,
+					appId: appId,
+					appName: app.appName,
+					status: service.status,
+					state: service.state || 'running',
+					containerId: service.containerId,
+					imageName: service.imageName,
+					ports: service.ports || [],
+					volumes: service.volumes || [],
+					environment: service.environment || {}
+				});
+				return;
+			}
+		}
+		
+		logger.error('Service not found', undefined, { serviceId });
+		process.exit(1);
+	} catch (error) {
+		logger.error('Failed to get service info', error as Error, { serviceId });
+		process.exit(1);
+	}
+}
+
+// ============================================================================
 // System Commands
 // ============================================================================
 
@@ -910,6 +1164,37 @@ async function main(): Promise<void> {
 					break;
 				default:
 					logger.error('Unknown apps command', undefined, {
+						command: subcommand,
+						hint: 'Use "iotctl help" for usage information'
+					});
+					process.exit(1);
+			}
+			break;
+		
+		case 'services':
+			switch (subcommand) {
+				case 'list':
+					// Optional appId filter
+					servicesList(arg1);
+					break;
+				case 'start':
+					servicesStart(arg1);
+					break;
+				case 'stop':
+					servicesStop(arg1);
+					break;
+				case 'restart':
+					servicesRestart(arg1);
+					break;
+				case 'logs':
+					const followLogs = args.includes('--follow') || args.includes('-f');
+					servicesLogs(arg1, followLogs);
+					break;
+				case 'info':
+					servicesInfo(arg1);
+					break;
+				default:
+					logger.error('Unknown services command', undefined, {
 						command: subcommand,
 						hint: 'Use "iotctl help" for usage information'
 					});

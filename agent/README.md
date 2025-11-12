@@ -2,9 +2,148 @@
 
 A standalone application manager service extracted from the Balena Supervisor. This package provides container orchestration capabilities for managing Docker-based applications.
 
+## 🎯 Quick Start
+
+### CLI Tool - iotctl
+
+The agent includes a powerful CLI tool for device management:
+
+```bash
+# Inside the Docker container
+iotctl status                     # Device health and status
+iotctl provision <key>            # Provision with cloud
+iotctl provision status           # Check provisioning state
+iotctl config show                # Show device configuration
+
+# Application-level commands (manage entire stacks)
+iotctl apps list                  # List all apps and services
+iotctl apps start 1001            # Start all services in app
+iotctl apps stop 1001             # Stop all services in app
+iotctl apps restart 1001          # Restart entire app stack
+iotctl apps purge 1001            # Remove app + volumes
+
+# Service-level commands (manage individual containers)
+iotctl services list              # List all services/containers
+iotctl services list 1001         # Services in specific app
+iotctl services start web-1       # Start one container
+iotctl services stop api-2        # Stop one container
+iotctl services restart db-1      # Restart one container
+iotctl services logs web-1 -f     # Follow container logs
+iotctl services info web-1        # Detailed service info
+
+# System commands
+iotctl system restart             # Restart the agent
+iotctl logs --tail 50             # View recent logs
+```
+
+**Key Features:**
+- ✅ REST client to Device API (port 48484 by default)
+- ✅ Structured logging (no emojis, JSON context)
+- ✅ Provisioning with two-phase authentication
+- ✅ Factory reset support
+- ✅ No config files - all data from Device API/database
+- ✅ **Dual-level control**: Apps (stacks) + Services (containers)
+
+**Architecture:**
+- **App** = Collection of one or more services (like docker-compose stack)
+- **Service** = Individual Docker container
+- **Apps commands** = Manage entire stacks (all containers in app)
+- **Services commands** = Manage individual containers
+
+**Example Workflow:**
+```bash
+# Check device status
+docker exec agent-1 iotctl status
+# [INFO] Agent running {"uuid":"1dc6ce29-be81-49ee-aad7-b2d317a96fbb"}
+# [INFO] Applications {"configured":0,"runningServices":0}
+
+# List all apps and their services
+docker exec agent-1 iotctl apps list
+
+# List individual services
+docker exec agent-1 iotctl services list
+
+# Start entire app stack
+docker exec agent-1 iotctl apps start 1001
+
+# Restart just one service in the stack
+docker exec agent-1 iotctl services restart myapp-web-1
+
+# Follow logs from specific service
+docker exec agent-1 iotctl services logs myapp-api-2 -f
+```
+
+### Anomaly Detection
+
+Real-time anomaly detection monitors device metrics using multiple algorithms:
+
+**Monitored Metrics:**
+- CPU usage, temperature, memory usage
+- Storage usage, network latency
+- Custom sensor data (temperature, humidity, pressure, gas)
+
+**Detection Methods:**
+1. **Z-Score** - Statistical deviation from baseline
+2. **MAD (Median Absolute Deviation)** - Robust outlier detection
+3. **IQR (Interquartile Range)** - Quartile-based outliers
+4. **Rate of Change** - Sudden spikes/drops
+5. **ML Predictions** - LSTM-based forecasting
+
+**Configuration:**
+```typescript
+// Environment variable
+ANOMALY_DETECTION_ENABLED=true
+
+// Automatic cloud reporting
+CloudSync.getSummaryForReport(10);  // Last 10 anomalies every 60s
+```
+
+**Example Output:**
+```json
+{
+  "metric": "memory_percent",
+  "value": 150,
+  "method": "rate_change",
+  "severity": "critical",
+  "confidence": 1,
+  "deviation": 16.97
+}
+```
+
+### Simulation Mode
+
+Unified testing framework for realistic sensor data and anomaly injection:
+
+**Configuration:**
+```bash
+# docker-compose.yml
+SIMULATION_MODE=true
+SIMULATION_CONFIG='{"scenarios":{"anomaly_injection":{"enabled":true,"metrics":["cpu_temp","memory_percent"],"pattern":"spike","intervalMs":30000,"magnitude":3},"sensor_data":{"enabled":true,"pattern":"realistic","publishIntervalMs":10000}}}'
+```
+
+**Features:**
+- 📊 **Realistic sensor data** - BME688-style temperature, humidity, pressure, gas readings
+- 🔥 **Anomaly injection** - Configurable spikes, drops, or drift patterns
+- 🎭 **Multiple patterns** - Random, sine wave, realistic variations
+- ⏱️ **Configurable intervals** - Control data generation frequency
+- 🎯 **Metric targeting** - Inject anomalies into specific metrics
+
+**Patterns:**
+- `spike` - Sudden short-lived increases
+- `drop` - Sudden short-lived decreases  
+- `drift` - Gradual trending changes
+- `random` - Chaotic variations
+- `sine` - Cyclical patterns
+
+**Use Cases:**
+- Testing anomaly detection algorithms
+- Stress testing cloud sync
+- UI/dashboard development without hardware
+- CI/CD integration testing
+
 ## 🐳 Docker Integration - NEW!
 
-This manager now has **REAL Docker support**! Deploy, update, and manage containers just likerr Balena does.
+This manager now has **REAL Docker support**! Deploy, update, and manage containers just like Balena does.
 
 ### Quick Start (30 seconds)
 
