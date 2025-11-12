@@ -16,7 +16,6 @@ import { DeviceManager } from "./provisioning/index.js";
 import type { DeviceInfo } from "./provisioning/types.js";
 import { DeviceAPI } from "./api/index.js";
 import { router as v1Router } from "./api/v1.js";
-import { router as v2Router } from "./api/v2.js";
 import * as deviceActions from "./api/actions.js";
 import { ApiBinder } from "./sync/index.js";
 import * as db from "./db/connection.js";
@@ -555,7 +554,7 @@ export default class DeviceAgent {
 
     // Create device API with routers
     this.deviceAPI = new DeviceAPI({
-      routers: [v1Router, v2Router],
+      routers: [v1Router],
       healthchecks,
     });
 
