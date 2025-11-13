@@ -60,7 +60,7 @@ jobs:
           CURRENT_VERSION=$(jq -r '.version' package.json)
           echo "Current version: $CURRENT_VERSION"
           
-          # Bump patch version (e.g., 1.0.0 -> 1.0.1)
+          # Bump patch version (e.g., 1.0.0 -> 1.0.1)3
           IFS='.' read -ra VERSION_PARTS <<< "$CURRENT_VERSION"
           MAJOR="${VERSION_PARTS[0]}"
           MINOR="${VERSION_PARTS[1]}"
