@@ -160,6 +160,306 @@ SIMULATION_CONFIG='{"scenarios":{"anomaly_injection":{"enabled":true,"metrics":[
 - UI/dashboard development without hardware
 - CI/CD integration testing
 
+## 🔐 MQTTS/TLS Setup
+
+Secure MQTT communication with TLS encryption using self-signed or commercial certificates.
+
+### Overview
+
+The agent supports MQTTS (MQTT over TLS) with automatic certificate handling during provisioning. When a device is provisioned, it receives:
+- Broker URL (`mqtts://mosquitto:8883`)
+- MQTT credentials (username/password)
+- **Broker configuration** including CA certificate for TLS verification
+
+### Architecture Flow
+
+```
+1. API Database (PostgreSQL)
+   └── system_config table
+       └── mqtt.brokers.1 (JSONB)
+           └── Contains: host, port, protocol, caCert, useTls, verifyCertificate
+
+2. Provisioning (API → Agent)
+   └── POST /api/provisioning/v2/register
+       └── Response includes mqtt.brokerConfig with CA certificate
+
+3. Agent Storage (SQLite)
+   └── device table
+       └── mqttBrokerConfig column (JSON string)
+           └── Stores: protocol, host, port, useTls, caCert, verifyCertificate
+
+4. Agent MQTT Connection
+   └── agent.ts: initializeMqttManager()
+       └── Reads mqttBrokerConfig from database
+       └── Applies TLS options: { ca: caCert, rejectUnauthorized: verifyCertificate }
+```
+
+### Setup Steps
+
+#### 1. Generate CA Certificate (Self-Signed)
+
+```bash
+# Create certs directory
+mkdir -p certs
+
+# Generate CA private key and certificate
+openssl req -new -x509 -days 365 -extensions v3_ca \
+  -keyout certs/ca.key -out certs/ca.crt \
+  -subj "/CN=Iotistic CA"
+
+# Generate server certificate signed by CA
+openssl genrsa -out certs/server.key 2048
+openssl req -new -out certs/server.csr -key certs/server.key \
+  -subj "/CN=mosquitto"
+openssl x509 -req -in certs/server.csr -CA certs/ca.crt \
+  -CAkey certs/ca.key -CAcreateserial -out certs/server.crt \
+  -days 365
+```
+
+#### 2. Configure Mosquitto Broker
+
+```conf
+# mosquitto/mosquitto.conf
+
+# Standard MQTT (port 1883)
+listener 1883
+protocol mqtt
+allow_anonymous false
+
+# MQTTS with TLS (port 8883)
+listener 8883
+protocol mqtt
+cafile /mosquitto/certs/ca.crt
+certfile /mosquitto/certs/server.crt
+keyfile /mosquitto/certs/server.key
+require_certificate false
+use_identity_as_username false
+allow_anonymous false
+
+# Authentication backend (PostgreSQL)
+auth_plugin /mosquitto/go-auth.so
+auth_opt_backends postgres
+auth_opt_pg_host postgres
+auth_opt_pg_port 5432
+auth_opt_pg_dbname iotistic
+auth_opt_pg_user postgres
+auth_opt_pg_password password
+auth_opt_pg_userquery SELECT password_hash FROM mqtt_users WHERE username = $1 AND enabled = TRUE LIMIT 1
+auth_opt_pg_aclquery SELECT 1 FROM mqtt_acls WHERE username = $1 AND topic = $2 AND rw >= $3 LIMIT 1
+```
+
+#### 3. Store CA Certificate in API Database
+
+```sql
+-- Run migration 057 or manually insert
+UPDATE system_config
+SET value = jsonb_set(
+  value,
+  '{caCert}',
+  to_jsonb('-----BEGIN CERTIFICATE-----
+...your CA certificate content...
+-----END CERTIFICATE-----'::text)
+)
+WHERE key = 'mqtt.brokers.1';
+```
+
+Or use the migration:
+```bash
+cd api
+npx knex migrate:latest  # Runs 057_add_mqtt_ca_certificate.sql
+```
+
+#### 4. Verify API Sends CA Certificate
+
+Check `api/src/utils/mqtt-broker-config.ts`:
+```typescript
+export function formatBrokerConfigForClient(config: any) {
+  return {
+    protocol: config.protocol,
+    host: config.host,
+    port: config.port,
+    useTls: config.useTls ?? config.use_tls,
+    verifyCertificate: config.verifyCertificate ?? config.verify_certificate,
+    // CA certificate included for TLS
+    ...(config.caCert && { caCert: config.caCert }),
+    // Other fields...
+  };
+}
+```
+
+#### 5. Agent Applies TLS Options
+
+Check `agent/src/agent.ts`:
+```typescript
+// Build MQTT connection options
+const mqttOptions: any = {
+  clientId: `device_${this.deviceInfo.uuid}`,
+  username: mqttUsername,
+  password: mqttPassword,
+};
+
+// Add TLS options if broker config specifies TLS
+if (this.deviceInfo.mqttBrokerConfig?.useTls && 
+    this.deviceInfo.mqttBrokerConfig.caCert) {
+  mqttOptions.ca = this.deviceInfo.mqttBrokerConfig.caCert; // String (PEM format)
+  mqttOptions.rejectUnauthorized = this.deviceInfo.mqttBrokerConfig.verifyCertificate;
+}
+
+await mqttManager.connect(mqttBrokerUrl, mqttOptions);
+```
+
+### Provisioning with MQTTS
+
+#### New Device Provisioning
+
+```bash
+# Start agent with provisioning key
+docker run -e PROVISIONING_API_KEY=your-key \
+  -e CLOUD_API_ENDPOINT=http://api:3002 \
+  iotistic/agent:latest
+
+# Agent auto-provisions and receives:
+# - mqtt.brokerConfig.protocol = "mqtts"
+# - mqtt.brokerConfig.host = "mosquitto"
+# - mqtt.brokerConfig.port = 8883
+# - mqtt.brokerConfig.caCert = "-----BEGIN CERTIFICATE-----\n..."
+# - mqtt.brokerConfig.useTls = true
+# - mqtt.brokerConfig.verifyCertificate = true
+```
+
+#### Re-Provisioning Existing Devices
+
+If you added MQTTS **after** devices were already provisioned:
+
+```bash
+# Option 1: Delete device database (forces re-provisioning)
+docker exec agent-1 rm /app/data/device.sqlite
+docker restart agent-1
+
+# Option 2: Manual database update (advanced)
+docker exec agent-1 sqlite3 /app/data/device.sqlite
+# UPDATE device SET mqttBrokerConfig = '{"protocol":"mqtts",...}';
+```
+
+### Verification
+
+#### Check Agent Logs
+
+```bash
+docker logs agent-1 | grep -i "mqtt\|tls"
+
+# Expected output:
+# MQTT TLS enabled {"protocol":"mqtts","verifyCertificate":true,"hasCaCert":true}
+# MQTT Manager connected {"brokerUrl":"mqtts://mosquitto:8883"}
+```
+
+#### Check Agent Database
+
+```bash
+# Create check script
+cat > check-mqtt-config.js << 'EOF'
+const Database = require('better-sqlite3');
+const db = new Database('/app/data/device.sqlite');
+const row = db.prepare('SELECT mqttBrokerConfig FROM device LIMIT 1').get();
+console.log(JSON.stringify(JSON.parse(row.mqttBrokerConfig), null, 2));
+EOF
+
+# Run inside container
+docker exec agent-1 node /app/check-mqtt-config.js
+
+# Expected output:
+# {
+#   "protocol": "mqtts",
+#   "host": "mosquitto",
+#   "port": 8883,
+#   "useTls": true,
+#   "caCert": "-----BEGIN CERTIFICATE-----\n...",
+#   "verifyCertificate": true
+# }
+```
+
+#### Test MQTTS Connection
+
+```bash
+# Install mosquitto clients
+apt-get install mosquitto-clients
+
+# Test with CA certificate
+mosquitto_pub -h localhost -p 8883 \
+  --cafile ./certs/ca.crt \
+  -u device_uuid -P mqtt_password \
+  -t test -m "Hello MQTTS"
+
+# Should succeed with no certificate errors
+```
+
+### Troubleshooting
+
+#### Error: "self-signed certificate in certificate chain"
+
+**Cause**: Agent doesn't have CA certificate or not applying TLS options.
+
+**Fix**:
+1. Check API database has CA cert: `SELECT value->'caCert' FROM system_config WHERE key = 'mqtt.brokers.1'`
+2. Check agent database: Run check script above
+3. Verify agent code applies TLS: Look for "MQTT TLS enabled" in logs
+4. Re-provision device if needed
+
+#### Error: "unable to verify the first certificate"
+
+**Cause**: CA certificate doesn't match server certificate.
+
+**Fix**:
+1. Regenerate server cert signed by same CA
+2. Ensure Mosquitto using correct `cafile`, `certfile`, `keyfile`
+3. Restart Mosquitto: `docker restart iotistic-mosquitto`
+
+#### Error: "ECONNREFUSED" on port 8883
+
+**Cause**: Mosquitto not listening on MQTTS port.
+
+**Fix**:
+1. Check Mosquitto config has `listener 8883` section
+2. Verify port exposed: `docker port iotistic-mosquitto 8883`
+3. Check Mosquitto logs: `docker logs iotistic-mosquitto`
+
+#### Missing CA Certificate in Provisioning Response
+
+**Cause**: `formatBrokerConfigForClient()` not handling camelCase fields.
+
+**Fix**: Update `api/src/utils/mqtt-broker-config.ts`:
+```typescript
+export function formatBrokerConfigForClient(config: any) {
+  const caCert = config.caCert ?? config.ca_cert ?? null;
+  return {
+    // ... other fields
+    ...(caCert && { caCert })
+  };
+}
+```
+
+### Production Considerations
+
+**Certificate Rotation**:
+- Update CA cert in `system_config` table
+- Re-provision devices OR push new config via cloud sync
+- Mosquitto auto-reloads on SIGHUP
+
+**Client Certificates** (mutual TLS):
+- Set `require_certificate true` in Mosquitto config
+- Generate client certs for each device
+- Include `clientCert` and `clientKey` in broker config
+
+**Commercial Certificates**:
+- Use Let's Encrypt or commercial CA instead of self-signed
+- Update `caCert` in database to trusted root CA
+- Clients automatically trust well-known CAs
+
+**Certificate Expiration**:
+- Monitor expiration dates
+- Automate renewal (certbot for Let's Encrypt)
+- Plan device update rollout before expiry
+
 ## 🐳 Docker Integration
 
 Deploy, update, and manage containers with full Docker and Kubernetes support.
