@@ -58,14 +58,13 @@ services:
                 - LEAK_MAX_MB=30
                 - ANOMALY_DETECTION_ENABLED=true
                 # NEW: Simulation mode (unified testing framework)
-                - SIMULATION_MODE=true
+                - SIMULATION_MODE=false
                 - SIMULATION_CONFIG={"scenarios":{"anomaly_injection":{"enabled":true,"metrics":["cpu_temp","memory_percent"],"pattern":"spike","intervalMs":30000,"magnitude":3},"sensor_data":{"enabled":true,"pattern":"realistic","publishIntervalMs":10000}}}
             depends_on:
                 api:
                     condition: service_healthy
             networks:
                 - iotistic-net
-                
     agent-2:
             container_name: agent-2
             build:
@@ -86,142 +85,22 @@ services:
                 - METRICS_INTERVAL_MS=30000
                 - LOG_COMPRESSION=true
                 - REQUIRE_PROVISIONING=false
-                - PROVISIONING_API_KEY=3045da51b7092a78bdcbae0c8e427cb60a9aa535b5e62856f03d297df57b1a28
+                - PROVISIONING_API_KEY=6a691bb2c3543bd7fda85b4e19f0ab712b04b90b70513d145885d515811df522
+                # Memory monitoring (edge-appropriate thresholds)
+                - MEMORY_CHECK_INTERVAL_MS=30000
+                - MEMORY_THRESHOLD_MB=15
                 # Data resilience (IoT best practices)
                 - LOG_FILE_PERSISTANCE=true
                 - LOG_MAX_AGE=86400000
                 - MAX_LOG_FILE_SIZE=52428800
                 - MAX_LOGS=10000
-                
-            depends_on:
-                api:
-                    condition: service_healthy
-            networks:
-                - iotistic-net
-    agent-3:
-            container_name: agent-3
-            build:
-                context: ./agent
-                dockerfile: Dockerfile
-            restart: always
-            volumes:
-                - /var/run/docker.sock:/var/run/docker.sock
-                - agent-3-data:/app/data
-            environment:
-                - AGENT_VERSION=1.0.0
-                - DEVICE_API_PORT=48483
-                - CLOUD_API_ENDPOINT=http://host.docker.internal:4002
-                - NODE_ENV=development
-                - MQTT_PERSIST_TO_DB=true
-                - MQTT_DB_SYNC_INTERVAL=70000
-                - REPORT_INTERVAL_MS=20000
-                - METRICS_INTERVAL_MS=30000
-                - LOG_COMPRESSION=true
-                - REQUIRE_PROVISIONING=false
-                - PROVISIONING_API_KEY=3045da51b7092a78bdcbae0c8e427cb60a9aa535b5e62856f03d297df57b1a28
-                # Data resilience (IoT best practices)
-                - LOG_FILE_PERSISTANCE=true
-                - LOG_MAX_AGE=86400000
-                - MAX_LOG_FILE_SIZE=52428800
-                - MAX_LOGS=10000
-                
-            depends_on:
-                api:
-                    condition: service_healthy
-            networks:
-                - iotistic-net
-    agent-4:
-            container_name: agent-4
-            build:
-                context: ./agent
-                dockerfile: Dockerfile
-            restart: always
-            volumes:
-                - /var/run/docker.sock:/var/run/docker.sock
-                - agent-4-data:/app/data
-            environment:
-                - AGENT_VERSION=1.0.0
-                - DEVICE_API_PORT=48484
-                - CLOUD_API_ENDPOINT=http://host.docker.internal:4002
-                - NODE_ENV=development
-                - MQTT_PERSIST_TO_DB=true
-                - MQTT_DB_SYNC_INTERVAL=70000
-                - REPORT_INTERVAL_MS=20000
-                - METRICS_INTERVAL_MS=30000
-                - LOG_COMPRESSION=true
-                - REQUIRE_PROVISIONING=false
-                - PROVISIONING_API_KEY=b3eef7b315d4f8bc4340a9349d6efa3f7da298657f7c89c651dd9a253d8bb7fe
-                # Data resilience (IoT best practices)
-                - LOG_FILE_PERSISTANCE=true
-                - LOG_MAX_AGE=86400000
-                - MAX_LOG_FILE_SIZE=52428800
-                - MAX_LOGS=10000
-                
-                
-            depends_on:
-                api:
-                    condition: service_healthy
-            networks:
-                - iotistic-net
-    agent-5:
-            container_name: agent-5
-            build:
-                context: ./agent
-                dockerfile: Dockerfile
-            restart: always
-            volumes:
-                - /var/run/docker.sock:/var/run/docker.sock
-                - agent-5-data:/app/data
-            environment:
-                - AGENT_VERSION=1.0.0
-                - DEVICE_API_PORT=48485
-                - CLOUD_API_ENDPOINT=http://host.docker.internal:4002
-                - NODE_ENV=development
-                - MQTT_PERSIST_TO_DB=true
-                - MQTT_DB_SYNC_INTERVAL=70000
-                - REPORT_INTERVAL_MS=20000
-                - METRICS_INTERVAL_MS=30000
-                - LOG_COMPRESSION=true
-                - REQUIRE_PROVISIONING=false
-                - PROVISIONING_API_KEY=aba83af8bddf79e3f79ed3fc2f7d450c86c72507c3b9194f3627508360c8c0b4
-                # Data resilience (IoT best practices)
-                - LOG_FILE_PERSISTANCE=true
-                - LOG_MAX_AGE=86400000
-                - MAX_LOG_FILE_SIZE=52428800
-                - MAX_LOGS=10000
-                
-                
-            depends_on:
-                api:
-                    condition: service_healthy
-            networks:
-                - iotistic-net
-    agent-6:
-            container_name: agent-6
-            build:
-                context: ./agent
-                dockerfile: Dockerfile
-            restart: always
-            volumes:
-                - /var/run/docker.sock:/var/run/docker.sock
-                - agent-6-data:/app/data
-            environment:
-                - AGENT_VERSION=1.0.0
-                - DEVICE_API_PORT=48486
-                - CLOUD_API_ENDPOINT=http://host.docker.internal:4002
-                - NODE_ENV=development
-                - MQTT_PERSIST_TO_DB=true
-                - MQTT_DB_SYNC_INTERVAL=70000
-                - REPORT_INTERVAL_MS=20000
-                - METRICS_INTERVAL_MS=30000
-                - LOG_COMPRESSION=true
-                - REQUIRE_PROVISIONING=false
-                - PROVISIONING_API_KEY=e0d409d6efe09f1fba3c0365a525de8949002072f0e48deacf247141826e6b83
-                # Data resilience (IoT best practices)
-                - LOG_FILE_PERSISTANCE=true
-                - LOG_MAX_AGE=86400000
-                - MAX_LOG_FILE_SIZE=52428800
-                - MAX_LOGS=10000
+                # Memory leak simulation 
+                - SIMULATE_MEMORY_LEAK=false
+                - LEAK_TYPE=sudden
+                - LEAK_RATE_MB=50
+                - LEAK_INTERVAL_MS=2000
+                - LEAK_MAX_MB=30
+                - ANOMALY_DETECTION_ENABLED=true
                 
                 
             depends_on:
@@ -596,18 +475,9 @@ services:
 
 volumes:
   wg-data:
-  
-  agent-2-data:
-    driver: local
   agent-1-data:
     driver: local
-  agent-3-data:
-    driver: local
-  agent-4-data:
-    driver: local
-  agent-5-data:
-    driver: local
-  agent-6-data:
+  agent-2-data:
     driver: local
   iotistic-pg-data:
     driver: local

@@ -143,6 +143,9 @@ $template = @"
                 - LEAK_INTERVAL_MS=2000
                 - LEAK_MAX_MB=30
                 - ANOMALY_DETECTION_ENABLED=true
+                 # NEW: Simulation mode (unified testing framework)
+                - SIMULATION_MODE=false
+                - SIMULATION_CONFIG={"scenarios":{"anomaly_injection":{"enabled":true,"metrics":["cpu_temp","memory_percent"],"pattern":"spike","intervalMs":30000,"magnitude":3},"sensor_data":{"enabled":true,"pattern":"realistic","publishIntervalMs":10000}}}
                 
                 
             depends_on:
