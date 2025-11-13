@@ -39,7 +39,7 @@ jobs:
   version:
     name: Bump Version
     needs: [test]
-    runs-on: ubuntu-24.04
+    runs-on: self-hosted
     permissions:
       contents: write
     outputs:
@@ -88,7 +88,7 @@ jobs:
   buildx:
     name: Build & Push to Docker
     needs: version
-    runs-on: ubuntu-24.04
+    runs-on: self-hosted
     permissions:
       contents: write
 
@@ -174,7 +174,7 @@ jobs:
   test-agent-docker:
     name: Test Docker Installation (via install.sh)
     needs: [version, buildx]
-    runs-on: ubuntu-24.04
+    runs-on: self-hosted
     
     steps:
       - name: Checkout repository
@@ -278,7 +278,7 @@ jobs:
   test-agent-systemd:
     name: Test Systemd Installation (via install.sh)
     needs: version
-    runs-on: ubuntu-24.04
+    runs-on: self-hosted
     
     steps:
       - name: Checkout repository
@@ -456,7 +456,7 @@ jobs:
   upload-install-scripts:
     name: Upload Installation Scripts
     needs: [version, buildx, test-agent-docker, test-agent-systemd]
-    runs-on: ubuntu-24.04
+    runs-on: self-hosted
     if: success()
     
     steps:
@@ -629,7 +629,7 @@ jobs:
   report:
     name: Generate Reports
     needs: [version, buildx, test-agent-docker, test-agent-systemd, upload-install-scripts]
-    runs-on: ubuntu-24.04
+    runs-on: self-hosted
     if: always()
     
     steps:
@@ -717,7 +717,7 @@ jobs:
   trigger-integration-tests:
     name: Trigger Integration Tests
     needs: [version, buildx, test-agent-docker, test-agent-systemd, upload-install-scripts]
-    runs-on: ubuntu-24.04
+    runs-on: self-hosted
     permissions:
       actions: write
       contents: read
