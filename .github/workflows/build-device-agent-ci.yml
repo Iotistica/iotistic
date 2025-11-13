@@ -56,7 +56,7 @@ jobs:
         id: bump
         run: |
           cd agent
-          # Get current version
+          # Get current version1
           CURRENT_VERSION=$(jq -r '.version' package.json)
           echo "Current version: $CURRENT_VERSION"
           
