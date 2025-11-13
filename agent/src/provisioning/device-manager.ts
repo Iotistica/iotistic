@@ -330,6 +330,7 @@ export class DeviceManager {
 				applicationId: this.deviceInfo.applicationId,
 				mqttUsername: this.deviceInfo.mqttUsername,
 				mqttBrokerUrl: this.deviceInfo.mqttBrokerUrl,
+				mqttBrokerConfig: this.deviceInfo.mqttBrokerConfig,
 			});
 
 			// Phase 4: Setup VPN if provided in response

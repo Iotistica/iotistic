@@ -82,13 +82,13 @@ export class MqttManager {
       this.client.on('connect', () => {
         clearTimeout(connectionTimeout);
         this.connected = true;
-        this.debugLog('✅ Connected to MQTT broker');
+        this.debugLog('Connected to MQTT broker');
         this.connectionPromise = null;
         resolve();
       });
 
       this.client.on('error', (err) => {
-        this.debugLog(`❌ MQTT error: ${err.message}`);
+        this.debugLog(`MQTT error: ${err.message}`);
         if (!this.connected) {
           clearTimeout(connectionTimeout);
           this.connectionPromise = null;

@@ -38,10 +38,6 @@ export async function getBrokerConfigForDevice(deviceUuid: string): Promise<Mqtt
     const envHost = process.env.MQTT_BROKER_HOST;
     const envPort = process.env.MQTT_BROKER_PORT;
     
-    if (envHost && envPort) {
-      // Use getDefaultBrokerConfig() which handles env var priority
-      return await getDefaultBrokerConfig();
-    }
     
     // Otherwise query database for device-specific broker ID, then use SystemConfig
     const deviceResult = await query(
@@ -130,25 +126,36 @@ export function buildBrokerUrl(config: MqttBrokerConfig): string {
  * Format broker configuration for API response
  * Removes sensitive information and formats for client consumption
  * 
- * @param config - Broker configuration
+ * @param config - Broker configuration (supports both snake_case and camelCase)
  * @returns Sanitized broker configuration object
  */
-export function formatBrokerConfigForClient(config: MqttBrokerConfig) {
+export function formatBrokerConfigForClient(config: any) {
+  // Handle both snake_case (from old configs) and camelCase (from JSONB in system_config)
+  const useTls = config.useTls ?? config.use_tls ?? false;
+  const caCert = config.caCert ?? config.ca_cert ?? null;
+  const clientCert = config.clientCert ?? config.client_cert ?? null;
+  const verifyCertificate = config.verifyCertificate ?? config.verify_certificate ?? true;
+  const clientIdPrefix = config.clientIdPrefix ?? config.client_id_prefix ?? 'Iotistic';
+  const keepAlive = config.keepAlive ?? config.keep_alive ?? 60;
+  const cleanSession = config.cleanSession ?? config.clean_session ?? true;
+  const reconnectPeriod = config.reconnectPeriod ?? config.reconnect_period ?? 1000;
+  const connectTimeout = config.connectTimeout ?? config.connect_timeout ?? 30000;
+
   return {
     protocol: config.protocol,
     host: config.host,
     port: config.port,
-    useTls: config.use_tls,
-    verifyCertificate: config.verify_certificate,
-    clientIdPrefix: config.client_id_prefix,
-    keepAlive: config.keep_alive,
-    cleanSession: config.clean_session,
-    reconnectPeriod: config.reconnect_period,
-    connectTimeout: config.connect_timeout,
+    useTls,
+    verifyCertificate,
+    clientIdPrefix,
+    keepAlive,
+    cleanSession,
+    reconnectPeriod,
+    connectTimeout,
     // Include CA certificate if present (client may need it for TLS)
-    ...(config.ca_cert && { caCert: config.ca_cert }),
+    ...(caCert && { caCert }),
     // Include client certificate if present
-    ...(config.client_cert && { clientCert: config.client_cert })
+    ...(clientCert && { clientCert })
   };
 }
 

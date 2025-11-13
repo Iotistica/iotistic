@@ -59,7 +59,7 @@
             "METRICS_INTERVAL_MS":"5000",
             "LOG_COMPRESSION":"true",
             "REQUIRE_PROVISIONING" : "false",
-            "PROVISIONING_API_KEY": "6ce0e357b8f44313652e0fac6307938e23b4e6df09f4551b8bde02d25b66ba44",
+            "PROVISIONING_API_KEY": "6d271aa829208fc22599cce991f06564562e11210c5e4570a4e3ceee2d7f400d",
            
       }
     },

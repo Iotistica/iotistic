@@ -108,6 +108,191 @@ services:
                     condition: service_healthy
             networks:
                 - iotistic-net
+    agent-3:
+            container_name: agent-3
+            build:
+                context: ./agent
+                dockerfile: Dockerfile
+            restart: always
+            volumes:
+                - /var/run/docker.sock:/var/run/docker.sock
+                - agent-3-data:/app/data
+            environment:
+                - AGENT_VERSION=1.0.0
+                - DEVICE_API_PORT=48483
+                - CLOUD_API_ENDPOINT=http://host.docker.internal:4002
+                - NODE_ENV=development
+                - MQTT_PERSIST_TO_DB=true
+                - MQTT_DB_SYNC_INTERVAL=70000
+                - REPORT_INTERVAL_MS=20000
+                - METRICS_INTERVAL_MS=30000
+                - LOG_COMPRESSION=true
+                - REQUIRE_PROVISIONING=false
+                - PROVISIONING_API_KEY=847de5f12493e66945f7fc8de0255ade88c7788fb9fd0569ade1ee1752250002
+                # Memory monitoring (edge-appropriate thresholds)
+                - MEMORY_CHECK_INTERVAL_MS=30000
+                - MEMORY_THRESHOLD_MB=15
+                # Data resilience (IoT best practices)
+                - LOG_FILE_PERSISTANCE=true
+                - LOG_MAX_AGE=86400000
+                - MAX_LOG_FILE_SIZE=52428800
+                - MAX_LOGS=10000
+                # Memory leak simulation 
+                - SIMULATE_MEMORY_LEAK=false
+                - LEAK_TYPE=sudden
+                - LEAK_RATE_MB=50
+                - LEAK_INTERVAL_MS=2000
+                - LEAK_MAX_MB=30
+                - ANOMALY_DETECTION_ENABLED=true
+                 # NEW: Simulation mode (unified testing framework)
+                - SIMULATION_MODE=false
+                - SIMULATION_CONFIG={"scenarios":{"anomaly_injection":{"enabled":true,"metrics":["cpu_temp","memory_percent"],"pattern":"spike","intervalMs":30000,"magnitude":3},"sensor_data":{"enabled":true,"pattern":"realistic","publishIntervalMs":10000}}}
+                
+                
+            depends_on:
+                api:
+                    condition: service_healthy
+            networks:
+                - iotistic-net
+    agent-41:
+            container_name: agent-41
+            build:
+                context: ./agent
+                dockerfile: Dockerfile
+            restart: always
+            volumes:
+                - /var/run/docker.sock:/var/run/docker.sock
+                - agent-41-data:/app/data
+            environment:
+                - AGENT_VERSION=1.0.0
+                - DEVICE_API_PORT=48494
+                - CLOUD_API_ENDPOINT=http://host.docker.internal:4002
+                - NODE_ENV=development
+                - MQTT_PERSIST_TO_DB=true
+                - MQTT_DB_SYNC_INTERVAL=70000
+                - REPORT_INTERVAL_MS=20000
+                - METRICS_INTERVAL_MS=30000
+                - LOG_COMPRESSION=true
+                - REQUIRE_PROVISIONING=false
+                - PROVISIONING_API_KEY=3dfe8a40788b154ada2f27886a56b95e7f1d652e9632b503af5e1c6df2f6ea9b
+                # Memory monitoring (edge-appropriate thresholds)
+                - MEMORY_CHECK_INTERVAL_MS=30000
+                - MEMORY_THRESHOLD_MB=15
+                # Data resilience (IoT best practices)
+                - LOG_FILE_PERSISTANCE=true
+                - LOG_MAX_AGE=86400000
+                - MAX_LOG_FILE_SIZE=52428800
+                - MAX_LOGS=10000
+                # Memory leak simulation 
+                - SIMULATE_MEMORY_LEAK=false
+                - LEAK_TYPE=sudden
+                - LEAK_RATE_MB=50
+                - LEAK_INTERVAL_MS=2000
+                - LEAK_MAX_MB=30
+                - ANOMALY_DETECTION_ENABLED=true
+                 # NEW: Simulation mode (unified testing framework)
+                - SIMULATION_MODE=false
+                - SIMULATION_CONFIG={"scenarios":{"anomaly_injection":{"enabled":true,"metrics":["cpu_temp","memory_percent"],"pattern":"spike","intervalMs":30000,"magnitude":3},"sensor_data":{"enabled":true,"pattern":"realistic","publishIntervalMs":10000}}}
+                
+                
+            depends_on:
+                api:
+                    condition: service_healthy
+            networks:
+                - iotistic-net
+    agent-42:
+            container_name: agent-42
+            build:
+                context: ./agent
+                dockerfile: Dockerfile
+            restart: always
+            volumes:
+                - /var/run/docker.sock:/var/run/docker.sock
+                - agent-42-data:/app/data
+            environment:
+                - AGENT_VERSION=1.0.0
+                - DEVICE_API_PORT=48445
+                - CLOUD_API_ENDPOINT=http://host.docker.internal:4002
+                - NODE_ENV=development
+                - MQTT_PERSIST_TO_DB=true
+                - MQTT_DB_SYNC_INTERVAL=70000
+                - REPORT_INTERVAL_MS=20000
+                - METRICS_INTERVAL_MS=30000
+                - LOG_COMPRESSION=true
+                - REQUIRE_PROVISIONING=false
+                - PROVISIONING_API_KEY=09a9248955efd28ebcbcc975f6c7cac219c1f41459cf667d05b6fbce0ca66c7f
+                # Memory monitoring (edge-appropriate thresholds)
+                - MEMORY_CHECK_INTERVAL_MS=30000
+                - MEMORY_THRESHOLD_MB=15
+                # Data resilience (IoT best practices)
+                - LOG_FILE_PERSISTANCE=true
+                - LOG_MAX_AGE=86400000
+                - MAX_LOG_FILE_SIZE=52428800
+                - MAX_LOGS=10000
+                # Memory leak simulation 
+                - SIMULATE_MEMORY_LEAK=false
+                - LEAK_TYPE=sudden
+                - LEAK_RATE_MB=50
+                - LEAK_INTERVAL_MS=2000
+                - LEAK_MAX_MB=30
+                - ANOMALY_DETECTION_ENABLED=true
+                 # NEW: Simulation mode (unified testing framework)
+                - SIMULATION_MODE=false
+                - SIMULATION_CONFIG={"scenarios":{"anomaly_injection":{"enabled":true,"metrics":["cpu_temp","memory_percent"],"pattern":"spike","intervalMs":30000,"magnitude":3},"sensor_data":{"enabled":true,"pattern":"realistic","publishIntervalMs":10000}}}
+                
+                
+            depends_on:
+                api:
+                    condition: service_healthy
+            networks:
+                - iotistic-net
+    
+    agent-43:
+            container_name: agent-43
+            build:
+                context: ./agent
+                dockerfile: Dockerfile
+            restart: always
+            volumes:
+                - /var/run/docker.sock:/var/run/docker.sock
+                - agent-43-data:/app/data
+            environment:
+                - AGENT_VERSION=1.0.0
+                - DEVICE_API_PORT=48443
+                - CLOUD_API_ENDPOINT=http://host.docker.internal:4002
+                - NODE_ENV=development
+                - MQTT_PERSIST_TO_DB=true
+                - MQTT_DB_SYNC_INTERVAL=70000
+                - REPORT_INTERVAL_MS=20000
+                - METRICS_INTERVAL_MS=30000
+                - LOG_COMPRESSION=true
+                - REQUIRE_PROVISIONING=false
+                - PROVISIONING_API_KEY=314a02beb2a823ee38c773d0cd5611cc8ef5a80cc759beef70616035d32bd5b7
+                # Memory monitoring (edge-appropriate thresholds)
+                - MEMORY_CHECK_INTERVAL_MS=30000
+                - MEMORY_THRESHOLD_MB=15
+                # Data resilience (IoT best practices)
+                - LOG_FILE_PERSISTANCE=true
+                - LOG_MAX_AGE=86400000
+                - MAX_LOG_FILE_SIZE=52428800
+                - MAX_LOGS=10000
+                # Memory leak simulation 
+                - SIMULATE_MEMORY_LEAK=false
+                - LEAK_TYPE=sudden
+                - LEAK_RATE_MB=50
+                - LEAK_INTERVAL_MS=2000
+                - LEAK_MAX_MB=30
+                - ANOMALY_DETECTION_ENABLED=true
+                 # NEW: Simulation mode (unified testing framework)
+                - SIMULATION_MODE=false
+                - SIMULATION_CONFIG={"scenarios":{"anomaly_injection":{"enabled":true,"metrics":["cpu_temp","memory_percent"],"pattern":"spike","intervalMs":30000,"magnitude":3},"sensor_data":{"enabled":true,"pattern":"realistic","publishIntervalMs":10000}}}
+                
+                
+            depends_on:
+                api:
+                    condition: service_healthy
+            networks:
+                - iotistic-net
     postgres:
         image: postgres:16-alpine
         container_name: iotistic-postgres
@@ -478,6 +663,16 @@ volumes:
   agent-1-data:
     driver: local
   agent-2-data:
+    driver: local
+  agent-3-data:
+    driver: local
+  agent-41-data:
+    driver: local
+  agent-42-data:
+    driver: local
+  agent-44-data:
+    driver: local
+  agent-43-data:
     driver: local
   iotistic-pg-data:
     driver: local

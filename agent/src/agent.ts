@@ -443,14 +443,31 @@ export default class DeviceAgent {
 
       const mqttManager = MqttManager.getInstance();
 
-      // Connect to MQTT broker with provisioned credentials
-      await mqttManager.connect(mqttBrokerUrl, {
+      // Build MQTT connection options
+      const mqttOptions: any = {
         clientId: `device_${this.deviceInfo.uuid}`,
         clean: true,
         reconnectPeriod: 5000,
         username: mqttUsername,
         password: mqttPassword,
-      });
+      };
+
+      // Add TLS options if broker config specifies TLS
+      if (this.deviceInfo.mqttBrokerConfig?.useTls && this.deviceInfo.mqttBrokerConfig.caCert) {
+        // MQTT library expects CA cert as string (not Buffer)
+        mqttOptions.ca = this.deviceInfo.mqttBrokerConfig.caCert;
+        mqttOptions.rejectUnauthorized = this.deviceInfo.mqttBrokerConfig.verifyCertificate;
+        
+        this.agentLogger.infoSync("MQTT TLS enabled", {
+          component: LogComponents.agent,
+          protocol: this.deviceInfo.mqttBrokerConfig.protocol,
+          verifyCertificate: this.deviceInfo.mqttBrokerConfig.verifyCertificate,
+          hasCaCert: !!this.deviceInfo.mqttBrokerConfig.caCert,
+        });
+      }
+
+      // Connect to MQTT broker with provisioned credentials
+      await mqttManager.connect(mqttBrokerUrl, mqttOptions);
 
       // Enable debug mode if requested
       if (process.env.MQTT_DEBUG === "true") {
