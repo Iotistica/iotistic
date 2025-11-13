@@ -606,6 +606,8 @@ async function buildProvisioningResponse(
     ? buildBrokerUrl(brokerConfig)
     : (process.env.MQTT_BROKER_URL || 'mqtt://mosquitto:1883');
 
+  // Fetch API TLS configuration from system_config
+  const apiTlsConfig = await SystemConfigModel.get('api.tls');
 
   const response: any = {
     id: device.id,
@@ -626,7 +628,15 @@ async function buildProvisioningResponse(
         publish: [`iot/device/${uuid}/#`],
         subscribe: [`iot/device/${uuid}/#`]
       }
-    }
+    },
+    ...(apiTlsConfig?.caCert && {
+      api: {
+        tlsConfig: {
+          caCert: apiTlsConfig.caCert,
+          verifyCertificate: apiTlsConfig.verifyCertificate !== false
+        }
+      }
+    })
   };
 
   // Add WireGuard VPN configuration if enabled

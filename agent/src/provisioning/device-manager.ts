@@ -15,6 +15,8 @@
  */
 
 import * as crypto from 'crypto';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import type { 
 	DeviceInfo, 
 	ProvisioningConfig, 
@@ -27,6 +29,20 @@ import { LogComponents } from '../logging/types';
 import { HttpClient, FetchHttpClient } from '../lib/http-client';
 import { DatabaseClient, KnexDatabaseClient } from '../db/client';
 import { WireGuardManager } from '../network/vpn/wireguard-manager';
+
+/**
+ * Get package version from package.json
+ */
+const getPackageVersion = (): string => {
+	try {
+		const packageJsonPath = join(process.cwd(), "package.json");
+		const content = readFileSync(packageJsonPath, "utf-8");
+		const packageJson = JSON.parse(content);
+		return packageJson.version || "unknown";
+	} catch (error) {
+		return "unknown";
+	}
+};
 
 /**
  * UUID Generator Interface for dependency injection
@@ -92,6 +108,7 @@ export class DeviceManager {
 				uuid: this.uuidGenerator.generate(),
 				deviceApiKey: generateAPIKey(), // Pre-generate device key
 				provisioned: false,
+				agentVersion: process.env.AGENT_VERSION || getPackageVersion(), // Set version on creation
 			};
 			await this.saveDeviceInfo();
 			this.logger?.infoSync('New device created', {
@@ -101,6 +118,20 @@ export class DeviceManager {
 				deviceApiKeyPreview: `${this.deviceInfo.deviceApiKey?.substring(0, 8)}...`,
 			});
 		} else {
+			// Update agent version on every startup (BEFORE logging)
+			const currentVersion = process.env.AGENT_VERSION || getPackageVersion();
+			if (this.deviceInfo.agentVersion !== currentVersion) {
+				const oldVersion = this.deviceInfo.agentVersion;
+				this.deviceInfo.agentVersion = currentVersion;
+				await this.saveDeviceInfo();
+				this.logger?.infoSync('Agent version updated', {
+					component: LogComponents.deviceManager,
+					operation: 'initialize',
+					oldVersion,
+					newVersion: currentVersion,
+				});
+			}
+			
 			this.logger?.infoSync('Device loaded', {
 				component: LogComponents.deviceManager,
 				operation: 'initialize',
@@ -109,6 +140,7 @@ export class DeviceManager {
 				provisioned: this.deviceInfo.provisioned,
 				hasDeviceApiKey: !!this.deviceInfo.deviceApiKey,
 				hasProvisioningKey: !!this.deviceInfo.provisioningApiKey,
+				agentVersion: this.deviceInfo.agentVersion, // Add version to log
 			});
 		}
 	}
@@ -133,16 +165,15 @@ export class DeviceManager {
 				applicationId: record.applicationId || undefined,
 				macAddress: record.macAddress || undefined,
 				osVersion: record.osVersion || undefined,
-				agentVersion: record.agentVersion || undefined,
-				mqttUsername: record.mqttUsername || undefined,
-				mqttPassword: record.mqttPassword || undefined,
-				mqttBrokerUrl: record.mqttBrokerUrl || undefined,
-				mqttBrokerConfig: record.mqttBrokerConfig ? JSON.parse(record.mqttBrokerConfig) : undefined,
-			};
-		}
+			agentVersion: record.agentVersion || undefined,
+			mqttUsername: record.mqttUsername || undefined,
+			mqttPassword: record.mqttPassword || undefined,
+			mqttBrokerUrl: record.mqttBrokerUrl || undefined,
+			mqttBrokerConfig: record.mqttBrokerConfig ? JSON.parse(record.mqttBrokerConfig) : undefined,
+			apiTlsConfig: record.apiTlsConfig ? JSON.parse(record.apiTlsConfig) : undefined,
+		};
 	}
-
-	/**
+}	/**
 	 * Save device info to database
 	 */
 	private async saveDeviceInfo(): Promise<void> {
@@ -165,10 +196,11 @@ export class DeviceManager {
 			macAddress: this.deviceInfo.macAddress || null,
 			osVersion: this.deviceInfo.osVersion || null,
 			agentVersion: this.deviceInfo.agentVersion || null,
-			mqttUsername: this.deviceInfo.mqttUsername || null,
-			mqttPassword: this.deviceInfo.mqttPassword || null,
-			mqttBrokerUrl: this.deviceInfo.mqttBrokerUrl || null,
-			mqttBrokerConfig: this.deviceInfo.mqttBrokerConfig ? JSON.stringify(this.deviceInfo.mqttBrokerConfig) : null,
+		mqttUsername: this.deviceInfo.mqttUsername || null,
+		mqttPassword: this.deviceInfo.mqttPassword || null,
+		mqttBrokerUrl: this.deviceInfo.mqttBrokerUrl || null,
+		mqttBrokerConfig: this.deviceInfo.mqttBrokerConfig ? JSON.stringify(this.deviceInfo.mqttBrokerConfig) : null,
+		apiTlsConfig: this.deviceInfo.apiTlsConfig ? JSON.stringify(this.deviceInfo.apiTlsConfig) : null,
 			updatedAt: new Date().toISOString(),
 		};
 		
@@ -287,16 +319,17 @@ export class DeviceManager {
 				agentVersion: this.deviceInfo.agentVersion,
 			},
 				this.deviceInfo.provisioningApiKey
-			);
+		);
 
-			// Save server-assigned device ID
-			this.deviceInfo.deviceId = response.id.toString();
-			this.deviceInfo.mqttUsername = response.mqtt.username;
-			this.deviceInfo.mqttPassword = response.mqtt.password;
-			this.deviceInfo.mqttBrokerUrl = response.mqtt.broker;
-			this.deviceInfo.mqttBrokerConfig = response.mqtt.brokerConfig; // Save TLS config if provided
+		// Save server-assigned device ID
+		this.deviceInfo.deviceId = response.id.toString();
+		this.deviceInfo.mqttUsername = response.mqtt.username;
+		this.deviceInfo.mqttPassword = response.mqtt.password;
+		this.deviceInfo.mqttBrokerUrl = response.mqtt.broker;
+		this.deviceInfo.mqttBrokerConfig = response.mqtt.brokerConfig; // Save TLS config if provided
+		this.deviceInfo.apiTlsConfig = response.api?.tlsConfig; // Save API HTTPS TLS config if provided
 
-			// Phase 2: Exchange keys - verify device can authenticate with deviceApiKey
+		// Phase 2: Exchange keys - verify device can authenticate with deviceApiKey
 			this.logger?.infoSync('Phase 2: Exchanging keys', {
 				component: LogComponents.deviceManager,
 				operation: 'provision',

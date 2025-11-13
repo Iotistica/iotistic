@@ -25,6 +25,7 @@ export interface Device {
   mqttPassword?: string | null;
   mqttBrokerUrl?: string | null;
   mqttBrokerConfig?: string | null; // JSON string of MqttBrokerConfig
+  apiTlsConfig?: string | null;     // JSON string of ApiTlsConfig
   createdAt?: Date;
   updatedAt?: Date;
 }

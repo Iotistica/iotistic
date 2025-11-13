@@ -4,6 +4,8 @@
  * 
  * Abstraction layer over fetch() to make sync-state testable.
  * Allows easy mocking in tests without stubbing global fetch.
+ * 
+ * Supports HTTPS with custom CA certificates for self-signed certs.
  */
 
 export interface HttpResponse<T = any> {
@@ -14,6 +16,13 @@ export interface HttpResponse<T = any> {
 		get(name: string): string | null;
 	};
 	json(): Promise<T>;
+}
+
+export interface HttpClientOptions {
+	/** Custom CA certificate for HTTPS (PEM format) */
+	caCert?: string;
+	/** Whether to reject unauthorized certificates (default: true) */
+	rejectUnauthorized?: boolean;
 }
 
 export interface HttpClient {
@@ -36,9 +45,17 @@ export interface HttpClient {
 }
 
 /**
- * Default implementation using native fetch
+ * Default implementation using native fetch with HTTPS support
  */
 export class FetchHttpClient implements HttpClient {
+	private caCert?: string;
+	private rejectUnauthorized: boolean;
+
+	constructor(options?: HttpClientOptions) {
+		this.caCert = options?.caCert;
+		this.rejectUnauthorized = options?.rejectUnauthorized !== false;
+	}
+
 	async get<T = any>(url: string, options?: {
 		headers?: Record<string, string>;
 		timeout?: number;
@@ -47,6 +64,8 @@ export class FetchHttpClient implements HttpClient {
 			method: 'GET',
 			headers: options?.headers,
 			signal: options?.timeout ? AbortSignal.timeout(options.timeout) : undefined,
+			// @ts-ignore - Node.js fetch supports agent option
+			...(this.isHttps(url) && this.getHttpsAgent()),
 		});
 		
 		return {
@@ -82,6 +101,8 @@ export class FetchHttpClient implements HttpClient {
 			headers: finalHeaders,
 			body: typeof finalBody === 'string' ? finalBody : JSON.stringify(finalBody),
 			signal: options?.timeout ? AbortSignal.timeout(options.timeout) : undefined,
+			// @ts-ignore - Node.js fetch supports agent option
+			...(this.isHttps(url) && this.getHttpsAgent()),
 		});
 		
 		return {
@@ -93,5 +114,21 @@ export class FetchHttpClient implements HttpClient {
 			},
 			json: () => response.json() as Promise<T>
 		};
+	}
+
+	private isHttps(url: string): boolean {
+		return url.startsWith('https://');
+	}
+
+	private getHttpsAgent() {
+		if (!this.isHttps) return {};
+		
+		const https = require('https');
+		const agent = new https.Agent({
+			ca: this.caCert,
+			rejectUnauthorized: this.rejectUnauthorized,
+		});
+		
+		return { agent };
 	}
 }

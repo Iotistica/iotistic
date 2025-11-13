@@ -29,6 +29,7 @@ export interface DeviceInfo {
 	mqttPassword?: string;
 	mqttBrokerUrl?: string;
 	mqttBrokerConfig?: MqttBrokerConfig; // TLS configuration from provisioning
+	apiTlsConfig?: ApiTlsConfig;         // API HTTPS TLS configuration
 }
 
 export interface MqttBrokerConfig {
@@ -44,6 +45,12 @@ export interface MqttBrokerConfig {
 	cleanSession: boolean;
 	reconnectPeriod: number;
 	connectTimeout: number;
+}
+
+export interface ApiTlsConfig {
+	caCert?: string;             // CA certificate for HTTPS (PEM format)
+	clientCert?: string;         // Client certificate (optional, for mTLS)
+	verifyCertificate: boolean;  // Whether to verify server certificate
 }
 
 export interface ProvisioningConfig {
@@ -91,6 +98,9 @@ export interface ProvisionResponse {
 			publish: string,
 			subscribe: string
 		}
+	}
+	api?: {
+		tlsConfig?: ApiTlsConfig;  // API HTTPS TLS configuration
 	}
 	vpnConfig?: {
 		enabled: boolean;

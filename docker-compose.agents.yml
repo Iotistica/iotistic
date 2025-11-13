@@ -1,0 +1,390 @@
+# Auto-generated docker-compose file for 10 agents
+# Generated: 2025-11-13 09:19:10
+# Agents: 1 to 10
+# Ports: 48481 to 48490
+
+services:
+  agent-1:
+    container_name: agent-1
+    image: zemfyre-sensor-agent:latest
+    restart: always
+    mem_limit: 512m
+    mem_reservation: 256m
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - agent-1-data:/app/data
+    environment:
+      - DEVICE_API_PORT=48481
+      - CLOUD_API_ENDPOINT=https://api:3443
+      - NODE_ENV=development
+      - FORCE_COLOR=1
+      - MQTT_DB_SYNC_INTERVAL=70000
+      - REPORT_INTERVAL_MS=20000
+      - METRICS_INTERVAL_MS=30000
+      - LOG_COMPRESSION=true
+      - REQUIRE_PROVISIONING=false
+      - PROVISIONING_API_KEY=d761f7341b6b57960a7e431415b20fb00de73cdd6f55ff4b0cb1b93433ebe78f
+      - API_SECURITY_MODE=LOCALHOST_ONLY
+      - MEMORY_CHECK_INTERVAL_MS=30000
+      - MEMORY_THRESHOLD_MB=15
+      - LOG_FILE_PERSISTANCE=true
+      - LOG_MAX_AGE=86400000
+      - MAX_LOG_FILE_SIZE=52428800
+      - MAX_LOGS=10000
+      - SIMULATE_MEMORY_LEAK=false
+      - ANOMALY_DETECTION_ENABLED=true
+      - SIMULATION_MODE=true
+      - SIMULATION_CONFIG={"scenarios":{"anomaly_injection":{"enabled":true,"metrics":["cpu_temp","memory_percent"],"pattern":"spike","intervalMs":60000,"magnitude":2},"sensor_data":{"enabled":true,"pattern":"realistic","publishIntervalMs":10000}}}
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - iotistic-net
+  agent-2:
+    container_name: agent-2
+    image: zemfyre-sensor-agent:latest
+    restart: always
+    mem_limit: 512m
+    mem_reservation: 256m
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - agent-2-data:/app/data
+    environment:
+      - DEVICE_API_PORT=48482
+      - CLOUD_API_ENDPOINT=https://api:3443
+      - NODE_ENV=development
+      - FORCE_COLOR=1
+      - MQTT_DB_SYNC_INTERVAL=70000
+      - REPORT_INTERVAL_MS=20000
+      - METRICS_INTERVAL_MS=30000
+      - LOG_COMPRESSION=true
+      - REQUIRE_PROVISIONING=false
+      - PROVISIONING_API_KEY=64c5d344539a5d3d624308fa99b26cbdd5b149bb052310ce18bec6f744e2d643
+      - API_SECURITY_MODE=LOCALHOST_ONLY
+      - MEMORY_CHECK_INTERVAL_MS=30000
+      - MEMORY_THRESHOLD_MB=15
+      - LOG_FILE_PERSISTANCE=true
+      - LOG_MAX_AGE=86400000
+      - MAX_LOG_FILE_SIZE=52428800
+      - MAX_LOGS=10000
+      - SIMULATE_MEMORY_LEAK=false
+      - ANOMALY_DETECTION_ENABLED=true
+      - SIMULATION_MODE=true
+      - SIMULATION_CONFIG={"scenarios":{"anomaly_injection":{"enabled":true,"metrics":["cpu_temp"],"pattern":"gradual","intervalMs":120000,"magnitude":4},"sensor_data":{"enabled":true,"pattern":"realistic","publishIntervalMs":5000}}}
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - iotistic-net
+  agent-3:
+    container_name: agent-3
+    image: zemfyre-sensor-agent:latest
+    restart: always
+    mem_limit: 512m
+    mem_reservation: 256m
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - agent-3-data:/app/data
+    environment:
+      - DEVICE_API_PORT=48483
+      - CLOUD_API_ENDPOINT=https://api:3443
+      - NODE_ENV=development
+      - FORCE_COLOR=1
+      - MQTT_DB_SYNC_INTERVAL=70000
+      - REPORT_INTERVAL_MS=20000
+      - METRICS_INTERVAL_MS=30000
+      - LOG_COMPRESSION=true
+      - REQUIRE_PROVISIONING=false
+      - PROVISIONING_API_KEY=d518290a261b5cd394ed9d1ce553c907f7c9da082c394bcc122a6704b3a28cc6
+      - API_SECURITY_MODE=LOCALHOST_ONLY
+      - MEMORY_CHECK_INTERVAL_MS=30000
+      - MEMORY_THRESHOLD_MB=15
+      - LOG_FILE_PERSISTANCE=true
+      - LOG_MAX_AGE=86400000
+      - MAX_LOG_FILE_SIZE=52428800
+      - MAX_LOGS=10000
+      - SIMULATE_MEMORY_LEAK=false
+      - ANOMALY_DETECTION_ENABLED=true
+      - SIMULATION_MODE=true
+      - SIMULATION_CONFIG={"scenarios":{"anomaly_injection":{"enabled":true,"metrics":["cpu_temp","memory_percent","disk_usage"],"pattern":"spike","intervalMs":30000,"magnitude":5},"sensor_data":{"enabled":true,"pattern":"realistic","publishIntervalMs":8000}}}
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - iotistic-net
+  agent-4:
+    container_name: agent-4
+    image: zemfyre-sensor-agent:latest
+    restart: always
+    mem_limit: 512m
+    mem_reservation: 256m
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - agent-4-data:/app/data
+    environment:
+      - DEVICE_API_PORT=48484
+      - CLOUD_API_ENDPOINT=https://api:3443
+      - NODE_ENV=development
+      - FORCE_COLOR=1
+      - MQTT_DB_SYNC_INTERVAL=70000
+      - REPORT_INTERVAL_MS=20000
+      - METRICS_INTERVAL_MS=30000
+      - LOG_COMPRESSION=true
+      - REQUIRE_PROVISIONING=false
+      - PROVISIONING_API_KEY=d592c9989dee9b4b756fde414399c4eaf04273896282580633d323af0fd9ad32
+      - API_SECURITY_MODE=LOCALHOST_ONLY
+      - MEMORY_CHECK_INTERVAL_MS=30000
+      - MEMORY_THRESHOLD_MB=15
+      - LOG_FILE_PERSISTANCE=true
+      - LOG_MAX_AGE=86400000
+      - MAX_LOG_FILE_SIZE=52428800
+      - MAX_LOGS=10000
+      - SIMULATE_MEMORY_LEAK=false
+      - ANOMALY_DETECTION_ENABLED=true
+      - SIMULATION_MODE=true
+      - SIMULATION_CONFIG={"scenarios":{"anomaly_injection":{"enabled":false},"sensor_data":{"enabled":true,"pattern":"random_walk","publishIntervalMs":15000}}}
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - iotistic-net
+  agent-5:
+    container_name: agent-5
+    image: zemfyre-sensor-agent:latest
+    restart: always
+    mem_limit: 512m
+    mem_reservation: 256m
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - agent-5-data:/app/data
+    environment:
+      - DEVICE_API_PORT=48485
+      - CLOUD_API_ENDPOINT=https://api:3443
+      - NODE_ENV=development
+      - FORCE_COLOR=1
+      - MQTT_DB_SYNC_INTERVAL=70000
+      - REPORT_INTERVAL_MS=20000
+      - METRICS_INTERVAL_MS=30000
+      - LOG_COMPRESSION=true
+      - REQUIRE_PROVISIONING=false
+      - PROVISIONING_API_KEY=d9efc89787555b933a1ec3558d9c9964f56439461aa2d598121f4d7706096222
+      - API_SECURITY_MODE=LOCALHOST_ONLY
+      - MEMORY_CHECK_INTERVAL_MS=30000
+      - MEMORY_THRESHOLD_MB=15
+      - LOG_FILE_PERSISTANCE=true
+      - LOG_MAX_AGE=86400000
+      - MAX_LOG_FILE_SIZE=52428800
+      - MAX_LOGS=10000
+      - SIMULATE_MEMORY_LEAK=false
+      - ANOMALY_DETECTION_ENABLED=true
+      - SIMULATION_MODE=false
+      - SIMULATION_CONFIG={}
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - iotistic-net
+  agent-6:
+    container_name: agent-6
+    image: zemfyre-sensor-agent:latest
+    restart: always
+    mem_limit: 512m
+    mem_reservation: 256m
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - agent-6-data:/app/data
+    environment:
+      - DEVICE_API_PORT=48486
+      - CLOUD_API_ENDPOINT=https://api:3443
+      - NODE_ENV=development
+      - FORCE_COLOR=1
+      - MQTT_DB_SYNC_INTERVAL=70000
+      - REPORT_INTERVAL_MS=20000
+      - METRICS_INTERVAL_MS=30000
+      - LOG_COMPRESSION=true
+      - REQUIRE_PROVISIONING=false
+      - PROVISIONING_API_KEY=b31c5f2afd7d5eead8e2b92014e182b152221dd4bdedc5b128fbdffe7d96e9ab
+      - API_SECURITY_MODE=LOCALHOST_ONLY
+      - MEMORY_CHECK_INTERVAL_MS=30000
+      - MEMORY_THRESHOLD_MB=15
+      - LOG_FILE_PERSISTANCE=true
+      - LOG_MAX_AGE=86400000
+      - MAX_LOG_FILE_SIZE=52428800
+      - MAX_LOGS=10000
+      - SIMULATE_MEMORY_LEAK=false
+      - ANOMALY_DETECTION_ENABLED=true
+      - SIMULATION_MODE=true
+      - SIMULATION_CONFIG={"scenarios":{"anomaly_injection":{"enabled":true,"metrics":["cpu_temp","memory_percent"],"pattern":"spike","intervalMs":60000,"magnitude":2},"sensor_data":{"enabled":true,"pattern":"realistic","publishIntervalMs":10000}}}
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - iotistic-net
+  agent-7:
+    container_name: agent-7
+    image: zemfyre-sensor-agent:latest
+    restart: always
+    mem_limit: 512m
+    mem_reservation: 256m
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - agent-7-data:/app/data
+    environment:
+      - DEVICE_API_PORT=48487
+      - CLOUD_API_ENDPOINT=https://api:3443
+      - NODE_ENV=development
+      - FORCE_COLOR=1
+      - MQTT_DB_SYNC_INTERVAL=70000
+      - REPORT_INTERVAL_MS=20000
+      - METRICS_INTERVAL_MS=30000
+      - LOG_COMPRESSION=true
+      - REQUIRE_PROVISIONING=false
+      - PROVISIONING_API_KEY=baeef9f6ed4a6edc80e5fd87038a9bb773c84556d5d58c1eed719276594319e6
+      - API_SECURITY_MODE=LOCALHOST_ONLY
+      - MEMORY_CHECK_INTERVAL_MS=30000
+      - MEMORY_THRESHOLD_MB=15
+      - LOG_FILE_PERSISTANCE=true
+      - LOG_MAX_AGE=86400000
+      - MAX_LOG_FILE_SIZE=52428800
+      - MAX_LOGS=10000
+      - SIMULATE_MEMORY_LEAK=false
+      - ANOMALY_DETECTION_ENABLED=true
+      - SIMULATION_MODE=true
+      - SIMULATION_CONFIG={"scenarios":{"anomaly_injection":{"enabled":true,"metrics":["cpu_temp"],"pattern":"gradual","intervalMs":120000,"magnitude":4},"sensor_data":{"enabled":true,"pattern":"realistic","publishIntervalMs":5000}}}
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - iotistic-net
+  agent-8:
+    container_name: agent-8
+    image: zemfyre-sensor-agent:latest
+    restart: always
+    mem_limit: 512m
+    mem_reservation: 256m
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - agent-8-data:/app/data
+    environment:
+      - DEVICE_API_PORT=48488
+      - CLOUD_API_ENDPOINT=https://api:3443
+      - NODE_ENV=development
+      - FORCE_COLOR=1
+      - MQTT_DB_SYNC_INTERVAL=70000
+      - REPORT_INTERVAL_MS=20000
+      - METRICS_INTERVAL_MS=30000
+      - LOG_COMPRESSION=true
+      - REQUIRE_PROVISIONING=false
+      - PROVISIONING_API_KEY=1231b8dd8bf09fc5803c3ad0a716c9929b44b48d3485378b7c3f200f957714ac
+      - API_SECURITY_MODE=LOCALHOST_ONLY
+      - MEMORY_CHECK_INTERVAL_MS=30000
+      - MEMORY_THRESHOLD_MB=15
+      - LOG_FILE_PERSISTANCE=true
+      - LOG_MAX_AGE=86400000
+      - MAX_LOG_FILE_SIZE=52428800
+      - MAX_LOGS=10000
+      - SIMULATE_MEMORY_LEAK=false
+      - ANOMALY_DETECTION_ENABLED=true
+      - SIMULATION_MODE=true
+      - SIMULATION_CONFIG={"scenarios":{"anomaly_injection":{"enabled":true,"metrics":["cpu_temp","memory_percent","disk_usage"],"pattern":"spike","intervalMs":30000,"magnitude":5},"sensor_data":{"enabled":true,"pattern":"realistic","publishIntervalMs":8000}}}
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - iotistic-net
+  agent-9:
+    container_name: agent-9
+    image: zemfyre-sensor-agent:latest
+    restart: always
+    mem_limit: 512m
+    mem_reservation: 256m
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - agent-9-data:/app/data
+    environment:
+      - DEVICE_API_PORT=48489
+      - CLOUD_API_ENDPOINT=https://api:3443
+      - NODE_ENV=development
+      - FORCE_COLOR=1
+      - MQTT_DB_SYNC_INTERVAL=70000
+      - REPORT_INTERVAL_MS=20000
+      - METRICS_INTERVAL_MS=30000
+      - LOG_COMPRESSION=true
+      - REQUIRE_PROVISIONING=false
+      - PROVISIONING_API_KEY=4a233ec2b575cfe5b9e5471fa31758350e16b97b5856ac0bc43fb44a85df4772
+      - API_SECURITY_MODE=LOCALHOST_ONLY
+      - MEMORY_CHECK_INTERVAL_MS=30000
+      - MEMORY_THRESHOLD_MB=15
+      - LOG_FILE_PERSISTANCE=true
+      - LOG_MAX_AGE=86400000
+      - MAX_LOG_FILE_SIZE=52428800
+      - MAX_LOGS=10000
+      - SIMULATE_MEMORY_LEAK=false
+      - ANOMALY_DETECTION_ENABLED=true
+      - SIMULATION_MODE=true
+      - SIMULATION_CONFIG={"scenarios":{"anomaly_injection":{"enabled":false},"sensor_data":{"enabled":true,"pattern":"random_walk","publishIntervalMs":15000}}}
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - iotistic-net
+  agent-10:
+    container_name: agent-10
+    image: zemfyre-sensor-agent:latest
+    restart: always
+    mem_limit: 512m
+    mem_reservation: 256m
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - agent-10-data:/app/data
+    environment:
+      - DEVICE_API_PORT=48490
+      - CLOUD_API_ENDPOINT=https://api:3443
+      - NODE_ENV=development
+      - FORCE_COLOR=1
+      - MQTT_DB_SYNC_INTERVAL=70000
+      - REPORT_INTERVAL_MS=20000
+      - METRICS_INTERVAL_MS=30000
+      - LOG_COMPRESSION=true
+      - REQUIRE_PROVISIONING=false
+      - PROVISIONING_API_KEY=c20297577bca3b4f77513031d1a130006756db25c3a814ae2c55d3dd2b0c915a
+      - API_SECURITY_MODE=LOCALHOST_ONLY
+      - MEMORY_CHECK_INTERVAL_MS=30000
+      - MEMORY_THRESHOLD_MB=15
+      - LOG_FILE_PERSISTANCE=true
+      - LOG_MAX_AGE=86400000
+      - MAX_LOG_FILE_SIZE=52428800
+      - MAX_LOGS=10000
+      - SIMULATE_MEMORY_LEAK=false
+      - ANOMALY_DETECTION_ENABLED=true
+      - SIMULATION_MODE=false
+      - SIMULATION_CONFIG={}
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - iotistic-net
+volumes:
+  agent-1-data:
+    driver: local
+  agent-2-data:
+    driver: local
+  agent-3-data:
+    driver: local
+  agent-4-data:
+    driver: local
+  agent-5-data:
+    driver: local
+  agent-6-data:
+    driver: local
+  agent-7-data:
+    driver: local
+  agent-8-data:
+    driver: local
+  agent-9-data:
+    driver: local
+  agent-10-data:
+    driver: local
+networks:
+  iotistic-net:
+    external: true

@@ -182,7 +182,9 @@ export class CloudSync extends EventEmitter {
 		this.protocolAdapters = protocolAdapters;
 		this.mqttManager = mqttManager;
 		this.anomalyService = anomalyService;
-		this.httpClient = httpClient || new FetchHttpClient(); // Default to real fetch
+		
+		// Initialize HTTP client with TLS support
+		this.httpClient = httpClient || this.createHttpClient();
 		
 		// Set defaults
 		this.config = {
@@ -201,6 +203,32 @@ export class CloudSync extends EventEmitter {
 		
 		// Listen to connection events
 		this.setupConnectionEventListeners();
+	}
+
+	/**
+	 * Create HTTP client with TLS configuration from device info
+	 */
+	private createHttpClient(): HttpClient {
+		const deviceInfo = this.deviceManager.getDeviceInfo();
+		
+		// Check if API TLS is configured (similar to MQTT)
+		const apiTlsConfig = deviceInfo?.apiTlsConfig;
+		
+		if (apiTlsConfig?.caCert) {
+			this.logger?.infoSync('Initializing HTTPS client with CA certificate', {
+				component: LogComponents.cloudSync,
+				hasCert: true,
+				verify: apiTlsConfig.verifyCertificate
+			});
+			
+			return new FetchHttpClient({
+				caCert: apiTlsConfig.caCert.replace(/\\n/g, '\n'), // Fix escaped newlines
+				rejectUnauthorized: apiTlsConfig.verifyCertificate !== false,
+			});
+		}
+		
+		// Default to plain HTTP client
+		return new FetchHttpClient();
 	}
 	
 	/**

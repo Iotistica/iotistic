@@ -4,6 +4,7 @@
 
 import express from 'express';
 import cors from 'cors';
+import https from 'https';
 import logger from './utils/logger';
 
 // Import route modules
@@ -53,6 +54,7 @@ import { LicenseValidator } from './services/license-validator';
 import licenseRoutes from './routes/license';
 import billingRoutes from './routes/billing';
 import { websocketManager } from './services/websocket-manager';
+import { createHttpsServer } from './https-server';
 
 // API Version Configuration - Change here to update all routesggg
 const API_VERSION = process.env.API_VERSION || 'v1';
@@ -384,6 +386,24 @@ async function startServer() {
     logger.info('='.repeat(80));
   });
 
+  // HTTPS server (optional - for device-to-API TLS)
+  let httpsServer: https.Server | null = null;
+  const HTTPS_ENABLED = process.env.HTTPS_ENABLED === 'true';
+  const HTTPS_PORT = parseInt(process.env.HTTPS_PORT || '3443', 10);
+
+  if (HTTPS_ENABLED) {
+    try {
+      httpsServer = createHttpsServer(app, {
+        enabled: true,
+        port: HTTPS_PORT,
+        certPath: process.env.HTTPS_CERT_PATH || './certs/server.crt',
+        keyPath: process.env.HTTPS_KEY_PATH || './certs/server.key',
+      });
+    } catch (error) {
+      logger.warn('Failed to start HTTPS server', { error });
+    }
+  }
+
   // Initialize WebSocket server
   try {
     websocketManager.initialize(server);
@@ -405,6 +425,13 @@ async function startServer() {
       logger.warn('Forcefully closing server after timeout');
       process.exit(1);
     }, 10000); // 10 second timeout
+    
+    // Close HTTPS server
+    if (httpsServer) {
+      httpsServer.close(() => {
+        logger.info('HTTPS Server closed');
+      });
+    }
     
     // Shutdown WebSocket Server
     try {
@@ -512,6 +539,13 @@ async function startServer() {
       process.exit(1);
     }, 10000); // 10 second timeout
     
+    // Close HTTPS server
+    if (httpsServer) {
+      httpsServer.close(() => {
+        logger.info('HTTPS Server closed');
+      });
+    }
+    
     // Shutdown WebSocket Server
     try {
       websocketManager.shutdown();
@@ -618,6 +652,13 @@ async function startServer() {
       logger.warn('Forcefully closing server after debugger disconnect timeout');
       process.exit(1);
     }, 3000); // 3 second timeout for debugger disconnect
+    
+    // Close HTTPS server
+    if (httpsServer) {
+      httpsServer.close(() => {
+        logger.info('HTTPS Server closed');
+      });
+    }
     
     server.close(() => {
       clearTimeout(forceCloseTimeout);

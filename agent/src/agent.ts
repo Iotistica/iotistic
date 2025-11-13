@@ -454,8 +454,11 @@ export default class DeviceAgent {
 
       // Add TLS options if broker config specifies TLS
       if (this.deviceInfo.mqttBrokerConfig?.useTls && this.deviceInfo.mqttBrokerConfig.caCert) {
+        // Fix double-escaped newlines in certificate (handles both \\n and \n)
+        const caCert = this.deviceInfo.mqttBrokerConfig.caCert.replace(/\\n/g, '\n');
+        
         // MQTT library expects CA cert as string (not Buffer)
-        mqttOptions.ca = this.deviceInfo.mqttBrokerConfig.caCert;
+        mqttOptions.ca = caCert;
         mqttOptions.rejectUnauthorized = this.deviceInfo.mqttBrokerConfig.verifyCertificate;
         
         this.agentLogger.infoSync("MQTT TLS enabled", {

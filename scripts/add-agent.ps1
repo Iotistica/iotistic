@@ -109,15 +109,12 @@ if (-not $ProvisioningKey) {
 $template = @"
     agent-{AGENT_NUMBER}:
             container_name: agent-{AGENT_NUMBER}
-            build:
-                context: ./agent
-                dockerfile: Dockerfile
+            image: zemfyre-sensor-agent:latest
             restart: always
             volumes:
                 - /var/run/docker.sock:/var/run/docker.sock
                 - agent-{AGENT_NUMBER}-data:/app/data
             environment:
-                - AGENT_VERSION=1.0.0
                 - DEVICE_API_PORT=4848{AGENT_NUMBER}
                 - CLOUD_API_ENDPOINT=http://host.docker.internal:4002
                 - NODE_ENV=development
