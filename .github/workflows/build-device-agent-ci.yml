@@ -73,7 +73,7 @@ jobs:
           # Update package.json
           jq --arg v "$NEW_VERSION" '.version = $v' package.json > tmp.json && mv tmp.json package.json
           
-          # Set outputs
+          # Set outputs1
           echo "package_version=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
