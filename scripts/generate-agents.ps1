@@ -40,8 +40,6 @@ param(
     # Agent Configuration
     [string]$NodeEnv = "development",
     [string]$CLOUD_API_ENDPOINT = "https://api:3443",
-    [string]$ForceColor = "1",
-    [int]$MqttDbSyncInterval = 70000,
     [int]$ReportInterval = 20000,
     [int]$MetricsInterval = 30000,
     [string]$LogCompression = "true",
@@ -269,8 +267,6 @@ for ($i = $StartIndex; $i -lt ($StartIndex + $Count); $i++) {
       - DEVICE_API_PORT=$port
       - CLOUD_API_ENDPOINT=$CLOUD_API_ENDPOINT
       - NODE_ENV=$NodeEnv
-      - FORCE_COLOR=$ForceColor
-      - MQTT_DB_SYNC_INTERVAL=$MqttDbSyncInterval
       - REPORT_INTERVAL_MS=$ReportInterval
       - METRICS_INTERVAL_MS=$MetricsInterval
       - LOG_COMPRESSION=$LogCompression

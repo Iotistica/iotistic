@@ -11,7 +11,7 @@ on:
 jobs:
   test:
     name: Run Unit Tests
-    runs-on: ubuntu-24.04
+    runs-on: self-hosted
     
     steps:
       - name: Checkout repository

@@ -14,57 +14,6 @@
 #   - GRAFANA_API_TOKEN=<token> # For Grafana integration
 
 services:
-    agent-1:
-            container_name: agent-1
-            build:
-                context: ./agent
-                dockerfile: Dockerfile
-            restart: always
-            # Memory limits for edge device testing (Raspberry Pi 4 = 2-4GB total RAM)
-            # Allocate 512MB limit to simulate constrained environment
-            mem_limit: 512m
-            mem_reservation: 256m
-            volumes:
-                - /var/run/docker.sock:/var/run/docker.sock
-                - agent-1-data:/app/data
-            environment:
-                - DEVICE_API_PORT=48481
-                - CLOUD_API_ENDPOINT=http://api:3002
-                - NODE_ENV=development
-                - FORCE_COLOR=1
-                - MQTT_DB_SYNC_INTERVAL=70000
-                - REPORT_INTERVAL_MS=7000
-                - METRICS_INTERVAL_MS=20000
-                - LOG_COMPRESSION=true
-                - PROVISIONING_API_KEY=708b51cbc9b5b515151fbb943ba9788ab6885d037455424b290f97d2077ae8c0
-                # API Security (change to test different modes)
-                # Options: LOCALHOST_ONLY (default), LOCAL_NETWORK, API_KEY, OPEN
-                - API_SECURITY_MODE=${API_SECURITY_MODE:-LOCALHOST_ONLY}
-                - API_KEY=${API_KEY:-}
-                # Memory monitoring (edge-appropriate thresholds)
-                - MEMORY_CHECK_INTERVAL_MS=30000
-                - MEMORY_THRESHOLD_MB=15
-                # Data resilience (IoT best practices)
-                - LOG_FILE_PERSISTANCE=true
-                - LOG_MAX_AGE=86400000
-                - MAX_LOG_FILE_SIZE=52428800
-                - MAX_LOGS=10000
-                # Memory leak simulation (for testing - disabled by default)
-                - SIMULATE_MEMORY_LEAK=false
-                - LEAK_TYPE=sudden
-                - LEAK_RATE_MB=50
-                - LEAK_INTERVAL_MS=2000
-                - LEAK_MAX_MB=30
-                - ANOMALY_DETECTION_ENABLED=true
-                # NEW: Simulation mode (unified testing framework)
-                - SIMULATION_MODE=false
-                - SIMULATION_CONFIG={"scenarios":{"anomaly_injection":{"enabled":true,"metrics":["cpu_temp","memory_percent"],"pattern":"spike","intervalMs":30000,"magnitude":3},"sensor_data":{"enabled":true,"pattern":"realistic","publishIntervalMs":10000}}}
-            depends_on:
-                api:
-                    condition: service_healthy
-            networks:
-                - iotistic-net
-   
     postgres:
         image: postgres:16-alpine
         container_name: iotistic-postgres
