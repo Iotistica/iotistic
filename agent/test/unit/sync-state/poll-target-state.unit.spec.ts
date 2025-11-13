@@ -1,5 +1,5 @@
 /**
- * Unit Tests: ApiBinder.pollTargetState
+ * Unit Tests: cloudSync.pollTargetState
  * ======================================
  * 
  * Tests the target state polling logic in isolation using dependency injection.
@@ -15,8 +15,8 @@
  */
 
 import { stub, restore } from 'sinon';
-import { ApiBinder } from '../../../src/sync-state';
-import type { StateReconciler, DeviceState } from '../../../src/orchestrator/state-reconciler';
+import { CloudSync } from '../../../src/sync';
+import type { StateReconciler, DeviceState } from '../../../src/drivers/state-reconciler';
 import type { DeviceManager } from '../../../src/provisioning';
 import { EventEmitter } from 'events';
 import { MockHttpClient } from '../../helpers/mock-http-client';
@@ -31,9 +31,9 @@ import {
 	createPartialConfigScenario
 } from '../../helpers/fixtures';
 
-describe('ApiBinder.pollTargetState', () => {
+describe('CloudSync.pollTargetState', () => {
 	// Test doubles
-	let apiBinder: any; // Use 'any' to access private methods
+	let cloudSync: any; // Use 'any' to access private methods
 	let mockHttpClient: MockHttpClient;
 	let mockDeviceManager: any;
 	let mockStateReconciler: any;
@@ -57,8 +57,8 @@ describe('ApiBinder.pollTargetState', () => {
 			config: {}
 		});
 		
-		// Create ApiBinder instance with injected mock HTTP client
-		apiBinder = new ApiBinder(
+		// Create CloudSync instance with injected mock HTTP client
+		cloudSync = new CloudSync(
 			mockStateReconciler as StateReconciler,
 			mockDeviceManager as DeviceManager,
 			{
@@ -91,7 +91,7 @@ describe('ApiBinder.pollTargetState', () => {
 			
 			mockHttpClient.mockGetSuccess(targetState);
 			
-			await apiBinder.pollTargetState();
+			await cloudSync.pollTargetState();
 			
 			expect(mockHttpClient.getStub.callCount).toBe(1);
 			const [url, options] = mockHttpClient.getStub.firstCall.args;
@@ -106,7 +106,7 @@ describe('ApiBinder.pollTargetState', () => {
 			
 			mockHttpClient.mockGetSuccess(targetState);
 			
-			await apiBinder.pollTargetState();
+			await cloudSync.pollTargetState();
 			
 			expect(mockStateReconciler.setTarget.callCount).toBe(1);
 		});
@@ -114,7 +114,7 @@ describe('ApiBinder.pollTargetState', () => {
 		it('should handle HTTP 304 Not Modified', async () => {
 			mockHttpClient.mockGetNotModified();
 			
-			await apiBinder.pollTargetState();
+			await cloudSync.pollTargetState();
 			
 			// Should not call setTarget on 304
 			expect(mockStateReconciler.setTarget.called).toBe(false);
@@ -123,13 +123,13 @@ describe('ApiBinder.pollTargetState', () => {
 		it('should reject on HTTP 500 Server Error', async () => {
 			mockHttpClient.mockGetError(500, 'Internal Server Error');
 			
-			await expect(apiBinder.pollTargetState()).rejects.toThrow('HTTP 500');
+			await expect(cloudSync.pollTargetState()).rejects.toThrow('HTTP 500');
 		});
 		
 		it('should timeout after 30 seconds', async () => {
 			mockHttpClient.mockTimeout();
 			
-			await expect(apiBinder.pollTargetState()).rejects.toThrow('Target state poll timeout');
+			await expect(cloudSync.pollTargetState()).rejects.toThrow('Target state poll timeout');
 		});
 		
 		it('should send If-None-Match header after first response with ETag', async () => {
@@ -138,11 +138,11 @@ describe('ApiBinder.pollTargetState', () => {
 			
 			// First request with ETag
 			mockHttpClient.mockGetSuccess(targetState, { etag: 'abc123' });
-			await apiBinder.pollTargetState();
+			await cloudSync.pollTargetState();
 			
 			// Second request should include ETag
 			mockHttpClient.mockGetNotModified();
-			await apiBinder.pollTargetState();
+			await cloudSync.pollTargetState();
 			
 			const [, secondOptions] = mockHttpClient.getStub.secondCall.args;
 			expect(secondOptions.headers['if-none-match']).toBe('abc123');
@@ -154,7 +154,7 @@ describe('ApiBinder.pollTargetState', () => {
 			
 			mockHttpClient.mockGetSuccess(targetState);
 			
-			await apiBinder.pollTargetState();
+			await cloudSync.pollTargetState();
 			
 			// deviceManager.getDeviceInfo is called synchronously, just verify it worked
 			const [url] = mockHttpClient.getStub.firstCall.args;
@@ -173,7 +173,7 @@ describe('ApiBinder.pollTargetState', () => {
 			
 			mockHttpClient.mockGetSuccess(targetState);
 			
-			await apiBinder.pollTargetState();
+			await cloudSync.pollTargetState();
 			
 			const passedState: DeviceState = mockStateReconciler.setTarget.firstCall.args[0];
 			expect(passedState.config).toBeTruthy();
@@ -186,7 +186,7 @@ describe('ApiBinder.pollTargetState', () => {
 			
 			mockHttpClient.mockGetSuccess(targetState);
 			
-			await apiBinder.pollTargetState();
+			await cloudSync.pollTargetState();
 			
 			const passedState: DeviceState = mockStateReconciler.setTarget.firstCall.args[0];
 			expect(passedState.config).toHaveProperty('logging');
@@ -201,7 +201,7 @@ describe('ApiBinder.pollTargetState', () => {
 			
 			mockHttpClient.mockGetSuccess(targetState);
 			
-			await apiBinder.pollTargetState();
+			await cloudSync.pollTargetState();
 			
 			const passedState: DeviceState = mockStateReconciler.setTarget.firstCall.args[0];
 			// Should preserve whatever the API sends
@@ -225,7 +225,7 @@ describe('ApiBinder.pollTargetState', () => {
 			
 			mockHttpClient.mockGetSuccess(targetState);
 			
-			await apiBinder.pollTargetState();
+			await cloudSync.pollTargetState();
 			
 			const passedState: DeviceState = mockStateReconciler.setTarget.firstCall.args[0];
 			expect(passedState.apps).toHaveProperty('1001');
@@ -237,7 +237,7 @@ describe('ApiBinder.pollTargetState', () => {
 			
 			mockHttpClient.mockGetSuccess(targetState);
 			
-			await apiBinder.pollTargetState();
+			await cloudSync.pollTargetState();
 			
 			const passedState: DeviceState = mockStateReconciler.setTarget.firstCall.args[0];
 			expect((passedState.config as any).sensors).toHaveLength(3);
@@ -257,7 +257,7 @@ describe('ApiBinder.pollTargetState', () => {
 			
 			mockHttpClient.mockGetSuccess(targetState);
 			
-			await apiBinder.pollTargetState();
+			await cloudSync.pollTargetState();
 			
 			const passedState: DeviceState = mockStateReconciler.setTarget.firstCall.args[0];
 			expect(passedState.apps).toEqual({});
@@ -272,7 +272,7 @@ describe('ApiBinder.pollTargetState', () => {
 			
 			mockHttpClient.mockGetSuccess(targetState);
 			
-			await apiBinder.pollTargetState();
+			await cloudSync.pollTargetState();
 			
 			const passedState: DeviceState = mockStateReconciler.setTarget.firstCall.args[0];
 			expect(passedState.config).toBeTruthy();
@@ -290,7 +290,7 @@ describe('ApiBinder.pollTargetState', () => {
 			
 			mockHttpClient.mockGetSuccess(targetState);
 			
-			await apiBinder.pollTargetState();
+			await cloudSync.pollTargetState();
 			
 			expect(mockStateReconciler.setTarget.callCount).toBe(1);
 			expect(mockStateReconciler.setTarget.firstCall.args[0]).toHaveProperty('config');
@@ -306,7 +306,7 @@ describe('ApiBinder.pollTargetState', () => {
 			
 			mockHttpClient.mockGetSuccess(targetState);
 			
-			await apiBinder.pollTargetState();
+			await cloudSync.pollTargetState();
 			
 			// In real implementation, this event is emitted by stateReconciler
 			mockStateReconciler.emit('target-state-changed');
@@ -315,12 +315,12 @@ describe('ApiBinder.pollTargetState', () => {
 		});
 		
 		it('should not call setTarget when device is not provisioned', async () => {
-			// Create new apiBinder with unprovisioned device
+			// Create new CloudSync with unprovisioned device
 			const unprovisionedDeviceManager = {
 				getDeviceInfo: () => createUnprovisionedDeviceInfo()
 			};
 			
-			const unprovisionedApiBinder: any = new ApiBinder(
+			const unprovisionedCloudSync: any = new CloudSync(
 				mockStateReconciler as any,
 				unprovisionedDeviceManager as any,
 				{
@@ -336,7 +336,7 @@ describe('ApiBinder.pollTargetState', () => {
 			const targetState = createMockTargetStateResponse('some-uuid');
 			mockHttpClient.mockGetSuccess(targetState);
 			
-			await unprovisionedApiBinder.pollTargetState();
+			await unprovisionedCloudSync.pollTargetState();
 			
 			expect(mockStateReconciler.setTarget.called).toBe(false);
 		});
@@ -347,7 +347,7 @@ describe('ApiBinder.pollTargetState', () => {
 			
 			mockHttpClient.mockGetSuccess(targetState);
 			
-			await apiBinder.pollTargetState();
+			await cloudSync.pollTargetState();
 			
 			// Version is tracked internally, just verify setTarget was called
 			expect(mockStateReconciler.setTarget.callCount).toBe(1);
@@ -359,7 +359,7 @@ describe('ApiBinder.pollTargetState', () => {
 			// First update
 			let targetState = createMockTargetStateResponse(deviceInfo.uuid);
 			mockHttpClient.mockGetSuccess(targetState);
-			await apiBinder.pollTargetState();
+			await cloudSync.pollTargetState();
 			
 			mockStateReconciler.setTarget.resetHistory();
 			mockHttpClient.reset();
@@ -375,7 +375,7 @@ describe('ApiBinder.pollTargetState', () => {
 				}
 			});
 			mockHttpClient.mockGetSuccess(targetState);
-			await apiBinder.pollTargetState();
+			await cloudSync.pollTargetState();
 			
 			expect(mockStateReconciler.setTarget.callCount).toBe(1);
 		});
@@ -389,19 +389,19 @@ describe('ApiBinder.pollTargetState', () => {
 		it('should handle network request failure', async () => {
 			mockHttpClient.mockNetworkError('Network request failed');
 			
-			await expect(apiBinder.pollTargetState()).rejects.toThrow('Network request failed');
+			await expect(cloudSync.pollTargetState()).rejects.toThrow('Network request failed');
 		});
 		
 		it('should handle timeout error', async () => {
 			mockHttpClient.mockTimeout();
 			
-			await expect(apiBinder.pollTargetState()).rejects.toThrow();
+			await expect(cloudSync.pollTargetState()).rejects.toThrow();
 		});
 		
 		it('should handle server error (HTTP 500)', async () => {
 			mockHttpClient.mockGetError(500, 'Internal Server Error');
 			
-			await expect(apiBinder.pollTargetState()).rejects.toThrow();
+			await expect(cloudSync.pollTargetState()).rejects.toThrow();
 		});
 		
 		it('should handle malformed JSON response', async () => {
@@ -414,7 +414,7 @@ describe('ApiBinder.pollTargetState', () => {
 			
 			mockHttpClient.getStub.resolves(response as any);
 			
-			await expect(apiBinder.pollTargetState()).rejects.toThrow('Invalid JSON');
+			await expect(cloudSync.pollTargetState()).rejects.toThrow('Invalid JSON');
 		});
 		
 		it('should warn when device UUID not in response', async () => {
@@ -429,7 +429,7 @@ describe('ApiBinder.pollTargetState', () => {
 			
 			mockHttpClient.mockGetSuccess(targetState);
 			
-			await apiBinder.pollTargetState();
+			await cloudSync.pollTargetState();
 			
 			// Should not call setTarget when UUID doesn't match
 			expect(mockStateReconciler.setTarget.called).toBe(false);
@@ -448,12 +448,12 @@ describe('ApiBinder.pollTargetState', () => {
 			
 			mockHttpClient.mockGetSuccess(targetState, { etag });
 			
-			await apiBinder.pollTargetState();
+			await cloudSync.pollTargetState();
 			
 			// DON'T reset - we need to keep call history
 			// Next request should include the ETag
 			mockHttpClient.mockGetNotModified();
-			await apiBinder.pollTargetState();
+			await cloudSync.pollTargetState();
 			
 			// Check the second call includes If-None-Match header
 			expect(mockHttpClient.getStub.callCount).toBe(2);
@@ -469,7 +469,7 @@ describe('ApiBinder.pollTargetState', () => {
 			
 			// First poll with ETag
 			mockHttpClient.mockGetSuccess(targetState, { etag: 'abc123' });
-			await apiBinder.pollTargetState();
+			await cloudSync.pollTargetState();
 			expect(mockStateReconciler.setTarget.callCount).toBe(1);
 			
 			mockStateReconciler.setTarget.resetHistory();
@@ -477,7 +477,7 @@ describe('ApiBinder.pollTargetState', () => {
 			
 			// Second poll returns 304
 			mockHttpClient.mockGetNotModified();
-			await apiBinder.pollTargetState();
+			await cloudSync.pollTargetState();
 			expect(mockStateReconciler.setTarget.called).toBe(false);
 		});
 		
@@ -488,7 +488,7 @@ describe('ApiBinder.pollTargetState', () => {
 			// Response without ETag
 			mockHttpClient.mockGetSuccess(targetState);
 			
-			await apiBinder.pollTargetState();
+			await cloudSync.pollTargetState();
 			
 			// Should still work
 			expect(mockStateReconciler.setTarget.callCount).toBe(1);
@@ -506,7 +506,7 @@ describe('ApiBinder.pollTargetState', () => {
 			
 			mockHttpClient.mockGetSuccess(targetState);
 			
-			await apiBinder.pollTargetState();
+			await cloudSync.pollTargetState();
 			
 			expect(mockStateReconciler.setTarget.callCount).toBe(1);
 		});
@@ -528,7 +528,7 @@ describe('ApiBinder.pollTargetState', () => {
 			
 			mockHttpClient.mockGetSuccess(targetState);
 			
-			await apiBinder.pollTargetState();
+			await cloudSync.pollTargetState();
 			
 			expect(mockStateReconciler.setTarget.callCount).toBe(1);
 		});
@@ -539,7 +539,7 @@ describe('ApiBinder.pollTargetState', () => {
 			// Version 1
 			let targetState = createMockTargetStateResponse(deviceInfo.uuid, { version: 1 });
 			mockHttpClient.mockGetSuccess(targetState);
-			await apiBinder.pollTargetState();
+			await cloudSync.pollTargetState();
 			
 			mockStateReconciler.setTarget.resetHistory();
 			mockHttpClient.reset();
@@ -555,7 +555,7 @@ describe('ApiBinder.pollTargetState', () => {
 				}
 			});
 			mockHttpClient.mockGetSuccess(targetState);
-			await apiBinder.pollTargetState();
+			await cloudSync.pollTargetState();
 			
 			expect(mockStateReconciler.setTarget.callCount).toBe(1);
 		});
@@ -572,7 +572,7 @@ describe('ApiBinder.pollTargetState', () => {
 			
 			mockHttpClient.mockGetSuccess(targetState);
 			
-			await apiBinder.pollTargetState();
+			await cloudSync.pollTargetState();
 			
 			const passedState: DeviceState = mockStateReconciler.setTarget.firstCall.args[0];
 			expect(passedState.apps).toEqual({});
@@ -590,7 +590,7 @@ describe('ApiBinder.pollTargetState', () => {
 			
 			mockHttpClient.mockGetSuccess(targetState);
 			
-			await apiBinder.pollTargetState();
+			await cloudSync.pollTargetState();
 			
 			// Should still call setTarget, but with empty config object
 			expect(mockStateReconciler.setTarget.callCount).toBe(1);
@@ -604,10 +604,11 @@ describe('ApiBinder.pollTargetState', () => {
 			
 			mockHttpClient.mockGetSuccess(targetState);
 			
-			await apiBinder.pollTargetState();
+			await cloudSync.pollTargetState();
 			
 			const passedState: DeviceState = mockStateReconciler.setTarget.firstCall.args[0];
 			expect((passedState.config as any).sensors).toHaveLength(100);
 		});
 	});
 });
+

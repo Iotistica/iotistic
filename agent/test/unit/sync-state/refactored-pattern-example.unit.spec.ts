@@ -7,7 +7,7 @@
  */
 
 import { MockHttpClient } from '../../helpers/mock-http-client';
-import { ApiBinder } from '../../../src/sync-state';
+import { CloudSync } from '../../../src/sync';
 import { createMockDeviceInfo, createMockTargetStateResponse } from '../../helpers/fixtures';
 import { stub } from 'sinon';
 import { EventEmitter } from 'events';
@@ -25,7 +25,7 @@ describe('Example: Refactored Testing Pattern', () => {
 		mockStateReconciler.getCurrentState = stub().resolves({ apps: {}, config: {} });
 		
 		// 2. Create system under test with injected mocks
-		const apiBinder: any = new ApiBinder(
+		const cloudSync: any = new CloudSync(
 			mockStateReconciler as any,
 			mockDeviceManager as any,
 			{
@@ -46,7 +46,7 @@ describe('Example: Refactored Testing Pattern', () => {
 		mockHttpClient.mockGetSuccess(targetState, { etag: 'abc123' });
 		
 		// 4. Execute test
-		await apiBinder.pollTargetState();
+		await cloudSync.pollTargetState();
 		
 		// 5. Verify behavior
 		expect(mockHttpClient.getStub.callCount).toBe(1);
@@ -63,7 +63,7 @@ describe('Example: Refactored Testing Pattern', () => {
 	it('should demonstrate error handling', async () => {
 		// Setup
 		const mockHttpClient = new MockHttpClient();
-		const apiBinder: any = new ApiBinder(
+		const cloudSync: any = new CloudSync(
 			{} as any,
 			{ getDeviceInfo: () => createMockDeviceInfo() } as any,
 			{ cloudApiEndpoint: 'http://api:3002', apiTimeout: 30000 } as any,
@@ -75,13 +75,13 @@ describe('Example: Refactored Testing Pattern', () => {
 		mockHttpClient.mockGetError(500, 'Internal Server Error');
 		
 		// Execute & Verify
-		await expect(apiBinder.pollTargetState()).rejects.toThrow('HTTP 500');
+		await expect(cloudSync.pollTargetState()).rejects.toThrow('HTTP 500');
 	});
 	
 	it('should demonstrate timeout handling', async () => {
 		// Setup
 		const mockHttpClient = new MockHttpClient();
-		const apiBinder: any = new ApiBinder(
+		const cloudSync: any = new CloudSync(
 			{} as any,
 			{ getDeviceInfo: () => createMockDeviceInfo() } as any,
 			{ cloudApiEndpoint: 'http://api:3002', apiTimeout: 30000 } as any,
@@ -93,6 +93,8 @@ describe('Example: Refactored Testing Pattern', () => {
 		mockHttpClient.mockTimeout();
 		
 		// Execute & Verify
-		await expect(apiBinder.pollTargetState()).rejects.toThrow('Target state poll timeout');
+		await expect(cloudSync.pollTargetState()).rejects.toThrow('Target state poll timeout');
 	});
 });
+
+
