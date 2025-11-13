@@ -28,6 +28,22 @@ export interface DeviceInfo {
 	mqttUsername?: string;
 	mqttPassword?: string;
 	mqttBrokerUrl?: string;
+	mqttBrokerConfig?: MqttBrokerConfig; // TLS configuration from provisioning
+}
+
+export interface MqttBrokerConfig {
+	protocol: string;           // 'mqtt' or 'mqtts'
+	host: string;
+	port: number;
+	useTls: boolean;
+	caCert?: string;            // CA certificate (PEM format)
+	clientCert?: string;        // Client certificate (optional)
+	verifyCertificate: boolean;
+	clientIdPrefix: string;
+	keepAlive: number;
+	cleanSession: boolean;
+	reconnectPeriod: number;
+	connectTimeout: number;
 }
 
 export interface ProvisioningConfig {
@@ -70,6 +86,7 @@ export interface ProvisionResponse {
 		username: string,
 		password: string,
 		broker: string,
+		brokerConfig?: MqttBrokerConfig, // TLS and connection configuration
 		topics: {
 			publish: string,
 			subscribe: string

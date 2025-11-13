@@ -24,6 +24,7 @@ export interface Device {
   mqttUsername?: string | null;
   mqttPassword?: string | null;
   mqttBrokerUrl?: string | null;
+  mqttBrokerConfig?: string | null; // JSON string of MqttBrokerConfig
   createdAt?: Date;
   updatedAt?: Date;
 }

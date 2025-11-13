@@ -137,6 +137,7 @@ export class DeviceManager {
 				mqttUsername: record.mqttUsername || undefined,
 				mqttPassword: record.mqttPassword || undefined,
 				mqttBrokerUrl: record.mqttBrokerUrl || undefined,
+				mqttBrokerConfig: record.mqttBrokerConfig ? JSON.parse(record.mqttBrokerConfig) : undefined,
 			};
 		}
 	}
@@ -167,6 +168,7 @@ export class DeviceManager {
 			mqttUsername: this.deviceInfo.mqttUsername || null,
 			mqttPassword: this.deviceInfo.mqttPassword || null,
 			mqttBrokerUrl: this.deviceInfo.mqttBrokerUrl || null,
+			mqttBrokerConfig: this.deviceInfo.mqttBrokerConfig ? JSON.stringify(this.deviceInfo.mqttBrokerConfig) : null,
 			updatedAt: new Date().toISOString(),
 		};
 		
@@ -292,6 +294,7 @@ export class DeviceManager {
 			this.deviceInfo.mqttUsername = response.mqtt.username;
 			this.deviceInfo.mqttPassword = response.mqtt.password;
 			this.deviceInfo.mqttBrokerUrl = response.mqtt.broker;
+			this.deviceInfo.mqttBrokerConfig = response.mqtt.brokerConfig; // Save TLS config if provided
 
 			// Phase 2: Exchange keys - verify device can authenticate with deviceApiKey
 			this.logger?.infoSync('Phase 2: Exchanging keys', {
