@@ -607,7 +607,7 @@ async function buildProvisioningResponse(
     : (process.env.MQTT_BROKER_URL || 'mqtt://mosquitto:1883');
 
   // Fetch API TLS configuration from system_config
-  const apiTlsConfig = await SystemConfigModel.get('api.tls');
+  const apiTlsConfig = await SystemConfigModel.get('api.tls.caCert');
 
   const response: any = {
     id: device.id,

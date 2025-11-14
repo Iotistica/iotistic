@@ -42,6 +42,15 @@ export interface HttpClient {
 		timeout?: number;
 		compress?: boolean;
 	}): Promise<HttpResponse<T>>;
+	
+	/**
+	 * Make HTTP PATCH request
+	 */
+	patch<T = any>(url: string, body: any, options?: {
+		headers?: Record<string, string>;
+		timeout?: number;
+		compress?: boolean;
+	}): Promise<HttpResponse<T>>;
 }
 
 /**
@@ -65,7 +74,7 @@ export class FetchHttpClient implements HttpClient {
 			headers: options?.headers,
 			signal: options?.timeout ? AbortSignal.timeout(options.timeout) : undefined,
 			// @ts-ignore - Node.js fetch supports agent option
-			...(this.isHttps(url) && this.getHttpsAgent()),
+			...(this.isHttps(url) && this.getHttpsAgent(url)),
 		});
 		
 		return {
@@ -102,7 +111,44 @@ export class FetchHttpClient implements HttpClient {
 			body: typeof finalBody === 'string' ? finalBody : JSON.stringify(finalBody),
 			signal: options?.timeout ? AbortSignal.timeout(options.timeout) : undefined,
 			// @ts-ignore - Node.js fetch supports agent option
-			...(this.isHttps(url) && this.getHttpsAgent()),
+			...(this.isHttps(url) && this.getHttpsAgent(url)),
+		});
+		
+		return {
+			ok: response.ok,
+			status: response.status,
+			statusText: response.statusText,
+			headers: {
+				get: (name: string) => response.headers.get(name)
+			},
+			json: () => response.json() as Promise<T>
+		};
+	}
+	
+	async patch<T = any>(url: string, body: any, options?: {
+		headers?: Record<string, string>;
+		timeout?: number;
+		compress?: boolean;
+	}): Promise<HttpResponse<T>> {
+		let finalBody: any = body;
+		let finalHeaders = { ...options?.headers };
+		
+		// Handle compression if requested
+		if (options?.compress && typeof body === 'string') {
+			const { gzip } = await import('zlib');
+			const { promisify } = await import('util');
+			const gzipAsync = promisify(gzip);
+			finalBody = await gzipAsync(Buffer.from(body));
+			finalHeaders['Content-Encoding'] = 'gzip';
+		}
+		
+		const response = await fetch(url, {
+			method: 'PATCH',
+			headers: finalHeaders,
+			body: finalBody,
+			signal: options?.timeout ? AbortSignal.timeout(options.timeout) : undefined,
+			// @ts-ignore - Node.js fetch supports agent option
+			...(this.isHttps(url) && this.getHttpsAgent(url)),
 		});
 		
 		return {
@@ -120,10 +166,21 @@ export class FetchHttpClient implements HttpClient {
 		return url.startsWith('https://');
 	}
 
-	private getHttpsAgent() {
-		if (!this.isHttps) return {};
+	private getHttpsAgent(url: string) {
+		if (!this.isHttps(url)) return {};
 		
 		const https = require('https');
+		
+		// Debug: Log certificate details
+		if (this.caCert) {
+			console.log('[HttpClient] Using CA certificate:', {
+				length: this.caCert.length,
+				preview: this.caCert.substring(0, 100),
+				hasBegin: this.caCert.includes('BEGIN CERTIFICATE'),
+				hasNewlines: this.caCert.includes('\n'),
+			});
+		}
+		
 		const agent = new https.Agent({
 			ca: this.caCert,
 			rejectUnauthorized: this.rejectUnauthorized,

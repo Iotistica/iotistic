@@ -183,10 +183,7 @@ export class CloudSync extends EventEmitter {
 		this.mqttManager = mqttManager;
 		this.anomalyService = anomalyService;
 		
-		// Initialize HTTP client with TLS support
-		this.httpClient = httpClient || this.createHttpClient();
-		
-		// Set defaults
+		// Set defaults FIRST (needed by createHttpClient)
 		this.config = {
 			cloudApiEndpoint: config.cloudApiEndpoint,
 			pollInterval: config.pollInterval || 60000, // 60s
@@ -194,6 +191,9 @@ export class CloudSync extends EventEmitter {
 			metricsInterval: config.metricsInterval || 300000, // 5min
 			apiTimeout: config.apiTimeout || 30000, // 30s
 		};
+		
+		// Initialize HTTP client with TLS support (after config is set)
+		this.httpClient = httpClient || this.createHttpClient();
 		
 		// Initialize connection monitor (with logger)
 		this.connectionMonitor = new ConnectionMonitor(logger);
@@ -224,6 +224,21 @@ export class CloudSync extends EventEmitter {
 			return new FetchHttpClient({
 				caCert: apiTlsConfig.caCert.replace(/\\n/g, '\n'), // Fix escaped newlines
 				rejectUnauthorized: apiTlsConfig.verifyCertificate !== false,
+			});
+		}
+		
+		// Check if using localhost HTTPS without TLS config (development mode)
+		const isLocalhostHttps = this.config.cloudApiEndpoint.startsWith('https://localhost') || 
+		                          this.config.cloudApiEndpoint.startsWith('https://127.0.0.1');
+		
+		if (isLocalhostHttps) {
+			this.logger?.warnSync('Using HTTPS with localhost - disabling certificate verification (development mode)', {
+				component: LogComponents.cloudSync,
+				endpoint: this.config.cloudApiEndpoint
+			});
+			
+			return new FetchHttpClient({
+				rejectUnauthorized: false, // Allow self-signed certs for localhost
 			});
 		}
 		
@@ -1037,6 +1052,9 @@ export class CloudSync extends EventEmitter {
 		// MQTT not available or failed - use HTTP fallback
 		const endpoint = buildApiEndpoint(this.config.cloudApiEndpoint, '/device/state');
 		
+		// Detect protocol from endpoint
+		const protocol = endpoint.startsWith('https://') ? 'https' : 'http';
+		
 		// Convert to JSON
 		const jsonPayload = JSON.stringify(report);
 		const uncompressedSize = Buffer.byteLength(jsonPayload, 'utf8');
@@ -1048,37 +1066,32 @@ export class CloudSync extends EventEmitter {
 		// Calculate compression ratio for logging
 		const compressionRatio = ((1 - compressedSize / uncompressedSize) * 100).toFixed(1);
 		
-		this.logger?.debugSync('Sending compressed state report via HTTP', {
+		this.logger?.debugSync(`Sending compressed state report via ${protocol.toUpperCase()}`, {
 			component: LogComponents.cloudSync,
 			operation: 'http-compress',
 			uncompressedBytes: uncompressedSize,
 			compressedBytes: compressedSize,
 			compressionRatio: `${compressionRatio}%`,
 			savings: `${uncompressedSize - compressedSize} bytes`,
-			transport: 'http'
+			transport: protocol
 		});
 		
-		const response = await fetch(endpoint, {
-			method: 'PATCH',
+		// Use httpClient.patch() for HTTPS support (handles CA certificates)
+		const response = await this.httpClient.patch(endpoint, compressedPayload, {
 			headers: {
 				'Content-Type': 'application/json',
 				'Content-Encoding': 'gzip',
 				'X-Device-API-Key': deviceInfo.apiKey || '',
 			},
-			body: compressedPayload,
-			signal: AbortSignal.timeout(this.config.apiTimeout),
+			timeout: this.config.apiTimeout,
+			compress: false, // Already compressed above
 		});
 		
 		if (!response.ok) {
-			throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+			throw new Error(`${protocol.toUpperCase()} ${response.status}: ${response.statusText}`);
 		}
 		
-		this.logger?.debugSync('State report sent via HTTP', {
-			component: LogComponents.cloudSync,
-			operation: 'http-success',
-			bytes: compressedSize,
-			transport: 'http'
-		});
+	
 	}
 	
 	/**

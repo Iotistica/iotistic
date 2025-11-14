@@ -1,0 +1,1 @@
+subjectAltName = DNS:mosquitto,DNS:api,DNS:localhost,DNS:*.iotistic.local,IP:127.0.0.1

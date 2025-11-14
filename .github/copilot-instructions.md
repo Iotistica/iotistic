@@ -153,6 +153,54 @@ WHERE username = $1 AND topic = $2 AND rw >= $3
 
 ## Development Workflows
 
+### Device Provisioning (Two-Phase Authentication)
+
+**Pattern**: Devices authenticate using two-phase provisioning for security
+
+**Phase 1 - Key Exchange**:
+```typescript
+// Agent requests public key from API
+POST /api/provisioning/v2/key-exchange
+Body: { deviceUuid, provisioningApiKey }
+Response: { apiPublicKey, keyId }
+
+// Agent generates RSA keypair, sends public key
+POST /api/provisioning/v2/key-exchange
+Body: { deviceUuid, provisioningApiKey, devicePublicKey }
+Response: { apiPublicKey, keyId }
+```
+
+**Phase 2 - Registration**:
+```typescript
+// Agent encrypts sensitive data with API's public key
+const encrypted = crypto.publicEncrypt(apiPublicKey, Buffer.from(JSON.stringify({
+  deviceUuid,
+  provisioningApiKey,
+  // ... other fields
+})));
+
+// Send encrypted payload
+POST /api/provisioning/v2/register
+Body: { encryptedPayload: encrypted.toString('base64') }
+Response: { 
+  mqtt: { brokerConfig, username, password },
+  deviceApiKey,
+  // ... other config
+}
+```
+
+**Key Files**:
+- `agent/src/provisioning/device-manager.ts` - Device-side provisioning
+- `api/src/routes/provisioning.ts` - API-side provisioning
+- `agent/cli/commands/provision.ts` - CLI provisioning command
+
+**Environment Variables**:
+```bash
+REQUIRE_PROVISIONING=true         # Enforce provisioning before agent starts
+PROVISIONING_API_KEY=<key>        # Pre-shared key from dashboard
+CLOUD_API_ENDPOINT=https://api.iotistic.ca
+```
+
 ### Starting Services
 
 **Multi-Tenant SaaS (Local Dev)**:
@@ -340,6 +388,80 @@ alerts/environmental    # Threshold alerts
 }
 ```
 
+### MQTTS/TLS Setup (Secure MQTT)
+
+**Architecture Flow**:
+```
+1. API Database (PostgreSQL)
+   └── system_config table
+       └── mqtt.brokers.1 (JSONB)
+           └── Contains: host, port, protocol, caCert, useTls, verifyCertificate
+
+2. Provisioning (API → Agent)
+   └── POST /api/provisioning/v2/register
+       └── Response includes mqtt.brokerConfig with CA certificate
+
+3. Agent Storage (SQLite)
+   └── device table
+       └── mqttBrokerConfig column (JSON string)
+           └── Stores: protocol, host, port, useTls, caCert, verifyCertificate
+
+4. Agent MQTT Connection
+   └── agent.ts: initializeMqttManager()
+       └── Reads mqttBrokerConfig from database
+       └── Applies TLS options: { ca: caCert, rejectUnauthorized: verifyCertificate }
+```
+
+**Setup Steps**:
+```bash
+# 1. Generate self-signed CA certificate
+cd certs
+openssl req -new -x509 -days 365 -extensions v3_ca \
+  -keyout ca.key -out ca.crt -subj "/CN=Iotistic CA"
+
+# 2. Generate server certificate signed by CA
+openssl genrsa -out server.key 2048
+openssl req -new -out server.csr -key server.key -subj "/CN=mosquitto"
+openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key \
+  -CAcreateserial -out server.crt -days 365
+
+# 3. Update Mosquitto config (mosquitto/mosquitto.conf)
+listener 8883
+protocol mqtt
+cafile /mosquitto/certs/ca.crt
+certfile /mosquitto/certs/server.crt
+keyfile /mosquitto/certs/server.key
+require_certificate false
+
+# 4. Store CA cert in API database
+# Run migration 057_add_mqtt_ca_certificate.sql
+cd api && npx knex migrate:latest
+
+# 5. Agent receives CA cert during provisioning
+# Automatically applies TLS options on MQTT connect
+```
+
+**Verification**:
+```bash
+# Check agent database has CA cert
+docker exec agent-1 node -e "
+const Database = require('better-sqlite3');
+const db = new Database('/app/data/device.sqlite');
+const row = db.prepare('SELECT mqttBrokerConfig FROM device').get();
+console.log(JSON.parse(row.mqttBrokerConfig));
+"
+
+# Test MQTTS connection
+mosquitto_pub -h localhost -p 8883 --cafile ./certs/ca.crt \
+  -u device_uuid -P mqtt_password -t test -m "Hello MQTTS"
+```
+
+**Key Files**:
+- `api/database/migrations/057_add_mqtt_ca_certificate.sql` - CA cert storage
+- `api/src/utils/mqtt-broker-config.ts` - Broker config formatting
+- `agent/src/agent.ts` - TLS options application
+- `mosquitto/mosquitto.conf` - Broker TLS configuration
+
 ---
 
 ## Key Files Reference
@@ -405,6 +527,24 @@ alerts/environmental    # Threshold alerts
 - `agent/src/logging/agent-logger.ts` - Structured logging with log levels and components
 - `agent/src/logging/cloud-backend.ts` - Cloud log aggregation with sampling
 - `agent/src/updater.ts` - MQTT-triggered agent self-updates
+- `agent/src/anomaly-detection/` - Real-time anomaly detection system
+
+### Anomaly Detection System
+- **Monitored Metrics**: CPU usage/temp, memory, storage, network latency
+- **Detection Methods**: 
+  - Z-Score (statistical deviation)
+  - MAD (Median Absolute Deviation) - robust outlier detection
+  - IQR (Interquartile Range) - quartile-based outliers
+  - Rate of Change - sudden spikes/drops
+  - ML Predictions - LSTM-based forecasting
+- **Configuration**: `ANOMALY_DETECTION_ENABLED=true` environment variable
+- **Cloud Reporting**: Automatic summary reporting every 60s via CloudSync
+- **Database**: SQLite `anomaly_detections` table for historical data
+
+**Key Files**:
+- `agent/src/anomaly-detection/detector.ts` - Main detection engine
+- `agent/src/anomaly-detection/algorithms/` - Detection algorithms (z-score, mad, iqr, etc.)
+- `agent/src/anomaly-detection/ml/` - LSTM model training and inference
 
 ---
 
@@ -443,6 +583,25 @@ npm run test:integration
 npm run test:watch:unit
 ```
 
+**Test Patterns**:
+```typescript
+// Unit test example
+describe('ContainerManager', () => {
+  it('should reconcile state', async () => {
+    const manager = new ContainerManager(logger);
+    await manager.setTargetState({ apps: { ... } });
+    // Assertions
+  });
+});
+
+// Integration test example (requires @testcontainers or Docker)
+describe('Docker Integration', () => {
+  it('should create container', async () => {
+    // Real Docker API call via dockerode
+  });
+});
+```
+
 ### Dashboard Testing (Playwright)
 
 **E2E Tests**:
@@ -453,6 +612,30 @@ npm run test:e2e:ui        # Interactive UI mode
 ```
 
 **Test Location**: `dashboard/e2e/` - End-to-end browser tests
+
+### Simulation Mode (Testing Without Hardware)
+
+**Configuration**:
+```bash
+# Environment variable
+SIMULATION_MODE=true
+SIMULATION_CONFIG='{"scenarios":{"anomaly_injection":{"enabled":true,"metrics":["cpu_temp","memory_percent"],"pattern":"spike","intervalMs":30000,"magnitude":3},"sensor_data":{"enabled":true,"pattern":"realistic","publishIntervalMs":10000}}}'
+```
+
+**Features**:
+- 📊 Realistic sensor data (BME688-style temperature, humidity, pressure, gas)
+- 🔥 Anomaly injection (spikes, drops, drift patterns)
+- 🎯 Metric targeting (inject anomalies into specific metrics)
+- ⏱️ Configurable intervals
+
+**Use Cases**:
+- Testing anomaly detection algorithms
+- UI/dashboard development without hardware
+- CI/CD integration testing
+
+**Key Files**:
+- `agent/src/simulation/index.ts` - Simulation engine
+- `agent/src/simulation/anomaly-injector.ts` - Anomaly patterns
 
 ---
 
@@ -610,9 +793,12 @@ curl http://localhost:3100/api/admin/jobs
 # Install on Raspberry Pi
 curl -sSL https://raw.githubusercontent.com/Iotistica/iotistic/master/bin/install.sh | bash
 
-# Local development
+# Local development (pull pre-built images)
 docker-compose -f docker-compose.dev.yml up -d
 cd agent && npm run dev
+
+# Local development (build from source)
+docker-compose -f docker-compose.yml up -d --build
 
 # Run tests
 cd agent && npm run test:unit         # Fast unit tests
@@ -620,6 +806,63 @@ cd agent && npm run test:integration  # Requires Docker
 
 # Ansible deployment
 cd ansible && ./run.sh
+```
+
+### CLI Tool - iotctl (Critical for Device Management)
+
+**The agent includes a CLI tool for device operations:**
+
+```bash
+# Inside agent container (PowerShell on Windows)
+docker exec agent-1 iotctl <command>
+
+# Provisioning
+iotctl provision <key>            # Provision with cloud (--api, --name, --type options)
+iotctl provision status           # Check provisioning state
+iotctl deprovision                # Remove cloud registration (keeps UUID/deviceApiKey)
+iotctl factory-reset              # WARNING: Complete wipe! Deletes everything
+
+# Configuration
+iotctl config show                # Show all configuration
+iotctl config set-api <url>       # Update cloud API endpoint
+iotctl config get-api             # Show current API endpoint
+iotctl config set <key> <value>   # Set any config value
+iotctl config get <key>           # Get specific config value
+iotctl config reset               # Reset to defaults
+
+# Device management
+iotctl status                     # Device health and status
+iotctl diagnostics                # Run full system diagnostics (API, DB, MQTT, cloud)
+iotctl diag                       # Short alias for diagnostics
+iotctl restart                    # Restart the agent
+iotctl logs --follow              # View agent logs (use from host: docker logs -f agent-1)
+iotctl logs -n 50                 # Show last 50 log lines
+
+# Application-level commands (manage entire stacks)
+iotctl apps list                  # List all apps and services
+iotctl apps start 1001            # Start all services in app
+iotctl apps stop 1001             # Stop all services in app
+iotctl apps restart 1001          # Restart entire app stack
+iotctl apps info 1001             # Show app details
+iotctl apps purge 1001            # Remove app + volumes
+
+# Service-level commands (manage individual containers)
+iotctl services list              # List all services/containers
+iotctl services list 1001         # Services in specific app
+iotctl services start web-1       # Start one container
+iotctl services stop api-2        # Stop one container
+iotctl services restart db-1      # Restart one container
+iotctl services logs web-1 -f     # Follow container logs
+iotctl services info web-1        # Detailed service info
+```
+
+**PowerShell Environment Note**: When developing on Windows, use PowerShell-compatible syntax:
+```powershell
+# Use semicolons for command chaining (NOT &&)
+cd billing; npm run dev
+
+# Docker commands work the same
+docker-compose up -d; docker logs -f agent-1
 ```
 
 ### Kubernetes
@@ -648,6 +891,28 @@ npm test -- container-manager.test.ts
 
 # Watch mode for TDD
 npm run test:watch:unit
+
+# Access agent SQLite database directly
+docker exec agent-1 sqlite3 /app/data/device.sqlite
+# Common queries:
+# SELECT * FROM device;                    -- Device info, MQTT config
+# SELECT * FROM target_state;              -- Apps target state
+# SELECT * FROM anomaly_detections;        -- Anomaly history
+```
+
+### Database Management
+```powershell
+# PostgreSQL (API database)
+docker exec -it iotistic-postgres psql -U postgres -d iotistic
+
+# Common queries:
+# SELECT * FROM devices;                   -- All devices
+# SELECT * FROM mqtt_acls;                 -- MQTT access control
+# SELECT * FROM system_config WHERE key LIKE 'mqtt%';  -- MQTT broker config
+
+# SQLite (Agent database)
+docker exec agent-1 sqlite3 /app/data/device.sqlite
+# SELECT mqttBrokerConfig FROM device;     -- Check MQTTS config
 ```
 
 ---

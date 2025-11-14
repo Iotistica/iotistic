@@ -76,6 +76,12 @@ interface TargetStateConfig {
     level: string;
     enableRemoteLogging: boolean;
     enableFilePersistence: boolean;
+    samplingRates: {
+        error: number,
+        warn: number,
+        info: number,
+        debug: number
+      }
   };
   features: {
     enableDeviceJobs: boolean;
@@ -109,11 +115,18 @@ export function generateDefaultTargetStateConfig(
       level: 'info',
       enableRemoteLogging: true,
       enableFilePersistence: false,
+      samplingRates: {
+        error: 1.0,
+        warn: 1.0,
+        info: 0.05,
+        debug: 0.001
+      }
     },
     features: {
       enableDeviceJobs: true, // Always enabled (API access required for system to work)
       enableDeviceSensorPublish:true,
       enableDeviceRemoteAccess: true,
+      
     },
     settings: {
       metricsIntervalMs: 60000, // 1 minute (starter plan)
