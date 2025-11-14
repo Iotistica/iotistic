@@ -645,11 +645,10 @@ export class DeviceManager {
 					apiEndpoint: this.deviceInfo.apiEndpoint,
 				});
 				
-				const response = await fetch(`${this.deviceInfo.apiEndpoint}/devices/${this.deviceInfo.uuid}`, {
-					method: 'DELETE',
+				const url = buildApiEndpoint(this.deviceInfo.apiEndpoint, `/devices/${this.deviceInfo.uuid}`);
+				const response = await this.httpClient.get(url, {
 					headers: {
 						'Authorization': `Bearer ${this.deviceInfo.deviceApiKey}`,
-						'Content-Type': 'application/json',
 					},
 				});
 

@@ -183,10 +183,7 @@ export class CloudSync extends EventEmitter {
 		this.mqttManager = mqttManager;
 		this.anomalyService = anomalyService;
 		
-		// Initialize HTTP client with TLS support
-		this.httpClient = httpClient || this.createHttpClient();
-		
-		// Set defaults
+		// Set defaults FIRST (needed by createHttpClient)
 		this.config = {
 			cloudApiEndpoint: config.cloudApiEndpoint,
 			pollInterval: config.pollInterval || 60000, // 60s
@@ -194,6 +191,9 @@ export class CloudSync extends EventEmitter {
 			metricsInterval: config.metricsInterval || 300000, // 5min
 			apiTimeout: config.apiTimeout || 30000, // 30s
 		};
+		
+		// Initialize HTTP client with TLS support (AFTER config is set)
+		this.httpClient = httpClient || this.createHttpClient();
 		
 		// Initialize connection monitor (with logger)
 		this.connectionMonitor = new ConnectionMonitor(logger);
@@ -211,7 +211,32 @@ export class CloudSync extends EventEmitter {
 	private createHttpClient(): HttpClient {
 		const deviceInfo = this.deviceManager.getDeviceInfo();
 		
-		// Check if API TLS is configured (similar to MQTT)
+		const endpoint = this.config.cloudApiEndpoint;
+		const isLocalhostHttps = endpoint.startsWith('https://localhost') || 
+		                          endpoint.startsWith('https://127.0.0.1');
+		
+		this.logger?.infoSync('Creating HTTP client', {
+			component: LogComponents.cloudSync,
+			endpoint: endpoint,
+			isLocalhostHttps: isLocalhostHttps,
+			hasApiTlsConfig: !!deviceInfo?.apiTlsConfig,
+			hasCaCert: !!deviceInfo?.apiTlsConfig?.caCert
+		});
+		
+		// Check if using localhost HTTPS (development mode) - MUST CHECK FIRST
+		// This takes precedence over apiTlsConfig because we're not talking to the real API
+		if (isLocalhostHttps) {
+			this.logger?.warnSync('Using HTTPS with localhost - disabling certificate verification (development mode)', {
+				component: LogComponents.cloudSync,
+				endpoint: endpoint
+			});
+			
+			return new FetchHttpClient({
+				rejectUnauthorized: false, // Allow self-signed certs for localhost
+			});
+		}
+		
+		// Check if API TLS is configured (production mode with provisioned CA cert)
 		const apiTlsConfig = deviceInfo?.apiTlsConfig;
 		
 		if (apiTlsConfig?.caCert) {
@@ -227,22 +252,11 @@ export class CloudSync extends EventEmitter {
 			});
 		}
 		
-		// Check if using localhost HTTPS without TLS config (development mode)
-		const isLocalhostHttps = this.config.cloudApiEndpoint.startsWith('https://localhost') || 
-		                          this.config.cloudApiEndpoint.startsWith('https://127.0.0.1');
-		
-		if (isLocalhostHttps) {
-			this.logger?.warnSync('Using HTTPS with localhost - disabling certificate verification (development mode)', {
-				component: LogComponents.cloudSync,
-				endpoint: this.config.cloudApiEndpoint
-			});
-			
-			return new FetchHttpClient({
-				rejectUnauthorized: false, // Allow self-signed certs for localhost
-			});
-		}
-		
 		// Default to plain HTTP client
+		this.logger?.infoSync('Using plain HTTP client', {
+			component: LogComponents.cloudSync,
+			endpoint: endpoint
+		});
 		return new FetchHttpClient();
 	}
 	
@@ -392,10 +406,23 @@ export class CloudSync extends EventEmitter {
 		} catch (error) {
 			this.pollErrors++;
 			this.connectionMonitor.markFailure('poll', error as Error); // Track failure
-			this.logger?.errorSync('Failed to poll target state', error instanceof Error ? error : new Error(String(error)), {
+			
+			// Extract the root cause for better error visibility
+			const err = error instanceof Error ? error : new Error(String(error));
+			const cause = (err as any).cause;
+			
+			this.logger?.errorSync('Failed to poll target state', err, {
 				component: LogComponents.cloudSync,
 				operation: 'poll',
-				errorCount: this.pollErrors
+				errorCount: this.pollErrors,
+				...(cause && { 
+					cause: {
+						message: cause.message,
+						code: cause.code,
+						errno: cause.errno,
+						syscall: cause.syscall
+					}
+				})
 			});
 		}
 		
@@ -576,10 +603,23 @@ export class CloudSync extends EventEmitter {
 		} catch (error) {
 			this.reportErrors++;
 			this.connectionMonitor.markFailure('report', error as Error); // Track failure
-			this.logger?.errorSync('Failed to report current state', error instanceof Error ? error : new Error(String(error)), {
+			
+			// Extract the root cause for better error visibility
+			const err = error instanceof Error ? error : new Error(String(error));
+			const cause = (err as any).cause;
+			
+			this.logger?.errorSync('Failed to report current state', err, {
 				component: LogComponents.cloudSync,
 				operation: 'report',
-				errorCount: this.reportErrors
+				errorCount: this.reportErrors,
+				...(cause && { 
+					cause: {
+						message: cause.message,
+						code: cause.code,
+						errno: cause.errno,
+						syscall: cause.syscall
+					}
+				})
 			});
 		}
 		

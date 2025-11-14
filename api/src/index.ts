@@ -398,6 +398,7 @@ async function startServer() {
         port: HTTPS_PORT,
         certPath: process.env.HTTPS_CERT_PATH || './certs/server.crt',
         keyPath: process.env.HTTPS_KEY_PATH || './certs/server.key',
+        caCertPath: process.env.HTTPS_CA_CERT_PATH || './certs/ca.crt',
       });
     } catch (error) {
       logger.warn('Failed to start HTTPS server', { error });

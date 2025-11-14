@@ -8,6 +8,7 @@ export interface HttpsConfig {
   port: number;
   certPath: string;
   keyPath: string;
+  caCertPath?: string;
   requestCert?: boolean;
   rejectUnauthorized?: boolean;
 }
@@ -35,11 +36,19 @@ export function createHttpsServer(app: Express, config: HttpsConfig): https.Serv
     // Read certificate files
     const cert = fs.readFileSync(config.certPath, 'utf8');
     const key = fs.readFileSync(config.keyPath, 'utf8');
+    
+    // Optional: Read CA certificate for chain verification
+    let ca: string | undefined;
+    if (config.caCertPath && fs.existsSync(config.caCertPath)) {
+      ca = fs.readFileSync(config.caCertPath, 'utf8');
+      logger.info(`Using CA certificate: ${config.caCertPath}`);
+    }
 
     // Optional: Client certificate verification (mutual TLS)
     const httpsOptions: https.ServerOptions = {
       cert,
       key,
+      ca, // CA certificate for chain verification
       requestCert: config.requestCert || false,
       rejectUnauthorized: config.rejectUnauthorized || false,
     };

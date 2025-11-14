@@ -63,18 +63,36 @@ export class FetchHttpClient implements HttpClient {
 	constructor(options?: HttpClientOptions) {
 		this.caCert = options?.caCert;
 		this.rejectUnauthorized = options?.rejectUnauthorized !== false;
+		
+		// For localhost development with self-signed certs, we need to disable TLS verification
+		// Node.js fetch (undici) doesn't support per-request TLS options well
+		if (options?.rejectUnauthorized === false) {
+			console.log('[HttpClient] Setting NODE_TLS_REJECT_UNAUTHORIZED=0 for localhost HTTPS');
+			process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+		}
 	}
 
 	async get<T = any>(url: string, options?: {
 		headers?: Record<string, string>;
 		timeout?: number;
 	}): Promise<HttpResponse<T>> {
+		const httpsAgent = this.isHttps(url) ? this.getHttpsAgent() : {};
+		
+		// Debug logging
+		if (this.isHttps(url)) {
+			console.log('[HttpClient] Making HTTPS request:', {
+				url,
+				hasAgent: !!(httpsAgent as any).agent,
+				rejectUnauthorized: this.rejectUnauthorized
+			});
+		}
+		
 		const response = await fetch(url, {
 			method: 'GET',
 			headers: options?.headers,
 			signal: options?.timeout ? AbortSignal.timeout(options.timeout) : undefined,
 			// @ts-ignore - Node.js fetch supports agent option
-			...(this.isHttps(url) && this.getHttpsAgent()),
+			...httpsAgent,
 		});
 		
 		return {
@@ -111,7 +129,7 @@ export class FetchHttpClient implements HttpClient {
 			body: typeof finalBody === 'string' ? finalBody : JSON.stringify(finalBody),
 			signal: options?.timeout ? AbortSignal.timeout(options.timeout) : undefined,
 			// @ts-ignore - Node.js fetch supports agent option
-			...(this.isHttps(url) && this.getHttpsAgent()),
+			...(this.isHttps(url) ? this.getHttpsAgent() : {}),
 		});
 		
 		return {
@@ -148,7 +166,7 @@ export class FetchHttpClient implements HttpClient {
 			body: finalBody,
 			signal: options?.timeout ? AbortSignal.timeout(options.timeout) : undefined,
 			// @ts-ignore - Node.js fetch supports agent option
-			...(this.isHttps(url) && this.getHttpsAgent()),
+			...(this.isHttps(url) ? this.getHttpsAgent() : {}),
 		});
 		
 		return {
@@ -167,7 +185,15 @@ export class FetchHttpClient implements HttpClient {
 	}
 
 	private getHttpsAgent() {
+		// Debug logging
+		console.log('[HttpClient] Creating HTTPS agent:', {
+			hasCaCert: !!this.caCert,
+			rejectUnauthorized: this.rejectUnauthorized
+		});
 		
+		// Node.js fetch uses undici internally but doesn't expose it
+		// The agent option doesn't work reliably with fetch()
+		// We've already set NODE_TLS_REJECT_UNAUTHORIZED in constructor if needed
 		const https = require('https');
 		const agent = new https.Agent({
 			ca: this.caCert,
