@@ -70,7 +70,6 @@ export default class DeviceAgent {
   private cloudSync?: CloudSync;
   private logBackend!: LocalLogBackend;
   private logBackends: LogBackend[] = [];
-  private cloudLogBackend?: CloudLogBackend;
   private logMonitor?: ContainerLogMonitor;
   private agentLogger!: AgentLogger; // Structured logging for agent-level events
   private firewall?: AgentFirewall; // Network firewall protection
@@ -500,7 +499,6 @@ export default class DeviceAgent {
           );
           await cloudLogBackend.initialize();
           this.logBackends.push(cloudLogBackend);
-          this.cloudLogBackend = cloudLogBackend;
 
           // Update agentLogger with new backend
           (this.agentLogger as any).logBackends = this.logBackends;
@@ -585,14 +583,6 @@ export default class DeviceAgent {
     // Remove any existing listener to prevent duplicates on re-initialization
     this.stateReconciler.removeListener("target-state-changed", this.targetStateChangeHandler);
     this.stateReconciler.on("target-state-changed", this.targetStateChangeHandler);
-    
-    // Listen for config changes to update log sampling rates
-    this.stateReconciler.on("reconciliation-complete", async () => {
-      const currentState = await this.stateReconciler.getCurrentState();
-      if (currentState.config?.logging?.samplingRates && this.cloudLogBackend) {
-        this.cloudLogBackend.updateSamplingRates(currentState.config.logging.samplingRates);
-      }
-    });
 
     // Initialize cache with current target state
     this.updateCachedTargetState();

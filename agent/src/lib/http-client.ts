@@ -74,7 +74,7 @@ export class FetchHttpClient implements HttpClient {
 			headers: options?.headers,
 			signal: options?.timeout ? AbortSignal.timeout(options.timeout) : undefined,
 			// @ts-ignore - Node.js fetch supports agent option
-			...(this.isHttps(url) && this.getHttpsAgent(url)),
+			...(this.isHttps(url) && this.getHttpsAgent()),
 		});
 		
 		return {
@@ -111,7 +111,7 @@ export class FetchHttpClient implements HttpClient {
 			body: typeof finalBody === 'string' ? finalBody : JSON.stringify(finalBody),
 			signal: options?.timeout ? AbortSignal.timeout(options.timeout) : undefined,
 			// @ts-ignore - Node.js fetch supports agent option
-			...(this.isHttps(url) && this.getHttpsAgent(url)),
+			...(this.isHttps(url) && this.getHttpsAgent()),
 		});
 		
 		return {
@@ -148,7 +148,7 @@ export class FetchHttpClient implements HttpClient {
 			body: finalBody,
 			signal: options?.timeout ? AbortSignal.timeout(options.timeout) : undefined,
 			// @ts-ignore - Node.js fetch supports agent option
-			...(this.isHttps(url) && this.getHttpsAgent(url)),
+			...(this.isHttps(url) && this.getHttpsAgent()),
 		});
 		
 		return {
@@ -166,21 +166,9 @@ export class FetchHttpClient implements HttpClient {
 		return url.startsWith('https://');
 	}
 
-	private getHttpsAgent(url: string) {
-		if (!this.isHttps(url)) return {};
+	private getHttpsAgent() {
 		
 		const https = require('https');
-		
-		// Debug: Log certificate details
-		if (this.caCert) {
-			console.log('[HttpClient] Using CA certificate:', {
-				length: this.caCert.length,
-				preview: this.caCert.substring(0, 100),
-				hasBegin: this.caCert.includes('BEGIN CERTIFICATE'),
-				hasNewlines: this.caCert.includes('\n'),
-			});
-		}
-		
 		const agent = new https.Agent({
 			ca: this.caCert,
 			rejectUnauthorized: this.rejectUnauthorized,

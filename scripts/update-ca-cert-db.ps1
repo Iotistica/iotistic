@@ -13,43 +13,54 @@ $caCertContent = Get-Content -Path "certs/ca.crt" -Raw
 # Escape for JSON/SQL (replace newlines with \r\n)
 $caCertEscaped = $caCertContent -replace "`r`n", "\r\n" -replace "`n", "\n"
 
-# Update mqtt.brokers.1 (contains caCert in JSON)
-Write-Host "🔄 Updating mqtt.brokers.1..." -ForegroundColor Yellow
-$mqttBrokerSql = @"
+# Update MQTT broker config
+Write-Host "🔄 Updating MQTT broker CA certificate..." -ForegroundColor Yellow
+$mqttSql = @"
 UPDATE system_config
 SET value = jsonb_set(
-  COALESCE(value, '{}'::jsonb),
+  value,
   '{caCert}',
   to_jsonb('$caCertEscaped'::text)
-),
-updated_at = CURRENT_TIMESTAMP
+)
 WHERE key = 'mqtt.brokers.1';
 "@
 
-docker exec -i iotistic-postgres psql -U postgres -d iotistic -c $mqttBrokerSql
+docker exec -i iotistic-postgres psql -U postgres -d iotistic -c $mqttSql
 
-# Update api.tls.caCert (contains caCert in JSON)
-Write-Host "🔄 Updating api.tls.caCert..." -ForegroundColor Yellow
-$apiTlsCaCertSql = @"
-UPDATE system_config
+# Add/update API TLS config
+Write-Host "🔄 Updating API TLS CA certificate..." -ForegroundColor Yellow
+$apiSql = @"
+INSERT INTO system_config (key, value, updated_at)
+VALUES (
+  'api.tls.caCert',
+  jsonb_build_object(
+    'enabled', true,
+    'caCert', '$caCertEscaped'::text
+  ),
+  CURRENT_TIMESTAMP
+)
+ON CONFLICT (key) DO UPDATE
 SET value = jsonb_set(
-  COALESCE(value, '{}'::jsonb),
+  EXCLUDED.value,
   '{caCert}',
   to_jsonb('$caCertEscaped'::text)
 ),
-updated_at = CURRENT_TIMESTAMP
-WHERE key = 'api.tls.caCert';
+updated_at = CURRENT_TIMESTAMP;
 "@
 
-docker exec -i iotistic-postgres psql -U postgres -d iotistic -c $apiTlsCaCertSql
+docker exec -i iotistic-postgres psql -U postgres -d iotistic -c $apiSql
 
 Write-Host ""
 Write-Host "✅ CA certificate updated in database" -ForegroundColor Green
 Write-Host ""
 Write-Host "🔍 Verification:" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "Certificate keys:" -ForegroundColor Yellow
-docker exec -i iotistic-postgres psql -U postgres -d iotistic -c "SELECT key, length(value::text) as value_length FROM system_config WHERE key IN ('mqtt.brokers.1', 'api.tls.caCert') ORDER BY key;"
+Write-Host "MQTT broker config:" -ForegroundColor Yellow
+docker exec -i iotistic-postgres psql -U postgres -d iotistic -c "SELECT key, value->'caCert' IS NOT NULL as has_cert FROM system_config WHERE key = 'mqtt.brokers.1';"
+
+Write-Host ""
+Write-Host "API TLS config:" -ForegroundColor Yellow
+docker exec -i iotistic-postgres psql -U postgres -d iotistic -c "SELECT key, value->'caCert' IS NOT NULL as has_cert FROM system_config WHERE key = 'api.tls.caCert';"
 
 Write-Host ""
 Write-Host "✅ Done! Re-provision devices to receive updated certificate." -ForegroundColor Green

@@ -61,109 +61,7 @@ services:
             retries: 5
         networks:
            - iotistic-net
-    agent-9:
-        container_name: agent-9
-        image: zemfyre-sensor-agent:latest
-        restart: always
-        mem_limit: 512m
-        mem_reservation: 256m
-        volumes:
-        - /var/run/docker.sock:/var/run/docker.sock
-        - agent-9-data:/app/data
-        environment:
-        - DEVICE_API_PORT=48489
-        - CLOUD_API_ENDPOINT=http://api:3002
-        - NODE_ENV=development
-        - REPORT_INTERVAL_MS=20000
-        - METRICS_INTERVAL_MS=30000
-        - LOG_COMPRESSION=true
-        - REQUIRE_PROVISIONING=false
-        - PROVISIONING_API_KEY=83d8898703e03288dd7195d98c8f27cee989760d238a136350b9a7b104cb8273
-        - API_SECURITY_MODE=LOCALHOST_ONLY
-        - MEMORY_CHECK_INTERVAL_MS=30000
-        - MEMORY_THRESHOLD_MB=15
-        - LOG_FILE_PERSISTANCE=true
-        - LOG_MAX_AGE=86400000
-        - MAX_LOG_FILE_SIZE=52428800
-        - MAX_LOGS=10000
-        - SIMULATE_MEMORY_LEAK=false
-        - ANOMALY_DETECTION_ENABLED=true
-        - SIMULATION_MODE=false
-        - SIMULATION_CONFIG={"scenarios":{"anomaly_injection":{"enabled":false},"sensor_data":{"enabled":true,"pattern":"random_walk","publishIntervalMs":15000}}}
-        depends_on:
-            api:
-                condition: service_healthy
-        networks:
-        - iotistic-net
-    agent-10:
-        container_name: agent-10
-        image: zemfyre-sensor-agent:latest
-        restart: always
-        mem_limit: 512m
-        mem_reservation: 256m
-        volumes:
-        - /var/run/docker.sock:/var/run/docker.sock
-        - agent-10-data:/app/data
-        environment:
-        - DEVICE_API_PORT=48490
-        - CLOUD_API_ENDPOINT=http://api:3002
-        - NODE_ENV=development
-        - REPORT_INTERVAL_MS=20000
-        - METRICS_INTERVAL_MS=30000
-        - LOG_COMPRESSION=true
-        - REQUIRE_PROVISIONING=false
-        - PROVISIONING_API_KEY=83d8898703e03288dd7195d98c8f27cee989760d238a136350b9a7b104cb8273
-        - API_SECURITY_MODE=LOCALHOST_ONLY
-        - MEMORY_CHECK_INTERVAL_MS=30000
-        - MEMORY_THRESHOLD_MB=15
-        - LOG_FILE_PERSISTANCE=true
-        - LOG_MAX_AGE=86400000
-        - MAX_LOG_FILE_SIZE=52428800
-        - MAX_LOGS=10000
-        - SIMULATE_MEMORY_LEAK=false
-        - ANOMALY_DETECTION_ENABLED=true
-        - SIMULATION_MODE=false
-        - SIMULATION_CONFIG={"scenarios":{"anomaly_injection":{"enabled":false},"sensor_data":{"enabled":true,"pattern":"random_walk","publishIntervalMs":15000}}}
-        depends_on:
-            api:
-                condition: service_healthy
-        networks:
-        - iotistic-net
 
-    agent-11:
-        container_name: agent-11
-        image: zemfyre-sensor-agent:latest
-        restart: always
-        mem_limit: 512m
-        mem_reservation: 256m
-        volumes:
-        - /var/run/docker.sock:/var/run/docker.sock
-        - agent-11-data:/app/data
-        environment:
-        - DEVICE_API_PORT=48491
-        - CLOUD_API_ENDPOINT=http://api:4002
-        - NODE_ENV=development
-        - REPORT_INTERVAL_MS=20000
-        - METRICS_INTERVAL_MS=30000
-        - LOG_COMPRESSION=true
-        - REQUIRE_PROVISIONING=false
-        - PROVISIONING_API_KEY=9a04b5526335af1697025f896a952d115e4d2d26525aa250a1605ea12d1f2696
-        - API_SECURITY_MODE=LOCALHOST_ONLY
-        - MEMORY_CHECK_INTERVAL_MS=30000
-        - MEMORY_THRESHOLD_MB=15
-        - LOG_FILE_PERSISTANCE=true
-        - LOG_MAX_AGE=86400000
-        - MAX_LOG_FILE_SIZE=52428800
-        - MAX_LOGS=10000
-        - SIMULATE_MEMORY_LEAK=false
-        - ANOMALY_DETECTION_ENABLED=true
-        - SIMULATION_MODE=false
-        - SIMULATION_CONFIG={"scenarios":{"anomaly_injection":{"enabled":false},"sensor_data":{"enabled":true,"pattern":"random_walk","publishIntervalMs":15000}}}
-        depends_on:
-            api:
-                condition: service_healthy
-        networks:
-        - iotistic-net
     api:
         build:
             context: ./api
@@ -180,10 +78,6 @@ services:
         environment:
             - PORT=${PORT:-3002}
             - NODE_ENV=${NODE_ENV:-development}
-            - HTTPS_ENABLED=true
-            - HTTPS_PORT=3443
-            - HTTPS_CERT_PATH=/app/certs/server.crt
-            - HTTPS_KEY_PATH=/app/certs/server.key
             - DB_HOST=${DB_HOST:-postgres}
             - DB_PORT=${DB_PORT:-5432}
             - DB_NAME=${DB_NAME:-iotistic}
@@ -211,9 +105,6 @@ services:
             - VPN_SERVER_PORT=51820
         ports:
             - "${API_PORT_EXT:-4002}:3002"
-            - "3443:3443"
-        volumes:
-            - ./certs:/app/certs:ro
         healthcheck:
             test: ["CMD", "curl", "-f", "http://localhost:3002/health"]
             interval: 10s
@@ -510,11 +401,7 @@ services:
 
 volumes:
   wg-data:
-  agent-9-data:
-    driver: local
-  agent-10-data:
-    driver: local
-  agent-11-data:
+  agent-1-data:
     driver: local
   iotistic-pg-data:
     driver: local

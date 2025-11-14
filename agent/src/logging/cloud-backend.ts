@@ -477,36 +477,6 @@ export class CloudLogBackend implements LogBackend {
 	}
 	
 	/**
-	 * Update sampling rates dynamically (from cloud config)
-	 */
-	public updateSamplingRates(rates: Partial<Record<'error' | 'warn' | 'info' | 'debug', number>>): void {
-		const oldRates = { ...this.samplingRates };
-		
-		// Update rates
-		if (rates.error !== undefined) this.samplingRates.error = Math.max(0, Math.min(1, rates.error));
-		if (rates.warn !== undefined) this.samplingRates.warn = Math.max(0, Math.min(1, rates.warn));
-		if (rates.info !== undefined) this.samplingRates.info = Math.max(0, Math.min(1, rates.info));
-		if (rates.debug !== undefined) this.samplingRates.debug = Math.max(0, Math.min(1, rates.debug));
-		
-		// Log the change
-		this.logger?.infoSync('Log sampling rates updated', {
-			component: LogComponents.logs,
-			old: {
-				error: `${(oldRates.error * 100).toFixed(0)}%`,
-				warn: `${(oldRates.warn * 100).toFixed(0)}%`,
-				info: `${(oldRates.info * 100).toFixed(0)}%`,
-				debug: `${(oldRates.debug * 100).toFixed(1)}%`
-			},
-			new: {
-				error: `${(this.samplingRates.error * 100).toFixed(0)}%`,
-				warn: `${(this.samplingRates.warn * 100).toFixed(0)}%`,
-				info: `${(this.samplingRates.info * 100).toFixed(0)}%`,
-				debug: `${(this.samplingRates.debug * 100).toFixed(1)}%`
-			}
-		});
-	}
-	
-	/**
 	 * Detect log level from message content
 	 * Uses regex patterns similar to dashboard display logic
 	 */

@@ -183,7 +183,10 @@ export class CloudSync extends EventEmitter {
 		this.mqttManager = mqttManager;
 		this.anomalyService = anomalyService;
 		
-		// Set defaults FIRST (needed by createHttpClient)
+		// Initialize HTTP client with TLS support
+		this.httpClient = httpClient || this.createHttpClient();
+		
+		// Set defaults
 		this.config = {
 			cloudApiEndpoint: config.cloudApiEndpoint,
 			pollInterval: config.pollInterval || 60000, // 60s
@@ -191,9 +194,6 @@ export class CloudSync extends EventEmitter {
 			metricsInterval: config.metricsInterval || 300000, // 5min
 			apiTimeout: config.apiTimeout || 30000, // 30s
 		};
-		
-		// Initialize HTTP client with TLS support (after config is set)
-		this.httpClient = httpClient || this.createHttpClient();
 		
 		// Initialize connection monitor (with logger)
 		this.connectionMonitor = new ConnectionMonitor(logger);
@@ -1091,7 +1091,12 @@ export class CloudSync extends EventEmitter {
 			throw new Error(`${protocol.toUpperCase()} ${response.status}: ${response.statusText}`);
 		}
 		
-	
+		this.logger?.debugSync(`State report sent via ${protocol.toUpperCase()}`, {
+			component: LogComponents.cloudSync,
+			operation: 'http-success',
+			bytes: compressedSize,
+			transport: protocol
+		});
 	}
 	
 	/**

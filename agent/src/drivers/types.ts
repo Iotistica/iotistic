@@ -291,14 +291,6 @@ export interface ProtocolAdapterDevice {
 export interface DeviceConfig {
 	sensors?: ProtocolAdapterDevice[];
 	features?: Record<string, any>;
-	logging?: {
-		samplingRates?: {
-			error?: number;   // 0.0-1.0 (default: 1.0 = 100%)
-			warn?: number;    // 0.0-1.0 (default: 1.0 = 100%)
-			info?: number;    // 0.0-1.0 (default: 0.1 = 10%)
-			debug?: number;   // 0.0-1.0 (default: 0.01 = 1%)
-		};
-	};
 	[key: string]: any;
 }
 

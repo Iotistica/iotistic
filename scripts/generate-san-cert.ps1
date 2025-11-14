@@ -13,7 +13,7 @@ if (Test-Path "certs/ca.crt") {
     Write-Host "✅ Using existing CA certificate" -ForegroundColor Green
 } else {
     Write-Host "📝 Generating CA certificate..." -ForegroundColor Yellow
-    docker run --rm -v "${PWD}/certs:/certs" alpine/openssl req -new -x509 -days 365 -nodes -extensions v3_ca `
+    docker run --rm -v "${PWD}/certs:/certs" alpine/openssl req -new -x509 -days 365 -extensions v3_ca `
         -keyout /certs/ca.key -out /certs/ca.crt `
         -subj "/CN=Iotistic CA"
     Write-Host "✅ CA certificate created" -ForegroundColor Green
