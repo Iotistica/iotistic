@@ -349,8 +349,8 @@ services:
             dockerfile: Dockerfile
         container_name: iotistic-mqtt-monitor
         restart: unless-stopped
-        expose:
-            - "3500"  # Internal only, accessed via API gateway
+        ports:
+            - "${MQTT_MONITOR_PORT_EXT:-3500}:3500"  # Exposed for testing
         environment:
             - NODE_ENV=${NODE_ENV:-development}
             - PORT=3500

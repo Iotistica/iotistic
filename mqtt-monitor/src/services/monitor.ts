@@ -749,10 +749,31 @@ export class MQTTMonitorService extends EventEmitter {
    * Get connection status
    */
   getStatus(): { connected: boolean; topicCount: number; messageCount: number } {
+    // Count actual topics and messages by traversing the tree
+    let topicCount = 0;
+    let messageCount = 0;
+
+    const traverse = (node: any) => {
+      Object.keys(node).forEach(key => {
+        if (key.startsWith('_')) return; // Skip metadata
+        
+        const child = node[key];
+        if (child._message !== undefined) {
+          topicCount++;
+          messageCount += child._messagesCounter || 0;
+        }
+        
+        // Recurse into children
+        traverse(child);
+      });
+    };
+
+    traverse(this.topicTree);
+
     return {
       connected: this.connected,
-      topicCount: this.topicTree._topicsCounter,
-      messageCount: this.topicTree._messagesCounter
+      topicCount,
+      messageCount
     };
   }
 
