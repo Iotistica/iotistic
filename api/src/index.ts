@@ -5,6 +5,7 @@
 import express from 'express';
 import cors from 'cors';
 import https from 'https';
+import { createProxyMiddleware } from 'http-proxy-middleware';
 import logger from './utils/logger';
 
 // Import route modules
@@ -24,7 +25,6 @@ import scheduledJobsRoutes from './routes/scheduled-jobs';
 import rotationRoutes from './routes/rotation';
 import digitalTwinRoutes from './routes/digital-twin';
 import digitalTwinGraphRoutes from './routes/digital-twin-graph';
-import mqttMonitorRoutes from './routes/mqtt-monitor';
 import eventsRoutes from './routes/events';
 import mqttBrokerRoutes from './routes/mqtt-broker';
 import sensorsRoutes from './routes/sensors';
@@ -47,9 +47,6 @@ import { jobScheduler } from './services/job-scheduler';
 import poolWrapper from './db/connection';
 import { initializeMqtt, shutdownMqtt } from './mqtt';
 import { initializeSchedulers, shutdownSchedulers } from './services/rotation-scheduler';
-import { setMonitorInstance } from './routes/mqtt-monitor';
-import { MQTTMonitorService } from './services/mqtt-monitor';
-import { MQTTDatabaseService } from './services/mqtt-database-service';
 import { LicenseValidator } from './services/license-validator';
 import licenseRoutes from './routes/license';
 import billingRoutes from './routes/billing';
@@ -59,7 +56,6 @@ import { createHttpsServer } from './https-server';
 // API Version Configuration - Change here to update all routesggg
 const API_VERSION = process.env.API_VERSION || 'v1';
 const API_BASE = `/api/${API_VERSION}`;
-const MQTT_MONITOR_ENABLED = process.env.MQTT_MONITOR_ENABLED === 'true';
 
 const app = express();
 const PORT = process.env.PORT || 3002;
@@ -160,7 +156,47 @@ app.use(API_BASE, scheduledJobsRoutes);
 app.use(API_BASE, rotationRoutes);
 app.use(API_BASE, digitalTwinRoutes);
 app.use(`${API_BASE}/digital-twin/graph`, digitalTwinGraphRoutes);
-app.use(`${API_BASE}/mqtt-monitor`, mqttMonitorRoutes);
+
+// API Gateway Proxy: Route mqtt-monitor requests to mqtt-monitor service
+app.use(`${API_BASE}/mqtt-monitor`, createProxyMiddleware({
+  target: 'http://mqtt-monitor:3500',
+  changeOrigin: true,
+  pathRewrite: {
+    [`^${API_BASE}/mqtt-monitor`]: '/api/v1'
+  },
+  on: {
+    error: (err, req, res) => {
+      logger.error('MQTT Monitor proxy error', { error: err.message });
+      if ('headersSent' in res && res.headersSent) return;
+      if ('writeHead' in res) {
+        res.writeHead(502, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: 'MQTT Monitor service unavailable' }));
+      }
+    }
+  },
+  logger: logger
+}));
+
+// API Gateway Proxy: Route postoffice (email) requests to postoffice service
+app.use(`${API_BASE}/postoffice`, createProxyMiddleware({
+  target: 'http://postoffice:3300',
+  changeOrigin: true,
+  pathRewrite: {
+    [`^${API_BASE}/postoffice`]: '/api/v1'
+  },
+  on: {
+    error: (err, req, res) => {
+      logger.error('Postoffice proxy error', { error: err.message });
+      if ('headersSent' in res && res.headersSent) return;
+      if ('writeHead' in res) {
+        res.writeHead(502, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: 'Postoffice service unavailable' }));
+      }
+    }
+  },
+  logger: logger
+}));
+
 app.use(API_BASE, eventsRoutes);
 app.use(`${API_BASE}/mqtt`, mqttBrokerRoutes);
 app.use(API_BASE, sensorsRoutes);
@@ -204,9 +240,6 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
 // Start server
 async function startServer() {
   logger.info('Initializing Iotistic Unified API...');
-
-  // MQTT Monitor instance (needs to be accessible in shutdown handlers)
-  let mqttMonitor: MQTTMonitorService | null = null;
 
   // Initialize PostgreSQL database
   try {
@@ -364,20 +397,6 @@ async function startServer() {
     // Don't exit - this is not critical for API operation
   }
 
-  // MQTT broker monitor
-  if (MQTT_MONITOR_ENABLED) {
-    const mqttMonitorBundle = await MQTTMonitorService.initialize(poolWrapper.pool);
-
-    if (mqttMonitorBundle.instance) {
-      setMonitorInstance(mqttMonitorBundle.instance, mqttMonitorBundle.dbService);
-      websocketManager.setMqttMonitor(mqttMonitorBundle.instance);
-      logger.info('MQTT Monitor started');
-    }
-  } else {
-    logger.info('MQTT Monitor disabled via MQTT_MONITOR_ENABLED=false');
-  }
-
-
   const server = app.listen(PORT, () => {
     logger.info('='.repeat(80));
     logger.info('☁️  Iotistic Unified API Server');
@@ -454,16 +473,6 @@ async function startServer() {
     try {
       const { redisClient } = await import('./redis/client');
       await redisClient.disconnect();
-    } catch (error) {
-      // Ignore errors during shutdown
-    }
-    
-    // Shutdown MQTT Monitor
-    try {
-      if (mqttMonitor) {
-        await mqttMonitor.stop();
-        logger.info('MQTT Monitor stopped');
-      }
     } catch (error) {
       // Ignore errors during shutdown
     }
@@ -567,16 +576,6 @@ async function startServer() {
     try {
       const { redisClient } = await import('./redis/client');
       await redisClient.disconnect();
-    } catch (error) {
-      // Ignore errors during shutdown
-    }
-    
-    // Shutdown MQTT Monitor
-    try {
-      if (mqttMonitor) {
-        await mqttMonitor.stop();
-        logger.info('MQTT Monitor stopped');
-      }
     } catch (error) {
       // Ignore errors during shutdown
     }

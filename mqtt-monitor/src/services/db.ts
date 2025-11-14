@@ -3,7 +3,7 @@
  * Handles persistent storage of MQTT topics, schemas, and statistics
  */
 
-import { Pool, PoolClient } from 'pg';
+import { Pool } from 'pg';
 import crypto from 'crypto';
 
 export interface MQTTTopicRecord {

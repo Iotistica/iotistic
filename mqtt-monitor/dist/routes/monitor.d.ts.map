@@ -1,0 +1,1 @@
+{"version":3,"file":"monitor.d.ts","sourceRoot":"","sources":["../../src/routes/monitor.ts"],"names":[],"mappings":"AACA,OAAO,EAAE,kBAAkB,EAAE,MAAM,0BAA0B,CAAC;AAC9D,OAAO,EAAE,mBAAmB,EAAE,MAAM,mCAAmC,CAAC;AAGxE,QAAA,MAAM,MAAM,4CAAW,CAAC;AAKxB,wBAAgB,kBAAkB,CAAC,eAAe,EAAE,kBAAkB,GAAG,IAAI,EAAE,SAAS,GAAE,mBAAmB,GAAG,IAAW,QAI1H;AA8hBD,eAAe,MAAM,CAAC"}

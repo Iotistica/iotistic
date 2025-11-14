@@ -15,7 +15,8 @@
 import mqtt, { MqttClient } from 'mqtt';
 import { EventEmitter } from 'events';
 import isUtf8 from 'is-utf8';
-import { MQTTDatabaseService } from './mqtt-database-service';
+import { MQTTDatabaseService } from './db';
+import logger from '../utils/logger';
 
 // Update interval for metrics (milliseconds)
 const METRICS_UPDATE_INTERVAL = parseInt(process.env.MQTT_METRICS_UPDATE_INTERVAL || '5000');
@@ -184,8 +185,8 @@ class SchemaGenerator {
           } else {
             const keys = Object.keys(elementSchema.properties || {});
             keys.forEach(key => {
-              if (!itemsSchema.properties[key]) {
-                itemsSchema.properties[key] = elementSchema.properties[key];
+              if (!itemsSchema.properties![key]) {
+                itemsSchema.properties![key] = elementSchema.properties![key];
               }
             });
           }
@@ -343,20 +344,20 @@ export class MQTTMonitorService extends EventEmitter {
       );
 
       monitor.on('connected', () => {
-        console.log(`✅ MQTT Monitor connected to broker at ${brokerUrl}`);
+        logger.info(`MQTT Monitor connected to broker at ${brokerUrl}`);
       });
 
       monitor.on('error', (error) => {
-        console.error('⚠️  MQTT Monitor error:', error);
+        logger.error('MQTT Monitor error', { error: error.message });
       });
 
       await monitor.start();
-      console.log('✅ MQTT Monitor Service started');
+      logger.info('MQTT Monitor Service started');
 
       return { instance: monitor, dbService };
     } catch (err: any) {
-        console.error('⚠️  Failed to start MQTT Monitor:', err);
-        console.log('Retrying initialization every 15s...');
+        logger.error('Failed to start MQTT Monitor', { error: err.message || err });
+        logger.info('Retrying initialization every 15s...');
         this.retryInitialization(dbPool);
         return { instance: null as any, dbService };
     }
@@ -367,11 +368,11 @@ export class MQTTMonitorService extends EventEmitter {
     try {
       const { instance } = await this.initialize(dbPool);
       if (instance) {
-        console.log('✅ MQTT reconnected successfully');
+        logger.info('MQTT reconnected successfully');
         clearInterval(timer); // clear the correct interval
       }
     } catch (err: any) {
-      console.warn(`⏳ MQTT still unavailable (${err?.message || err})`);
+      logger.warn(`MQTT still unavailable (${err?.message || err})`);
     }
   }, intervalMs);
 }
@@ -410,13 +411,13 @@ export class MQTTMonitorService extends EventEmitter {
       reconnectPeriod: 5000
     };
 
-    console.log(`[MQTT Monitor] Connecting to ${this.options.brokerUrl}...`);
+    logger.info(`Connecting to ${this.options.brokerUrl}...`);
 
     this.client = mqtt.connect(this.options.brokerUrl, mqttOptions);
 
     this.client.on('connect', () => {
       this.connected = true;
-      console.log(`[MQTT Monitor] Connected to ${this.options.brokerUrl}`);
+      logger.info(`Connected to ${this.options.brokerUrl}`);
       this.emit('connected');
 
       // Reset per-session counters
@@ -426,9 +427,9 @@ export class MQTTMonitorService extends EventEmitter {
       if (this.options.topicTreeEnabled) {
         this.client!.subscribe('#', (err) => {
           if (err) {
-            console.error('[MQTT Monitor] Failed to subscribe to all topics:', err);
+            logger.error('Failed to subscribe to all topics', { error: err.message });
           } else {
-            console.log('[MQTT Monitor] Subscribed to all topics (#)');
+            logger.info('Subscribed to all topics (#)');
           }
         });
       }
@@ -437,9 +438,9 @@ export class MQTTMonitorService extends EventEmitter {
       if (this.options.metricsEnabled) {
         this.client!.subscribe('$SYS/#', (err) => {
           if (err) {
-            console.error('[MQTT Monitor] Failed to subscribe to $SYS topics:', err);
+            logger.error('Failed to subscribe to $SYS topics', { error: err.message });
           } else {
-            console.log('[MQTT Monitor] Subscribed to $SYS topics');
+            logger.info('Subscribed to $SYS topics');
           }
         });
       }
@@ -449,12 +450,12 @@ export class MQTTMonitorService extends EventEmitter {
     });
 
     this.client.on('error', (error) => {
-      console.error('[MQTT Monitor] Error:', error);
+      logger.error('MQTT error', { error: error.message });
       this.emit('error', error);
     });
 
     this.client.on('close', () => {
-      console.log('[MQTT Monitor] Connection closed');
+      logger.info('Connection closed');
       this.connected = false;
     });
 
@@ -534,7 +535,7 @@ export class MQTTMonitorService extends EventEmitter {
       // safety: reset if approaching 32-bit signed int overflow
       if (typeof current[part]._messagesCounter === 'number' &&
           current[part]._messagesCounter >= 2147483640) {
-        console.warn(`[MQTT Monitor] Overflow threshold reached for ${topicPath}. Resetting counter.`);
+        logger.warn(`Overflow threshold reached for ${topicPath}. Resetting counter.`);
         current[part]._messagesCounter = 0;
       }
 
@@ -543,7 +544,7 @@ export class MQTTMonitorService extends EventEmitter {
 
       // debug: warn if number is absurdly large
       if (current[part]._messagesCounter > 1_000_000) {
-        console.warn(`[MQTT Monitor] High message count for ${topicPath}:`, current[part]._messagesCounter);
+        logger.warn(`High message count for ${topicPath}`, { count: current[part]._messagesCounter });
       }
     }
 
@@ -698,7 +699,7 @@ export class MQTTMonitorService extends EventEmitter {
 
     // Sync to database before stopping
     if (this.options.persistToDatabase && this.dbService) {
-      console.log('[MQTT Monitor] Syncing to database before stop...');
+      logger.info('Syncing to database before stop...');
       await this.syncToDatabase();
     }
 
@@ -720,7 +721,7 @@ export class MQTTMonitorService extends EventEmitter {
     }
 
     this.connected = false;
-    console.log('[MQTT Monitor] Stopped');
+    logger.info('Stopped');
   }
 
   /**
@@ -844,17 +845,17 @@ export class MQTTMonitorService extends EventEmitter {
     if (!this.dbService) return;
 
     try {
-      console.log('[MQTT Monitor] Loading state from database...');
+      logger.info('Loading state from database...');
       const { topics, stats } = await this.dbService.loadInitialState();
 
-      console.log(`[MQTT Monitor] Loaded ${topics.length} topics from database`);
+      logger.info(`Loaded ${topics.length} topics from database`);
 
       // Restore topic tree from database
       for (const topic of topics) {
         const parts = topic.topic.split('/');
         let current: any = this.topicTree;
 
-        parts.forEach((part, index) => {
+        parts.forEach((part: string, index: number) => {
           if (!current[part]) {
             current[part] = {
               _name: part,
@@ -891,9 +892,9 @@ export class MQTTMonitorService extends EventEmitter {
         };
       }
 
-      console.log('[MQTT Monitor] State loaded from database');
+      logger.info('State loaded from database');
     } catch (error) {
-      console.error('[MQTT Monitor] Failed to load state from database:', error);
+      logger.error('Failed to load state from database', { error });
     }
   }
 
@@ -909,7 +910,7 @@ export class MQTTMonitorService extends EventEmitter {
     });
   };
   traverse(this.topicTree);
-  console.log('[MQTT Monitor] Session counters reset');
+  logger.info('Session counters reset');
 }
 
 
@@ -925,7 +926,7 @@ export class MQTTMonitorService extends EventEmitter {
       this.syncToDatabase();
     }, this.options.dbSyncInterval || 30000);
 
-    console.log(`[MQTT Monitor] Database sync started (interval: ${this.options.dbSyncInterval}ms)`);
+    console.log(`Database sync started (interval: ${this.options.dbSyncInterval}ms)`);
   }
 
   /**
@@ -965,7 +966,7 @@ export class MQTTMonitorService extends EventEmitter {
               topic,
               current._schema,
               current._message
-            ).catch((err: any) => console.error('Failed to save schema history:', err));
+            ).catch((err: any) => logger.error('Failed to save schema history', { error: err.message }));
           }
         }
       }
@@ -973,7 +974,7 @@ export class MQTTMonitorService extends EventEmitter {
       // Batch upsert topics
       if (topicRecords.length > 0) {
         await this.dbService.batchUpsertTopics(topicRecords);
-        console.log(`[MQTT Monitor] Synced ${topicRecords.length} topics to database`);
+        logger.info(`Synced ${topicRecords.length} topics to database`);
       }
 
       // Save broker stats
@@ -998,13 +999,13 @@ export class MQTTMonitorService extends EventEmitter {
           bytesReceived: record.lastMessage ? Buffer.byteLength(record.lastMessage) : 0,
           messageRate: 0, // Will be calculated from historical data
           avgMessageSize: record.lastMessage ? Buffer.byteLength(record.lastMessage) : undefined
-        }).catch((err: any) => console.error('Failed to save topic metrics:', err));
+        }).catch((err: any) => logger.error('Failed to save topic metrics', { error: err.message }));
       }
 
       // Clear pending updates
       this.pendingTopicUpdates.clear();
     } catch (error) {
-      console.error('[MQTT Monitor] Failed to sync to database:', error);
+      logger.error('Failed to sync to database', { error });
     }
   }
 
@@ -1013,7 +1014,7 @@ export class MQTTMonitorService extends EventEmitter {
    */
   async flushToDatabase(): Promise<void> {
     if (!this.options.persistToDatabase || !this.dbService) {
-      console.warn('[MQTT Monitor] Database persistence not enabled');
+      logger.warn('Database persistence not enabled');
       return;
     }
 

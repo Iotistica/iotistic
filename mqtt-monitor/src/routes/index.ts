@@ -1,30 +1,19 @@
-/**
- * MQTT Monitoring Dashboard API Routes
- * Provides topic tree, metrics, and real-time broker statistics
- */
-
 import { Router, Request, Response } from 'express';
-import { MQTTMonitorService } from '../services/mqtt-monitor';
-import { MQTTDatabaseService } from '../services/mqtt-database-service';
+import { MQTTMonitorService } from '../services/monitor';
+import { MQTTDatabaseService } from '../services/db';
+import { logger } from '../utils/logger';
 
 const router = Router();
 
-// Monitor instance will be injected from index.ts
 let monitor: MQTTMonitorService | null = null;
 let mqttDbService: MQTTDatabaseService | null = null;
 
-/**
- * Set the monitor instance (called from index.ts during initialization)
- */
 export function setMonitorInstance(monitorInstance: MQTTMonitorService | null, dbService: MQTTDatabaseService | null = null) {
   monitor = monitorInstance;
   mqttDbService = dbService;
+  logger.info('Monitor instance injected into routes');
 }
 
-/**
- * GET /api/v1/mqtt-monitor/status
- * Get monitor connection status
- */
 router.get('/status', (req: Request, res: Response) => {
   try {
     if (!monitor) {
@@ -43,6 +32,7 @@ router.get('/status', (req: Request, res: Response) => {
       data: status
     });
   } catch (error: any) {
+    logger.error('Error getting status', { error: error.message });
     res.status(500).json({ 
       success: false,
       error: error.message 
@@ -50,26 +40,24 @@ router.get('/status', (req: Request, res: Response) => {
   }
 });
 
-/**
- * POST /api/v1/mqtt-monitor/start
- * Start the MQTT monitor
- */
 router.post('/start', async (req: Request, res: Response) => {
   try {
     if (!monitor) {
       return res.status(400).json({
         success: false,
-        error: 'Monitor not initialized. Service should be started via index.ts'
+        error: 'Monitor not initialized'
       });
     }
     
     await monitor.start();
+    logger.info('MQTT monitor started via API');
     
     res.json({
       success: true,
       message: 'MQTT monitor started'
     });
   } catch (error: any) {
+    logger.error('Error starting monitor', { error: error.message });
     res.status(500).json({ 
       success: false,
       error: error.message 
@@ -77,10 +65,6 @@ router.post('/start', async (req: Request, res: Response) => {
   }
 });
 
-/**
- * POST /api/v1/mqtt-monitor/stop
- * Stop the MQTT monitor
- */
 router.post('/stop', async (req: Request, res: Response) => {
   try {
     if (!monitor) {
@@ -91,13 +75,14 @@ router.post('/stop', async (req: Request, res: Response) => {
     }
 
     await monitor.stop();
-    monitor = null;
+    logger.info('MQTT monitor stopped via API');
 
     res.json({
       success: true,
       message: 'MQTT monitor stopped'
     });
   } catch (error: any) {
+    logger.error('Error stopping monitor', { error: error.message });
     res.status(500).json({ 
       success: false,
       error: error.message 
@@ -105,10 +90,6 @@ router.post('/stop', async (req: Request, res: Response) => {
   }
 });
 
-/**
- * GET /api/v1/mqtt-monitor/topic-tree
- * Get complete hierarchical topic tree
- */
 router.get('/topic-tree', (req: Request, res: Response) => {
   try {
     if (!monitor) {
@@ -125,6 +106,7 @@ router.get('/topic-tree', (req: Request, res: Response) => {
       data: topicTree
     });
   } catch (error: any) {
+    logger.error('Error getting topic tree', { error: error.message });
     res.status(500).json({ 
       success: false,
       error: error.message 
@@ -132,14 +114,6 @@ router.get('/topic-tree', (req: Request, res: Response) => {
   }
 });
 
-/**
- * GET /api/v1/mqtt-monitor/topics
- * Get flattened list of topics with message counts and schemas
- * 
- * Query parameters:
- * - timeWindow: Filter topics by time window (1h, 6h, 24h, 7d, 30d, all)
- * - minutes: Alternative time filter in minutes (e.g., 60 for last hour)
- */
 router.get('/topics', (req: Request, res: Response) => {
   try {
     if (!monitor) {
@@ -149,7 +123,6 @@ router.get('/topics', (req: Request, res: Response) => {
       });
     }
 
-    // Parse time window parameters
     const timeWindow = req.query.timeWindow as string;
     const minutesParam = req.query.minutes as string;
     
@@ -195,6 +168,7 @@ router.get('/topics', (req: Request, res: Response) => {
       filteredFrom: filterTimestamp ? new Date(filterTimestamp).toISOString() : null
     });
   } catch (error: any) {
+    logger.error('Error getting topics', { error: error.message });
     res.status(500).json({ 
       success: false,
       error: error.message 
@@ -202,10 +176,6 @@ router.get('/topics', (req: Request, res: Response) => {
   }
 });
 
-/**
- * GET /api/v1/mqtt-monitor/topics/:topic/schema
- * Get schema for a specific topic
- */
 router.get('/topics/:topic(*)/schema', (req: Request, res: Response) => {
   try {
     if (!monitor) {
@@ -233,6 +203,7 @@ router.get('/topics/:topic(*)/schema', (req: Request, res: Response) => {
       }
     });
   } catch (error: any) {
+    logger.error('Error getting topic schema', { error: error.message, topic: req.params.topic });
     res.status(500).json({ 
       success: false,
       error: error.message 
@@ -240,10 +211,6 @@ router.get('/topics/:topic(*)/schema', (req: Request, res: Response) => {
   }
 });
 
-/**
- * GET /api/v1/mqtt-monitor/metrics
- * Get real-time broker metrics (message rates, throughput, clients)
- */
 router.get('/metrics', (req: Request, res: Response) => {
   try {
     if (!monitor) {
@@ -271,6 +238,7 @@ router.get('/metrics', (req: Request, res: Response) => {
       }
     });
   } catch (error: any) {
+    logger.error('Error getting metrics', { error: error.message });
     res.status(500).json({ 
       success: false,
       error: error.message 
@@ -278,10 +246,6 @@ router.get('/metrics', (req: Request, res: Response) => {
   }
 });
 
-/**
- * GET /api/v1/mqtt-monitor/system-stats
- * Get raw $SYS topic statistics
- */
 router.get('/system-stats', (req: Request, res: Response) => {
   try {
     if (!monitor) {
@@ -298,6 +262,7 @@ router.get('/system-stats', (req: Request, res: Response) => {
       data: systemStats
     });
   } catch (error: any) {
+    logger.error('Error getting system stats', { error: error.message });
     res.status(500).json({ 
       success: false,
       error: error.message 
@@ -305,11 +270,6 @@ router.get('/system-stats', (req: Request, res: Response) => {
   }
 });
 
-/**
- * GET /api/v1/mqtt-monitor/stats
- * Get comprehensive statistics (combines metrics + system stats)
- * Provides compatibility with legacy mqtt-schema stats endpoint
- */
 router.get('/stats', (req: Request, res: Response) => {
   try {
     if (!monitor) {
@@ -324,7 +284,6 @@ router.get('/stats', (req: Request, res: Response) => {
     const systemStats = monitor.getSystemStats();
     const topics = monitor.getFlattenedTopics();
     
-    // Calculate schema statistics
     const topicsWithSchemas = topics.filter(t => t.schema).length;
     const messageTypeBreakdown = topics.reduce((acc, t) => {
       if (t.messageType) {
@@ -336,43 +295,31 @@ router.get('/stats', (req: Request, res: Response) => {
     res.json({
       success: true,
       stats: {
-        // Connection stats
         connected: status.connected,
         topicCount: status.topicCount,
         messageCount: status.messageCount,
-        
-        // Schema stats
         schemas: {
           total: topicsWithSchemas,
           byType: messageTypeBreakdown
         },
-        
-        // Message rates
         messageRate: {
           published: metrics.messageRate.current.published,
           received: metrics.messageRate.current.received
         },
-        
-        // Throughput
         throughput: {
           inbound: metrics.throughput.current.inbound,
           outbound: metrics.throughput.current.outbound
         },
-        
-        // Client info
         clients: metrics.clients,
         subscriptions: metrics.subscriptions,
         retainedMessages: metrics.retainedMessages,
-        
-        // Totals
         totalMessagesSent: metrics.totalMessagesSent,
         totalMessagesReceived: metrics.totalMessagesReceived,
-        
-        // Broker info (if available)
         broker: systemStats.$SYS?.broker || null
       }
     });
   } catch (error: any) {
+    logger.error('Error getting comprehensive stats', { error: error.message });
     res.status(500).json({ 
       success: false,
       error: error.message 
@@ -380,10 +327,6 @@ router.get('/stats', (req: Request, res: Response) => {
   }
 });
 
-/**
- * GET /api/v1/mqtt-monitor/dashboard
- * Get all dashboard data in one call (topic tree + metrics + schemas)
- */
 router.get('/dashboard', (req: Request, res: Response) => {
   try {
     if (!monitor) {
@@ -398,7 +341,6 @@ router.get('/dashboard', (req: Request, res: Response) => {
     const topics = monitor.getFlattenedTopics();
     const metrics = monitor.getMetrics();
     
-    // Count topics with schemas
     const topicsWithSchemas = topics.filter(t => t.schema).length;
     
     res.json({
@@ -409,7 +351,7 @@ router.get('/dashboard', (req: Request, res: Response) => {
         topics: {
           count: topics.length,
           withSchemas: topicsWithSchemas,
-          list: topics.slice(0, 100) // Limit to first 100 for performance
+          list: topics.slice(0, 100)
         },
         metrics: {
           messageRate: metrics.messageRate,
@@ -426,6 +368,7 @@ router.get('/dashboard', (req: Request, res: Response) => {
       }
     });
   } catch (error: any) {
+    logger.error('Error getting dashboard data', { error: error.message });
     res.status(500).json({ 
       success: false,
       error: error.message 
@@ -433,10 +376,6 @@ router.get('/dashboard', (req: Request, res: Response) => {
   }
 });
 
-/**
- * POST /api/v1/mqtt-monitor/sync
- * Manually trigger database sync
- */
 router.post('/sync', async (req: Request, res: Response) => {
   try {
     if (!monitor) {
@@ -447,12 +386,14 @@ router.post('/sync', async (req: Request, res: Response) => {
     }
 
     await (monitor as any).flushToDatabase();
+    logger.info('Manual database sync triggered');
     
     res.json({
       success: true,
       message: 'Data synced to database'
     });
   } catch (error: any) {
+    logger.error('Error syncing to database', { error: error.message });
     res.status(500).json({ 
       success: false,
       error: error.message 
@@ -460,10 +401,6 @@ router.post('/sync', async (req: Request, res: Response) => {
   }
 });
 
-/**
- * GET /api/v1/mqtt-monitor/database/topics
- * Get topics from database (persisted data)
- */
 router.get('/database/topics', async (req: Request, res: Response) => {
   try {
     if (!mqttDbService) {
@@ -489,6 +426,7 @@ router.get('/database/topics', async (req: Request, res: Response) => {
       data: topics
     });
   } catch (error: any) {
+    logger.error('Error getting database topics', { error: error.message });
     res.status(500).json({ 
       success: false,
       error: error.message 
@@ -496,10 +434,6 @@ router.get('/database/topics', async (req: Request, res: Response) => {
   }
 });
 
-/**
- * GET /api/v1/mqtt-monitor/database/stats/summary
- * Get statistics summary from database
- */
 router.get('/database/stats/summary', async (req: Request, res: Response) => {
   try {
     if (!mqttDbService) {
@@ -516,6 +450,7 @@ router.get('/database/stats/summary', async (req: Request, res: Response) => {
       data: summary
     });
   } catch (error: any) {
+    logger.error('Error getting stats summary', { error: error.message });
     res.status(500).json({ 
       success: false,
       error: error.message 
@@ -523,10 +458,6 @@ router.get('/database/stats/summary', async (req: Request, res: Response) => {
   }
 });
 
-/**
- * GET /api/v1/mqtt-monitor/database/schema-history/:topic
- * Get schema evolution history for a topic
- */
 router.get('/database/schema-history/:topic(*)', async (req: Request, res: Response) => {
   try {
     if (!mqttDbService) {
@@ -546,6 +477,7 @@ router.get('/database/schema-history/:topic(*)', async (req: Request, res: Respo
       data: history
     });
   } catch (error: any) {
+    logger.error('Error getting schema history', { error: error.message, topic: req.params.topic });
     res.status(500).json({ 
       success: false,
       error: error.message 
@@ -553,12 +485,6 @@ router.get('/database/schema-history/:topic(*)', async (req: Request, res: Respo
   }
 });
 
-/**
- * GET /api/v1/mqtt-monitor/recent-activity
- * Get recent message counts for all topics (time-windowed)
- * Query params:
- *   - window: Time window in minutes (default: 15, options: 5, 15, 30, 60)
- */
 router.get('/recent-activity', async (req: Request, res: Response) => {
   try {
     if (!mqttDbService) {
@@ -570,7 +496,6 @@ router.get('/recent-activity', async (req: Request, res: Response) => {
 
     const windowMinutes = req.query.window ? parseInt(req.query.window as string) : 15;
     
-    // Validate window parameter
     if (![5, 15, 30, 60].includes(windowMinutes)) {
       return res.status(400).json({
         success: false,
@@ -587,6 +512,7 @@ router.get('/recent-activity', async (req: Request, res: Response) => {
       data: recentActivity
     });
   } catch (error: any) {
+    logger.error('Error getting recent activity', { error: error.message });
     res.status(500).json({ 
       success: false,
       error: error.message 
@@ -594,12 +520,6 @@ router.get('/recent-activity', async (req: Request, res: Response) => {
   }
 });
 
-/**
- * GET /api/v1/mqtt-monitor/topics/:topic/recent-activity
- * Get recent activity for a specific topic with data points
- * Query params:
- *   - window: Time window in minutes (default: 15)
- */
 router.get('/topics/:topic(*)/recent-activity', async (req: Request, res: Response) => {
   try {
     if (!mqttDbService) {
@@ -626,6 +546,7 @@ router.get('/topics/:topic(*)/recent-activity', async (req: Request, res: Respon
       data: activity
     });
   } catch (error: any) {
+    logger.error('Error getting topic recent activity', { error: error.message, topic: req.params.topic });
     res.status(500).json({ 
       success: false,
       error: error.message 
