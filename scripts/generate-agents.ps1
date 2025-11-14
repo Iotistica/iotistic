@@ -28,8 +28,8 @@
 #>
 
 param(
-    [int]$Count = 10,
-    [int]$StartIndex = 1,
+    [int]$Count = 1,
+    [int]$StartIndex = 25,
     [string]$OutputFile = "docker-compose.agents.yml",
     [string]$ApiUrl = "http://localhost:4002",
     [string]$FleetId = "default-fleet",
@@ -39,7 +39,7 @@ param(
     
     # Agent Configuration
     [string]$NodeEnv = "development",
-    [string]$CLOUD_API_ENDPOINT = "https://api:3443",
+    [string]$CLOUD_API_ENDPOINT = "http://api:3002",
     [int]$ReportInterval = 20000,
     [int]$MetricsInterval = 30000,
     [string]$LogCompression = "true",
@@ -263,6 +263,7 @@ for ($i = $StartIndex; $i -lt ($StartIndex + $Count); $i++) {
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - $volumeName`:/app/data
+      - ./certs/ca.crt:/app/certs/ca.crt:ro
     environment:
       - DEVICE_API_PORT=$port
       - CLOUD_API_ENDPOINT=$CLOUD_API_ENDPOINT

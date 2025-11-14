@@ -1,3 +1,34 @@
+# ---- Dependencies stage ----
+FROM node:20-alpine AS deps
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install production dependencies only and aggressively clean
+RUN npm ci --omit=dev --legacy-peer-deps && \
+    npm cache clean --force && \
+    # Remove entire unnecessary packages
+    rm -rf node_modules/prettier \
+           node_modules/node-opcua-generator \
+           node_modules/node-gyp && \
+    # Remove unnecessary files from node_modules
+    find node_modules -type f -name '*.md' -delete && \
+    find node_modules -type f -name '*.txt' -delete && \
+    find node_modules -type f -name 'LICENSE*' -delete && \
+    find node_modules -type f -name 'CHANGELOG*' -delete && \
+    find node_modules -type d -name 'test' -exec rm -rf {} + 2>/dev/null || true && \
+    find node_modules -type d -name 'tests' -exec rm -rf {} + 2>/dev/null || true && \
+    find node_modules -type d -name 'docs' -exec rm -rf {} + 2>/dev/null || true && \
+    find node_modules -type d -name 'examples' -exec rm -rf {} + 2>/dev/null || true && \
+    find node_modules -type d -name 'coverage' -exec rm -rf {} + 2>/dev/null || true && \
+    find node_modules -type d -name '.github' -exec rm -rf {} + 2>/dev/null || true && \
+    find node_modules -type d -name 'source' -exec rm -rf {} + 2>/dev/null || true && \
+    # Remove source maps and TypeScript source files (keep .d.ts for types)
+    find node_modules -type f -name '*.map' -delete && \
+    find node_modules -type f -name '*.ts' ! -name '*.d.ts' -delete
+
 # ---- Build stage ----
 FROM node:20-alpine AS builder
 
@@ -6,11 +37,14 @@ WORKDIR /app
 # Install build tools for native deps (Alpine uses apk)
 RUN apk add --no-cache make g++ sqlite-dev
 
+# Copy package files
 COPY package*.json tsconfig.json tsconfig.build.json ./
 
 # Install all deps (including dev)
-RUN npm ci --legacy-peer-deps
+RUN npm ci --legacy-peer-deps && \
+    npm cache clean --force
 
+# Copy source code
 COPY src ./src
 COPY cli ./cli
 
@@ -21,60 +55,60 @@ RUN npx tsc --project tsconfig.build.json && npm run copy:migrations
 RUN npx tsc cli/iotctl.ts --outDir dist/cli --module commonjs --target es2020
 
 # ---- Production stage ------
-FROM node:20-alpine AS runtime
+FROM node:20-alpine AS production
 
 WORKDIR /app
 
-# Install runtime dependencies in single layer
+# Install runtime dependencies and tini in single layer
 RUN apk add --no-cache \
     sqlite-libs \
     iptables \
     curl \
     jq \
-    procps
+    procps \
+    tini && \
+    rm -rf /var/cache/apk/*
 
-COPY package*.json package-lock.json ./
+# Create non-root user and group early
+RUN addgroup -S agentgroup && \
+    adduser -S agentuser -G agentgroup && \
+    mkdir -p /app/data/vpn && \
+    chown -R agentuser:agentgroup /app
 
-# Install production deps only, then aggressively clean
-RUN npm ci --omit=dev --legacy-peer-deps \
-    && npm cache clean --force \
-    # Remove entire unnecessary packages
-    && rm -rf node_modules/prettier \
-    && rm -rf node_modules/node-opcua-generator \
-    && rm -rf node_modules/node-gyp \
-    # Remove unnecessary files from node_modules
-    && find node_modules -type f -name '*.md' -delete \
-    && find node_modules -type f -name '*.txt' -delete \
-    && find node_modules -type f -name 'LICENSE*' -delete \
-    && find node_modules -type f -name 'CHANGELOG*' -delete \
-    && find node_modules -type d -name 'test' -exec rm -rf {} + 2>/dev/null || true \
-    && find node_modules -type d -name 'tests' -exec rm -rf {} + 2>/dev/null || true \
-    && find node_modules -type d -name 'docs' -exec rm -rf {} + 2>/dev/null || true \
-    && find node_modules -type d -name 'examples' -exec rm -rf {} + 2>/dev/null || true \
-    && find node_modules -type d -name 'coverage' -exec rm -rf {} + 2>/dev/null || true \
-    && find node_modules -type d -name '.github' -exec rm -rf {} + 2>/dev/null || true \
-    && find node_modules -type d -name 'source' -exec rm -rf {} + 2>/dev/null || true \
-    # Remove source maps and TypeScript source files (keep .d.ts for types)
-    && find node_modules -type f -name '*.map' -delete \
-    && find node_modules -type f -name '*.ts' ! -name '*.d.ts' -delete
+# Copy package files
+COPY --chown=agentuser:agentgroup package*.json ./
 
-# Copy built app
-COPY --from=builder /app/dist ./dist
+# Copy production dependencies from deps stage (already cleaned)
+COPY --from=deps --chown=agentuser:agentgroup /app/node_modules ./node_modules
 
-# Create iotctl symlink for easy CLI access
-RUN ln -s /app/dist/cli/iotctl.js /usr/local/bin/iotctl \
-    && chmod +x /app/dist/cli/iotctl.js
+# Copy built application from builder stage
+COPY --from=builder --chown=agentuser:agentgroup /app/dist ./dist
 
 # Copy update scripts
-COPY bin/update-agent-docker.sh /app/bin/update-agent-docker.sh
-COPY bin/update-agent-systemd.sh /app/bin/update-agent-systemd.sh
-RUN chmod +x /app/bin/update-agent-docker.sh /app/bin/update-agent-systemd.sh
+COPY --chown=agentuser:agentgroup bin/update-agent-docker.sh /app/bin/update-agent-docker.sh
+COPY --chown=agentuser:agentgroup bin/update-agent-systemd.sh /app/bin/update-agent-systemd.sh
+
+# Create iotctl symlink and set permissions
+RUN chmod +x /app/dist/cli/iotctl.js && \
+    chmod +x /app/bin/update-agent-docker.sh && \
+    chmod +x /app/bin/update-agent-systemd.sh && \
+    ln -s /app/dist/cli/iotctl.js /usr/local/bin/iotctl
 
 # Data volume for persistent storage
-RUN mkdir -p /app/data/vpn
 VOLUME ["/app/data"]
 
-EXPOSE 3002
+# Switch to non-root user
+USER agentuser
 
-# Use node directly instead of npm run to avoid npm overhead
+# Expose device API port
+EXPOSE 48484
+
+# Health check for device API
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD curl -f http://localhost:48484/health || exit 1
+
+# Use tini as init process for proper signal handling
+ENTRYPOINT ["/sbin/tini", "--"]
+
+# Start the agent
 CMD ["node", "dist/app.js"]

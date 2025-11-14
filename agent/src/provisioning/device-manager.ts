@@ -151,6 +151,14 @@ export class DeviceManager {
 	private async loadDeviceInfo(): Promise<void> {
 		const record = await this.dbClient.loadDevice();
 		if (record) {
+			// Debug: log record before parsing
+			console.log('[DeviceManager] Record from DB:', JSON.stringify({
+				hasRecord: !!record,
+				hasApiTlsConfig: !!record.apiTlsConfig,
+				apiTlsConfigType: typeof record.apiTlsConfig,
+				apiTlsConfigLength: record.apiTlsConfig?.length
+			}, null, 2));
+
 			this.deviceInfo = {
 				uuid: record.uuid,
 				deviceId: record.deviceId?.toString(),
@@ -172,6 +180,13 @@ export class DeviceManager {
 			mqttBrokerConfig: record.mqttBrokerConfig ? JSON.parse(record.mqttBrokerConfig) : undefined,
 			apiTlsConfig: record.apiTlsConfig ? JSON.parse(record.apiTlsConfig) : undefined,
 		};
+		
+		// Debug: log parsed deviceInfo
+		console.log('[DeviceManager] Parsed deviceInfo:', JSON.stringify({
+			hasDeviceInfo: !!this.deviceInfo,
+			hasApiTlsConfig: !!this.deviceInfo?.apiTlsConfig,
+			apiTlsConfigKeys: this.deviceInfo?.apiTlsConfig ? Object.keys(this.deviceInfo.apiTlsConfig) : []
+		}, null, 2));
 	}
 }	/**
 	 * Save device info to database

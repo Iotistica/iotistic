@@ -211,6 +211,17 @@ export class CloudSync extends EventEmitter {
 	private createHttpClient(): HttpClient {
 		const deviceInfo = this.deviceManager.getDeviceInfo();
 		
+		// Debug: log full device info
+		console.log('[CloudSync] Device info:', JSON.stringify({
+			hasDeviceInfo: !!deviceInfo,
+			uuid: deviceInfo?.uuid,
+			hasApiKey: !!deviceInfo?.apiKey,
+			hasApiTlsConfig: !!deviceInfo?.apiTlsConfig,
+			apiTlsConfigKeys: deviceInfo?.apiTlsConfig ? Object.keys(deviceInfo.apiTlsConfig) : [],
+			hasCaCert: !!deviceInfo?.apiTlsConfig?.caCert,
+			caCertLength: deviceInfo?.apiTlsConfig?.caCert?.length
+		}, null, 2));
+		
 		const endpoint = this.config.cloudApiEndpoint;
 		const isLocalhostHttps = endpoint.startsWith('https://localhost') || 
 		                          endpoint.startsWith('https://127.0.0.1');
@@ -238,6 +249,14 @@ export class CloudSync extends EventEmitter {
 		
 		// Check if API TLS is configured (production mode with provisioned CA cert)
 		const apiTlsConfig = deviceInfo?.apiTlsConfig;
+		
+		console.log('[CloudSync] apiTlsConfig check:', {
+			hasDeviceInfo: !!deviceInfo,
+			hasApiTlsConfig: !!apiTlsConfig,
+			hasCaCert: !!apiTlsConfig?.caCert,
+			caCertLength: apiTlsConfig?.caCert?.length,
+			verifyCertificate: apiTlsConfig?.verifyCertificate
+		});
 		
 		if (apiTlsConfig?.caCert) {
 			this.logger?.infoSync('Initializing HTTPS client with CA certificate', {

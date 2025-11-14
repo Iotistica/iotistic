@@ -45,6 +45,15 @@ export class DeviceModel {
       return null;
     }
 
+    // Debug: log what we're getting from database
+    console.log('[DeviceModel] Raw device from DB:', JSON.stringify({
+      hasDevice: !!device,
+      hasApiTlsConfig: !!device.apiTlsConfig,
+      apiTlsConfigType: typeof device.apiTlsConfig,
+      apiTlsConfigLength: device.apiTlsConfig?.length,
+      apiTlsConfigPreview: device.apiTlsConfig?.substring(0, 100)
+    }, null, 2));
+
     return {
       ...device,
       provisioned: !!device.provisioned,

@@ -1,0 +1,46 @@
+# Auto-generated docker-compose file for 1 agents
+# Generated: 2025-11-13 22:17:57
+# Agents: 25 to 25
+# Ports: 48505 to 48505
+
+services:
+  agent-25:
+    container_name: agent-25
+    image: zemfyre-sensor-agent:latest
+    restart: always
+    mem_limit: 512m
+    mem_reservation: 256m
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - agent-25-data:/app/data
+    environment:
+      - DEVICE_API_PORT=48505
+      - CLOUD_API_ENDPOINT=http://api:3002
+      - NODE_ENV=development
+      - REPORT_INTERVAL_MS=20000
+      - METRICS_INTERVAL_MS=30000
+      - LOG_COMPRESSION=true
+      - REQUIRE_PROVISIONING=false
+      - PROVISIONING_API_KEY=0dbc23c9bc6805b08bad6717a929fe48c925de32e99861f267fad5f90e916884
+      - API_SECURITY_MODE=LOCALHOST_ONLY
+      - MEMORY_CHECK_INTERVAL_MS=30000
+      - MEMORY_THRESHOLD_MB=15
+      - LOG_FILE_PERSISTANCE=true
+      - LOG_MAX_AGE=86400000
+      - MAX_LOG_FILE_SIZE=52428800
+      - MAX_LOGS=10000
+      - SIMULATE_MEMORY_LEAK=false
+      - ANOMALY_DETECTION_ENABLED=true
+      - SIMULATION_MODE=false
+      - SIMULATION_CONFIG={}
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - iotistic-net
+volumes:
+  agent-25-data:
+    driver: local
+networks:
+  iotistic-net:
+    external: true

@@ -61,24 +61,25 @@ services:
             retries: 5
         networks:
            - iotistic-net
-    agent-9:
-        container_name: agent-9
+    agent-20:
+        container_name: agent-20
         image: zemfyre-sensor-agent:latest
         restart: always
         mem_limit: 512m
         mem_reservation: 256m
         volumes:
         - /var/run/docker.sock:/var/run/docker.sock
-        - agent-9-data:/app/data
+        - agent-20-data:/app/data
+        - ./certs/ca.crt:/app/certs/ca.crt:ro
         environment:
-        - DEVICE_API_PORT=48489
+        - DEVICE_API_PORT=48500
         - CLOUD_API_ENDPOINT=http://api:3002
         - NODE_ENV=development
         - REPORT_INTERVAL_MS=20000
         - METRICS_INTERVAL_MS=30000
         - LOG_COMPRESSION=true
-        - REQUIRE_PROVISIONING=false
-        - PROVISIONING_API_KEY=83d8898703e03288dd7195d98c8f27cee989760d238a136350b9a7b104cb8273
+        - REQUIRE_PROVISIONING=true
+        - PROVISIONING_API_KEY=1ee72ac184889b87e62e86eea290101c92c2747701a55f58759478faf836f365
         - API_SECURITY_MODE=LOCALHOST_ONLY
         - MEMORY_CHECK_INTERVAL_MS=30000
         - MEMORY_THRESHOLD_MB=15
@@ -89,76 +90,7 @@ services:
         - SIMULATE_MEMORY_LEAK=false
         - ANOMALY_DETECTION_ENABLED=true
         - SIMULATION_MODE=false
-        - SIMULATION_CONFIG={"scenarios":{"anomaly_injection":{"enabled":false},"sensor_data":{"enabled":true,"pattern":"random_walk","publishIntervalMs":15000}}}
-        depends_on:
-            api:
-                condition: service_healthy
-        networks:
-        - iotistic-net
-    agent-10:
-        container_name: agent-10
-        image: zemfyre-sensor-agent:latest
-        restart: always
-        mem_limit: 512m
-        mem_reservation: 256m
-        volumes:
-        - /var/run/docker.sock:/var/run/docker.sock
-        - agent-10-data:/app/data
-        environment:
-        - DEVICE_API_PORT=48490
-        - CLOUD_API_ENDPOINT=http://api:3002
-        - NODE_ENV=development
-        - REPORT_INTERVAL_MS=20000
-        - METRICS_INTERVAL_MS=30000
-        - LOG_COMPRESSION=true
-        - REQUIRE_PROVISIONING=false
-        - PROVISIONING_API_KEY=83d8898703e03288dd7195d98c8f27cee989760d238a136350b9a7b104cb8273
-        - API_SECURITY_MODE=LOCALHOST_ONLY
-        - MEMORY_CHECK_INTERVAL_MS=30000
-        - MEMORY_THRESHOLD_MB=15
-        - LOG_FILE_PERSISTANCE=true
-        - LOG_MAX_AGE=86400000
-        - MAX_LOG_FILE_SIZE=52428800
-        - MAX_LOGS=10000
-        - SIMULATE_MEMORY_LEAK=false
-        - ANOMALY_DETECTION_ENABLED=true
-        - SIMULATION_MODE=false
-        - SIMULATION_CONFIG={"scenarios":{"anomaly_injection":{"enabled":false},"sensor_data":{"enabled":true,"pattern":"random_walk","publishIntervalMs":15000}}}
-        depends_on:
-            api:
-                condition: service_healthy
-        networks:
-        - iotistic-net
-
-    agent-11:
-        container_name: agent-11
-        image: zemfyre-sensor-agent:latest
-        restart: always
-        mem_limit: 512m
-        mem_reservation: 256m
-        volumes:
-        - /var/run/docker.sock:/var/run/docker.sock
-        - agent-11-data:/app/data
-        environment:
-        - DEVICE_API_PORT=48491
-        - CLOUD_API_ENDPOINT=http://api:4002
-        - NODE_ENV=development
-        - REPORT_INTERVAL_MS=20000
-        - METRICS_INTERVAL_MS=30000
-        - LOG_COMPRESSION=true
-        - REQUIRE_PROVISIONING=false
-        - PROVISIONING_API_KEY=9a04b5526335af1697025f896a952d115e4d2d26525aa250a1605ea12d1f2696
-        - API_SECURITY_MODE=LOCALHOST_ONLY
-        - MEMORY_CHECK_INTERVAL_MS=30000
-        - MEMORY_THRESHOLD_MB=15
-        - LOG_FILE_PERSISTANCE=true
-        - LOG_MAX_AGE=86400000
-        - MAX_LOG_FILE_SIZE=52428800
-        - MAX_LOGS=10000
-        - SIMULATE_MEMORY_LEAK=false
-        - ANOMALY_DETECTION_ENABLED=true
-        - SIMULATION_MODE=false
-        - SIMULATION_CONFIG={"scenarios":{"anomaly_injection":{"enabled":false},"sensor_data":{"enabled":true,"pattern":"random_walk","publishIntervalMs":15000}}}
+        - SIMULATION_CONFIG={}
         depends_on:
             api:
                 condition: service_healthy
@@ -235,11 +167,13 @@ services:
         ports:
           - "${MOSQUITTO_PORT_EXT:-5883}:1883"        # Non-TLS (local)
           - "${MOSQUITTO_WS_PORT_EXT:-59002}:9001"    # WebSocket non-TLS
-          - "${MOSQUITTO_TLS_PORT_EXT:-8883}:8883"    # MQTTS (TLS)
-          - "${MOSQUITTO_WSS_PORT_EXT:-9002}:9002"    # WebSocket TLS
+          # MQTTS (TLS) - Commented out until certificate management is implemented
+          # - "${MOSQUITTO_TLS_PORT_EXT:-8883}:8883"    # MQTTS (TLS)
+          # - "${MOSQUITTO_WSS_PORT_EXT:-9002}:9002"    # WebSocket TLS
         volumes:
           - ./mosquitto/mosquitto.conf:/etc/mosquitto/mosquitto.conf
-          - ./certs:/mosquitto/certs:ro  # Mount certificates (read-only)
+          # Certificate mount - uncomment when enabling MQTTS
+          # - ./certs:/mosquitto/certs:ro  # Mount certificates (read-only)
         depends_on:
             postgres:
                 condition: service_healthy
@@ -422,7 +356,7 @@ services:
             - PORT=3300
             - HOST=0.0.0.0
             - EMAIL_ENABLED=${EMAIL_ENABLED:-true}
-            - EMAIL_FROM=${EMAIL_FROM:-"Iotistic Platform <noreply@iotistic.cloud>"}
+            - EMAIL_FROM=${EMAIL_FROM:-"Iotistic Platform <noreply@iotistic.ca>"}
             - EMAIL_DEBUG=${EMAIL_DEBUG:-false}
             - BASE_URL=${BASE_URL:-https://iotistic.ca}
             - SMTP_HOST=${SMTP_HOST}
@@ -511,11 +445,7 @@ services:
 
 volumes:
   wg-data:
-  agent-9-data:
-    driver: local
-  agent-10-data:
-    driver: local
-  agent-11-data:
+  agent-20-data:
     driver: local
   iotistic-pg-data:
     driver: local

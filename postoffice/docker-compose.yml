@@ -1,0 +1,136 @@
+# Docker Compose for PostOffice Service Development
+# 
+# This stack provides:
+#   - PostOffice email service
+#   - PostgreSQL for email logging
+#   - Redis for Bull queue
+#
+# Usage:
+#   docker-compose up -d
+
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: postoffice-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-iotistic}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+    ports:
+      - "${DB_PORT_EXT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - postoffice-net
+
+  # Redis (Bull Queue Backend)
+  redis:
+    image: redis:7-alpine
+    container_name: postoffice-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --maxmemory 256mb
+      --maxmemory-policy volatile-lru
+      --save 60 1000
+      --appendonly yes
+    ports:
+      - "${REDIS_PORT_EXT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - postoffice-net
+
+  # PostOffice Service
+  postoffice:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: postoffice
+    restart: unless-stopped
+    ports:
+      - "${POSTOFFICE_PORT_EXT:-3300}:3300"
+    environment:
+      # Server
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=3300
+      - HOST=0.0.0.0
+      
+      # Email
+      - EMAIL_ENABLED=${EMAIL_ENABLED:-true}
+      - EMAIL_FROM=${EMAIL_FROM:-"Iotistic Platform <noreply@iotistic.cloud>"}
+      - EMAIL_DEBUG=${EMAIL_DEBUG:-false}
+      - BASE_URL=${BASE_URL:-https://iotistic.ca}
+      
+      # SMTP (if configured)
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_SECURE=${SMTP_SECURE:-false}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+      
+      # AWS SES (if configured)
+      - AWS_SES_REGION=${AWS_SES_REGION}
+      - AWS_SES_SOURCE_ARN=${AWS_SES_SOURCE_ARN}
+      - AWS_SES_FROM_ARN=${AWS_SES_FROM_ARN}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      
+      # Redis
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      
+      # Database
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME:-iotistic}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+      
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_FORMAT=${LOG_FORMAT:-json}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3300/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - postoffice-net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
+
+networks:
+  postoffice-net:
+    driver: bridge

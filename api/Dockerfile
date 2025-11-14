@@ -1,31 +1,72 @@
-# Stage 1: Builder
-FROM node:20 AS builder
-WORKDIR /usr/src/app
+# Stage 1: Dependencies (production only)
+FROM node:20-alpine AS deps
+WORKDIR /app
 
-# Copy package files and install deps (cache layer)
+# Copy package files for dependency installation
 COPY package*.json ./
-RUN npm install
 
-# Copy TypeScript config and sourcedfgdf
+# Install production dependencies only with clean cache
+RUN npm ci --only=production && \
+    npm cache clean --force
+
+# Stage 2: Builder
+FROM node:20-alpine AS builder
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install all dependencies (including devDependencies for build)
+RUN npm ci && \
+    npm cache clean --force
+
+# Copy TypeScript config and source code
 COPY tsconfig*.json ./
 COPY src ./src
 COPY database ./database
 
-# Build with incremental compilation
+# Build the application
 RUN npm run build
 
-# Stage 2: Production image
-FROM node:20
-WORKDIR /usr/src/app
+# Stage 3: Production runtime
+FROM node:20-alpine AS production
+WORKDIR /app
 
-# Copy built files and production deps
-COPY --from=builder /usr/src/app/dist ./dist
-COPY --from=builder /usr/src/app/database ./database
-COPY --from=builder /usr/src/app/package*.json ./
-RUN npm install --production
+# Install runtime system dependencies in single layer with cleanup
+RUN apk add --no-cache \
+    curl \
+    tini && \
+    rm -rf /var/cache/apk/*
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y libnotify-bin curl && rm -rf /var/lib/apt/lists/*
+# Create non-root user and group
+RUN addgroup -S appgroup && \
+    adduser -S appuser -G appgroup
 
+# Copy production dependencies from deps stage
+COPY --from=deps --chown=appuser:appgroup /app/node_modules ./node_modules
+
+# Copy built application from builder stage
+COPY --from=builder --chown=appuser:appgroup /app/dist ./dist
+COPY --from=builder --chown=appuser:appgroup /app/database ./database
+
+# Copy package files for runtime reference
+COPY --chown=appuser:appgroup package*.json ./
+
+# Set proper ownership of application directory
+RUN chown -R appuser:appgroup /app
+
+# Switch to non-root user
+USER appuser
+
+# Expose application port
 EXPOSE 3002
+
+# Health check to verify API is responding
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD curl -f http://localhost:3002/health || exit 1
+
+# Use tini as init process for proper signal handling
+ENTRYPOINT ["/sbin/tini", "--"]
+
+# Start the application
 CMD ["node", "dist/index.js"]
