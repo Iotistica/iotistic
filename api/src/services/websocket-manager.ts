@@ -675,47 +675,6 @@ export class WebSocketManager {
       return null;
     }
   }
-      
-      return {
-        connected: status.connected,
-        broker: status.broker || 'Not configured',
-        uptime: status.uptime || 0,
-        
-        // Real-time metrics - extract current values from nested structure
-        messageRate: {
-          published: metrics.messageRate?.current?.published || 0,
-          received: metrics.messageRate?.current?.received || 0,
-          total: (metrics.messageRate?.current?.published || 0) + (metrics.messageRate?.current?.received || 0)
-        },
-        throughput: {
-          inbound: metrics.throughput?.current?.inbound || 0,
-          outbound: metrics.throughput?.current?.outbound || 0,
-          total: (metrics.throughput?.current?.inbound || 0) + (metrics.throughput?.current?.outbound || 0)
-        },
-        clients: metrics.clients || 0,
-        subscriptions: metrics.subscriptions || 0,
-        retainedMessages: metrics.retainedMessages || 0,
-        
-        // Total messages
-        totalMessagesSent: metrics.totalMessagesSent || 0,
-        totalMessagesReceived: metrics.totalMessagesReceived || 0,
-        
-        // Topic statistics
-        totalTopics: topics.length,
-        topicsWithSchemas,
-        schemasDetected: topicsWithSchemas,
-        messageTypeBreakdown,
-        
-        // System stats ($SYS topics)
-        systemStats: systemStats || {},
-        
-        timestamp: new Date().toISOString()
-      };
-    } catch (error) {
-      logger.error(' Error fetching MQTT stats:', error);
-      return null;
-    }
-  }
 
   private async fetchMqttTopics(): Promise<any> {
     try {
