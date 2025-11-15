@@ -1,9 +1,0 @@
-[submodule "wg-server"]
-	path = wg-server
-	url = https://github.com/Iotistica/iot-wg-server.git
-[submodule "housekeeper"]
-	path = housekeeper
-	url = https://github.com/Iotistica/iot-housekeeper.git
-[submodule "mqtt-monitor"]
-	path = mqtt-monitor
-	url = https://github.com/Iotistica/iot-mqtt-monitor.git
