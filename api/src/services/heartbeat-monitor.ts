@@ -190,6 +190,13 @@ export class HeartbeatMonitor {
               metadata: {
                 detection_method: 'heartbeat_monitor',
                 api_restart: true
+              },
+              severity: 'warning',
+              impact: 'medium',
+              actor: {
+                type: 'system',
+                id: 'heartbeat-monitor',
+                name: 'Heartbeat Monitor Service'
               }
             }
           );
@@ -268,6 +275,13 @@ export class HeartbeatMonitor {
               metadata: {
                 detection_method: 'heartbeat_monitor',
                 check_interval_ms: this.checkInterval
+              },
+              severity: 'warning',
+              impact: 'medium',
+              actor: {
+                type: 'system',
+                id: 'heartbeat-monitor',
+                name: 'Heartbeat Monitor Service'
               }
             }
           );

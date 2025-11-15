@@ -568,9 +568,19 @@ async function publishProvisioningEvent(
     },
     {
       metadata: {
-        user_agent: userAgent,
-        provisioning_key_id: provisioningKeyRecord.id,
-        endpoint: '/device/register'
+        request: {
+          user_agent: userAgent,
+          path: '/device/register'
+        },
+        provisioning_key_id: provisioningKeyRecord.id
+      },
+      severity: 'info',
+      impact: 'high',
+      actor: {
+        type: 'device',
+        id: data.uuid,
+        name: data.deviceName,
+        ip_address: ipAddress
       }
     }
   );

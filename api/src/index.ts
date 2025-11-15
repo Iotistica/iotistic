@@ -27,6 +27,7 @@ import digitalTwinRoutes from './routes/digital-twin';
 import digitalTwinGraphRoutes from './routes/digital-twin-graph';
 import eventsRoutes from './routes/events';
 import mqttBrokerRoutes from './routes/mqtt-broker';
+import mqttMetricsRoutes from './routes/mqtt-metrics';
 import sensorsRoutes from './routes/sensors';
 import { router as protocolDevicesRoutes } from './routes/device-sensors';
 import { router as trafficRoutes } from './routes/traffic';
@@ -35,10 +36,6 @@ import dashboardLayoutsRoutes from './routes/dashboard-layouts';
 import mosquittoAuthRoutes from './routes/mosquitto-auth';
 import { trafficLogger} from "./middleware/traffic-logger";
 import { startTrafficFlushService, stopTrafficFlushService } from './services/traffic-flush-service';
-// Import entity/graph routes
-import { createEntitiesRouter } from './routes/entities';
-import { createRelationshipsRouter } from './routes/relationships';
-import { createGraphRouter } from './routes/graph';
 import alertsRoutes from './routes/alerts';
 
 // Import jobs
@@ -49,6 +46,7 @@ import { initializeMqtt, shutdownMqtt } from './mqtt';
 import { initializeSchedulers, shutdownSchedulers } from './services/rotation-scheduler';
 import { LicenseValidator } from './services/license-validator';
 import licenseRoutes from './routes/license';
+import jwtAuth from './middleware/jwt-auth';
 import billingRoutes from './routes/billing';
 import { websocketManager } from './services/websocket-manager';
 import { createHttpsServer } from './https-server';
@@ -156,14 +154,14 @@ app.use(API_BASE, scheduledJobsRoutes);
 app.use(API_BASE, rotationRoutes);
 app.use(API_BASE, digitalTwinRoutes);
 app.use(`${API_BASE}/digital-twin/graph`, digitalTwinGraphRoutes);
+app.use(`${API_BASE}/mqtt`, mqttMetricsRoutes);
 
 // API Gateway Proxy: Route mqtt-monitor requests to mqtt-monitor service
-app.use(`${API_BASE}/mqtt-monitor`, createProxyMiddleware({
-  target: 'http://mqtt-monitor:3500',
+// Protected by JWT authentication
+const MQTT_MONITOR_URL = process.env.MQTT_MONITOR_URL || 'http://mqtt-monitor:3500';
+app.use(`${API_BASE}/mqtt-monitor`, jwtAuth, createProxyMiddleware({
+  target: `${MQTT_MONITOR_URL}/api/v1`,
   changeOrigin: true,
-  pathRewrite: {
-    [`^${API_BASE}/mqtt-monitor`]: '/api/v1'
-  },
   on: {
     error: (err, req, res) => {
       logger.error('MQTT Monitor proxy error', { error: err.message });
@@ -178,12 +176,10 @@ app.use(`${API_BASE}/mqtt-monitor`, createProxyMiddleware({
 }));
 
 // API Gateway Proxy: Route postoffice (email) requests to postoffice service
+const POSTOFFICE_URL = process.env.POSTOFFICE_URL || 'http://postoffice:3300';
 app.use(`${API_BASE}/postoffice`, createProxyMiddleware({
-  target: 'http://postoffice:3300',
+  target: `${POSTOFFICE_URL}/api/v1`,
   changeOrigin: true,
-  pathRewrite: {
-    [`^${API_BASE}/postoffice`]: '/api/v1'
-  },
   on: {
     error: (err, req, res) => {
       logger.error('Postoffice proxy error', { error: err.message });
@@ -205,12 +201,6 @@ app.use(API_BASE, trafficRoutes);
 app.use(API_BASE, deviceTagsRoutes);
 app.use(`${API_BASE}/dashboard-layouts`, dashboardLayoutsRoutes);
 app.use(`${API_BASE}/alerts`, alertsRoutes);
-
-// Mount entity/graph routes
-app.use(`${API_BASE}/entities`, createEntitiesRouter(poolWrapper.pool));
-app.use(`${API_BASE}/relationships`, createRelationshipsRouter(poolWrapper.pool));
-app.use(`${API_BASE}/graph`, createGraphRouter(poolWrapper.pool));
-
 
 
 // 404 handler

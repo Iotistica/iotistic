@@ -28,6 +28,7 @@ import { GlobalDashboardPage } from "./pages/GlobalDashboardPage";
 import DeviceTagsPage from "./pages/DeviceTagsPage";
 import TagDefinitionsPage from "./pages/TagDefinitionsPage";
 import { DigitalTwinPage } from "./pages/DigitalTwinPage";
+import { EventDebuggerPage } from "./pages/EventDebuggerPage";
 
 import { toast } from "sonner";
 import { Header } from "./components/Header";
@@ -61,7 +62,7 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [deviceDialogOpen, setDeviceDialogOpen] = useState(false);
   const [editingDevice, setEditingDevice] = useState<Device | null>(null);
-  const [currentView, setCurrentView] = useState<'metrics' | 'sensors' | 'mqtt' | 'jobs' | 'applications' | 'timeline' | 'usage' | 'analytics' | 'security' | 'maintenance' | 'logs' | 'settings' | 'tags' | 'tag-definitions' | 'account' | 'users' | 'profile' | 'dashboard' | 'digital-twin'>('dashboard');
+  const [currentView, setCurrentView] = useState<'metrics' | 'sensors' | 'mqtt' | 'jobs' | 'applications' | 'timeline' | 'usage' | 'analytics' | 'security' | 'maintenance' | 'logs' | 'settings' | 'tags' | 'tag-definitions' | 'account' | 'users' | 'profile' | 'dashboard' | 'digital-twin' | 'event-debugger'>('dashboard');
   const [debugMode, setDebugMode] = useState(false);
   
   // Memoize selected device to prevent unnecessary re-renders
@@ -595,6 +596,14 @@ export default function App() {
               Timeline
             </Button>
             <Button
+              variant={currentView === 'event-debugger' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setCurrentView('event-debugger')}
+            >
+              <Activity className="w-4 h-4 mr-2" />
+              Event Debugger
+            </Button>
+            <Button
               variant={currentView === 'usage' ? 'default' : 'outline'}
               size="sm"
               onClick={() => setCurrentView('usage')}
@@ -690,6 +699,9 @@ export default function App() {
           )}
           {currentView === 'timeline' && (
             <TimelinePage device={selectedDevice} />
+          )}
+          {currentView === 'event-debugger' && (
+            <EventDebuggerPage deviceUuid={selectedDevice.deviceUuid} />
           )}
           {currentView === 'usage' && (
             <UsagePage />

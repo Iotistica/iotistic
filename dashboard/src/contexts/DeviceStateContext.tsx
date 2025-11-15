@@ -653,11 +653,12 @@ export function DeviceStateProvider({ children }: { children: ReactNode }) {
     const deviceState = deviceStates[deviceUuid];
     if (!deviceState) return false;
     
-    // If device hasn't reported yet (no currentState), no deployment needed
-    if (!deviceState.currentState) return false;
+    // If device hasn't reported yet (no currentState) OR no target state loaded, no deployment needed
+    // This prevents the sync button from being enabled before initial data is loaded
+    if (!deviceState.currentState || !deviceState.targetState) return false;
     
     // Check if there are unsaved local changes OR saved changes that need deployment
-    return !!deviceState.isDirty || !!deviceState.targetState?.needsDeployment;
+    return !!deviceState.isDirty || !!deviceState.targetState.needsDeployment;
   }, [deviceStates]);
   
   const getSyncStatus = useCallback((deviceUuid: string): "synced" | "syncing" | "error" | "pending" => {

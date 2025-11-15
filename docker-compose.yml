@@ -142,6 +142,8 @@ services:
             - WG_SERVER_URL=http://wg-server:8089
             - VPN_SERVER_ENDPOINT=${VPN_SERVER_ENDPOINT:-vpn.example.com}
             - VPN_SERVER_PORT=51820
+            - MQTT_MONITOR_URL=${MQTT_MONITOR_URL:-http://mqtt-monitor:3500}
+            - POSTOFFICE_URL=${POSTOFFICE_URL:-http://postoffice:3300}
         ports:
             - "${API_PORT_EXT:-4002}:3002"
             - "3443:3443"
@@ -179,6 +181,24 @@ services:
                 condition: service_healthy
         networks:
            - iotistic-net
+
+    mqtt-exporter:
+        build:
+            context: ./mqtt-exporter
+            dockerfile: Dockerfile
+        container_name: iotistic-mqtt-exporter
+        restart: unless-stopped
+        environment:
+            - MQTT_BROKER=mqtt://mosquitto:1883
+            - MQTT_USERNAME=${MQTT_USERNAME:-}
+            - MQTT_PASSWORD=${MQTT_PASSWORD:-}
+            - METRICS_PORT=9234
+        ports:
+            - "9234:9234"  # Prometheus metrics endpoint
+        depends_on:
+            - mosquitto
+        networks:
+            - iotistic-net
     
 
     # VPN Services - Commented out until TypeScript code is complete

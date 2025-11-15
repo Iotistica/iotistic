@@ -97,8 +97,9 @@ RUN chmod +x /app/dist/cli/iotctl.js && \
 # Data volume for persistent storage
 VOLUME ["/app/data"]
 
-# Switch to non-root user
-USER agentuser
+# TEMPORARY: Run as root for development to avoid volume permission issues
+# TODO: For production, use init container or entrypoint script to fix permissions
+# USER agentuser
 
 # Expose device API port
 EXPOSE 48484

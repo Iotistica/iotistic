@@ -2,6 +2,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { Server as HTTPServer } from 'http';
 import { DeviceModel, DeviceMetricsModel, DeviceLogsModel } from '../db/models';
 import logger from '../utils/logger';
+import fetch from 'node-fetch';
 
 interface WebSocketClient {
   ws: WebSocket;
@@ -659,24 +660,21 @@ export class WebSocketManager {
 
   private async fetchMqttStats(): Promise<any> {
     try {
-      if (!this.mqttMonitor) {
+      // Fetch from mqtt-exporter via our proxy endpoint
+      const response = await fetch('http://localhost:3002/api/v1/mqtt/metrics');
+      
+      if (!response.ok) {
+        logger.warn(`Failed to fetch MQTT metrics: ${response.status}`);
         return null;
       }
-
-      // Use same logic as HTTP endpoint /api/v1/mqtt-monitor/stats
-      const status = this.mqttMonitor.getStatus();
-      const metrics = this.mqttMonitor.getMetrics();
-      const systemStats = this.mqttMonitor.getSystemStats();
-      const topics = this.mqttMonitor.getFlattenedTopics();
       
-      // Calculate schema statistics
-      const topicsWithSchemas = topics.filter((t: any) => t.schema).length;
-      const messageTypeBreakdown = topics.reduce((acc: any, t: any) => {
-        if (t.messageType) {
-          acc[t.messageType] = (acc[t.messageType] || 0) + 1;
-        }
-        return acc;
-      }, {} as Record<string, number>);
+      const data = await response.json();
+      return data;
+    } catch (error: any) {
+      logger.error(' Error fetching MQTT stats:', error);
+      return null;
+    }
+  }
       
       return {
         connected: status.connected,
@@ -721,16 +719,11 @@ export class WebSocketManager {
 
   private async fetchMqttTopics(): Promise<any> {
     try {
-      if (!this.mqttMonitor) {
-        return null;
-      }
-
-      // Use same logic as HTTP endpoint /api/v1/mqtt-monitor/topics
-      const topics = this.mqttMonitor.getFlattenedTopics();
-      
+      // For now, return empty topics since mqtt-exporter doesn't track individual topics
+      // TODO: Could be enhanced to scrape $SYS/broker/subscriptions/# or similar
       return {
-        topics,
-        count: topics.length,
+        topics: [],
+        count: 0,
       };
     } catch (error) {
       logger.error(' Error fetching MQTT topics:', error);

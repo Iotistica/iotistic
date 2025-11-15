@@ -462,9 +462,19 @@ router.patch('/devices/:uuid/active', async (req, res) => {
       },
       {
         metadata: {
-          ip_address: req.ip,
-          user_agent: req.headers['user-agent'],
-          endpoint: '/devices/:uuid/active'
+          request: {
+            method: 'PATCH',
+            path: '/devices/:uuid/active',
+            user_agent: req.headers['user-agent']
+          }
+        },
+        severity: 'info',
+        impact: 'medium',
+        actor: {
+          type: 'user',
+          id: (req as any).user?.id || 'system',
+          name: (req as any).user?.email,
+          ip_address: req.ip
         }
       }
     );

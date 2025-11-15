@@ -14,10 +14,12 @@ import { getMqttJobsNotifier } from '../services/mqtt-jobs-notifier';
 import { hasPermission, hasAnyPermission } from '../middleware/permissions';
 import { PERMISSIONS } from '../types/permissions';
 import { jwtAuth } from '../middleware/jwt-auth';
+import { EventPublisher } from '../services/event-sourcing';
 
 const router = express.Router();
 const pool = poolWrapper.pool;
 const mqttNotifier = getMqttJobsNotifier();
+const eventPublisher = new EventPublisher('device-jobs-api');
 
 // Apply JWT authentication to all dashboard/cloud routes
 // Device routes use deviceAuth middleware individually
@@ -353,6 +355,39 @@ router.post('/jobs/execute', async (req: Request, res: Response) => {
     );
 
     console.log(`[Jobs] Created job ${jobId} for ${deviceUuids.length} devices`);
+
+    // 🎉 EVENT SOURCING: Publish job.queued event for each device
+    for (const deviceUuid of deviceUuids) {
+      await eventPublisher.publish(
+        'job.queued',
+        'device',
+        deviceUuid,
+        {
+          job_id: jobId,
+          job_name,
+          template_id: template_id || null,
+          execution_type: execution_type || 'oneTime',
+          timeout_minutes: timeout_minutes || 60,
+          queued_at: new Date().toISOString()
+        },
+        {
+          metadata: {
+            request: {
+              method: 'POST',
+              path: '/jobs/executions',
+              user_agent: req.headers['user-agent']
+            }
+          },
+          severity: 'info',
+          impact: 'low',
+          actor: {
+            type: 'user',
+            id: created_by || 'admin',
+            ip_address: req.ip
+          }
+        }
+      );
+    }
 
     // Send MQTT notification for real-time job delivery
     if (mqttNotifier.connected) {

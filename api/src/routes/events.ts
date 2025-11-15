@@ -189,6 +189,135 @@ router.get('/events/stats', async (req, res) => {
   }
 });
 
+/**
+ * Replay events within time window (for debugging)
+ * POST /api/v1/events/device/:deviceUuid/replay
+ * Body:
+ *   - fromTime: ISO timestamp
+ *   - toTime: ISO timestamp
+ */
+router.post('/events/device/:deviceUuid/replay', async (req, res) => {
+  try {
+    const { deviceUuid } = req.params;
+    const { fromTime, toTime } = req.body;
+
+    if (!fromTime || !toTime) {
+      return res.status(400).json({
+        success: false,
+        error: 'fromTime and toTime are required',
+      });
+    }
+
+    console.log(`[Events API] Replaying events for device ${deviceUuid} from ${fromTime} to ${toTime}`);
+
+    const result = await EventStore.replayEvents(
+      deviceUuid,
+      new Date(fromTime),
+      new Date(toTime)
+    );
+
+    res.json({
+      success: true,
+      deviceUuid,
+      fromTime,
+      toTime,
+      ...result,
+    });
+  } catch (error) {
+    console.error('[Events API] Error replaying events:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to replay events',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
+/**
+ * Create snapshot of device state at specific point in time
+ * POST /api/v1/events/device/:deviceUuid/snapshot
+ * Body:
+ *   - timestamp: ISO timestamp
+ */
+router.post('/events/device/:deviceUuid/snapshot', async (req, res) => {
+  try {
+    const { deviceUuid } = req.params;
+    const { timestamp } = req.body;
+
+    if (!timestamp) {
+      return res.status(400).json({
+        success: false,
+        error: 'timestamp is required',
+      });
+    }
+
+    console.log(`[Events API] Creating snapshot for device ${deviceUuid} at ${timestamp}`);
+
+    const snapshot = await EventStore.createSnapshot(
+      deviceUuid,
+      new Date(timestamp)
+    );
+
+    res.json({
+      success: true,
+      ...snapshot,
+    });
+  } catch (error) {
+    console.error('[Events API] Error creating snapshot:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to create snapshot',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
+/**
+ * Compare device state between two points in time
+ * POST /api/v1/events/device/:deviceUuid/compare
+ * Body:
+ *   - time1: ISO timestamp (earlier time)
+ *   - time2: ISO timestamp (later time)
+ */
+router.post('/events/device/:deviceUuid/compare', async (req, res) => {
+  try {
+    const { deviceUuid } = req.params;
+    const { time1, time2 } = req.body;
+
+    if (!time1 || !time2) {
+      return res.status(400).json({
+        success: false,
+        error: 'time1 and time2 are required',
+      });
+    }
+
+    console.log(`[Events API] Comparing states for device ${deviceUuid} between ${time1} and ${time2}`);
+
+    const comparison = await EventStore.compareStates(
+      deviceUuid,
+      new Date(time1),
+      new Date(time2)
+    );
+
+    res.json({
+      success: true,
+      deviceUuid,
+      time1,
+      time2,
+      changes_count: comparison.changes.length,
+      events_between_count: comparison.events_between.length,
+      ...comparison,
+    });
+  } catch (error) {
+    console.error('[Events API] Error comparing states:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to compare states',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
 // ============================================================================
 // Helper Functions
 // ============================================================================

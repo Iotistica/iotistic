@@ -26,6 +26,48 @@ export interface Event {
   causation_id?: string;
   source?: string;
   checksum: string;
+  actor_type?: string;
+  actor_id?: string;
+  severity?: 'debug' | 'info' | 'warning' | 'error' | 'critical';
+  impact?: 'low' | 'medium' | 'high';
+}
+
+export interface Actor {
+  type: 'user' | 'device' | 'system' | 'api' | 'scheduled_job';
+  id: string;           // user_id, device_uuid, job_id
+  name?: string;        // Display name
+  ip_address?: string;  // For user/API actions
+}
+
+export interface SnapshotResult {
+  timestamp: Date;
+  device_uuid: string;
+  target_state: any;
+  current_state: any;
+  containers: Record<string, any>;
+  jobs: Record<string, any>;
+  online: boolean | null;
+  last_seen: Date | null;
+  offline_since: Date | null;
+  event_count: number;
+  last_event_id?: string;
+  last_event_type?: string;
+}
+
+export interface EventMetadata {
+  actor?: Actor;
+  request?: {
+    id?: string;
+    method?: string;
+    path?: string;
+    user_agent?: string;
+  };
+  tenant?: {
+    id: string;
+    name?: string;
+  };
+  tags?: Record<string, string>;
+  [key: string]: any;  // Allow additional custom fields
 }
 
 export interface EventHandler {
@@ -43,10 +85,12 @@ export interface ProjectionHandler {
 export class EventPublisher {
   private correlationId?: string;
   private source: string;
+  private actor?: Actor;
 
-  constructor(source: string = 'system', correlationId?: string) {
+  constructor(source: string = 'system', correlationId?: string, actor?: Actor) {
     this.source = source;
     this.correlationId = correlationId || crypto.randomUUID();
+    this.actor = actor;
   }
 
   /**
@@ -59,7 +103,10 @@ export class EventPublisher {
     data: any,
     options?: {
       causationId?: string;
-      metadata?: any;
+      metadata?: EventMetadata;
+      severity?: 'debug' | 'info' | 'warning' | 'error' | 'critical';
+      impact?: 'low' | 'medium' | 'high';
+      actor?: Actor;  // Override instance-level actor
     }
   ): Promise<string | null> {
     // Check if this event should be published based on configuration
@@ -68,8 +115,17 @@ export class EventPublisher {
       return null;
     }
 
+    // Merge instance actor with options actor (options takes precedence)
+    const finalActor = options?.actor || this.actor;
+
+    // Merge actor into metadata
+    const enrichedMetadata = {
+      ...options?.metadata,
+      actor: finalActor,
+    };
+
     const result = await pool.query(
-      `SELECT publish_event($1, $2, $3, $4, $5, $6, $7, $8) as event_id`,
+      `SELECT publish_event($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) as event_id`,
       [
         eventType,
         aggregateType,
@@ -78,7 +134,11 @@ export class EventPublisher {
         this.source,
         this.correlationId,
         options?.causationId || null,
-        options?.metadata ? JSON.stringify(options.metadata) : null,
+        JSON.stringify(enrichedMetadata),
+        finalActor?.type || null,
+        finalActor?.id || null,
+        options?.severity || null,
+        options?.impact || null,
       ]
     );
 
@@ -221,6 +281,304 @@ export class EventStore {
     );
 
     return result.rows[0]?.state || {};
+  }
+
+  /**
+   * Replay events within time window (for debugging)
+   */
+  static async replayEvents(
+    deviceUuid: string,
+    fromTime: Date,
+    toTime: Date,
+    handlers?: Record<string, (event: Event) => void>
+  ): Promise<{
+    events_replayed: number;
+    final_state: any;
+    errors: string[];
+    events: Event[];
+  }> {
+    // Fetch all events in time window
+    const result = await pool.query(
+      `SELECT * FROM events 
+       WHERE aggregate_id = $1 
+         AND aggregate_type = 'device'
+         AND timestamp >= $2 
+         AND timestamp <= $3
+       ORDER BY timestamp ASC, id ASC`,
+      [deviceUuid, fromTime, toTime]
+    );
+
+    const events = result.rows as Event[];
+    const errors: string[] = [];
+    let state: any = {
+      target_state: {},
+      current_state: {},
+      containers: {},
+      jobs: {},
+    };
+
+    // Replay events in chronological order
+    for (const event of events) {
+      try {
+        // Call handler if registered
+        if (handlers && handlers[event.event_type]) {
+          handlers[event.event_type](event);
+        }
+
+        // Apply event to state reconstruction
+        state = this.applyEventToState(state, event);
+      } catch (error: any) {
+        errors.push(`Event ${event.event_id} (${event.event_type}): ${error.message}`);
+      }
+    }
+
+    return {
+      events_replayed: events.length,
+      final_state: state,
+      errors,
+      events,
+    };
+  }
+
+  /**
+   * Create snapshot of device state at specific point in time
+   */
+  static async createSnapshot(
+    deviceUuid: string,
+    atTime: Date
+  ): Promise<SnapshotResult> {
+    // Get all events up to this point in time
+    const eventsResult = await pool.query(
+      `SELECT * FROM events 
+       WHERE aggregate_id = $1 
+         AND aggregate_type = 'device'
+         AND timestamp <= $2
+       ORDER BY timestamp ASC, id ASC`,
+      [deviceUuid, atTime]
+    );
+
+    const events = eventsResult.rows as Event[];
+    let state: any = {
+      target_state: {},
+      current_state: {},
+      containers: {},
+      jobs: {},
+    };
+
+    // Replay all events to reconstruct state
+    for (const event of events) {
+      state = this.applyEventToState(state, event);
+    }
+
+    const lastEvent = events[events.length - 1];
+
+    return {
+      timestamp: atTime,
+      device_uuid: deviceUuid,
+      target_state: state.target_state,
+      current_state: state.current_state,
+      containers: state.containers || {},
+      jobs: state.jobs || {},
+      online: state.online ?? null,
+      last_seen: state.last_seen ?? null,
+      offline_since: state.offline_since ?? null,
+      event_count: events.length,
+      last_event_id: lastEvent?.event_id,
+      last_event_type: lastEvent?.event_type,
+    };
+  }
+
+  /**
+   * Compare device state between two points in time
+   */
+  static async compareStates(
+    deviceUuid: string,
+    time1: Date,
+    time2: Date
+  ): Promise<{
+    time1_snapshot: any;
+    time2_snapshot: any;
+    changes: Array<{
+      field: string;
+      old_value: any;
+      new_value: any;
+      events_involved: string[];
+    }>;
+    events_between: Event[];
+  }> {
+    // Get snapshots at both times
+    const [snapshot1, snapshot2] = await Promise.all([
+      this.createSnapshot(deviceUuid, time1),
+      this.createSnapshot(deviceUuid, time2),
+    ]);
+
+    // Get events between the two times
+    const eventsResult = await pool.query(
+      `SELECT * FROM events 
+       WHERE aggregate_id = $1 
+         AND aggregate_type = 'device'
+         AND timestamp > $2 
+         AND timestamp <= $3
+       ORDER BY timestamp ASC`,
+      [deviceUuid, time1, time2]
+    );
+
+    const eventsBetween = eventsResult.rows as Event[];
+
+    // Calculate differences
+    const changes = this.calculateStateChanges(
+      snapshot1.target_state,
+      snapshot2.target_state,
+      eventsBetween
+    );
+
+    return {
+      time1_snapshot: snapshot1,
+      time2_snapshot: snapshot2,
+      changes,
+      events_between: eventsBetween,
+    };
+  }
+
+  /**
+   * Apply an event to state (state reconstruction logic)
+   */
+  private static applyEventToState(state: any, event: Event): any {
+    const newState = { ...state };
+
+    switch (event.event_type) {
+      case 'target_state.updated':
+        newState.target_state = event.data.new_state || event.data.state || {};
+        break;
+
+      case 'current_state.updated':
+        newState.current_state = event.data.state || {};
+        break;
+
+      case 'container.started':
+      case 'container.created':
+        if (event.data.container_id || event.data.container_name) {
+          const containerId = event.data.container_id || event.data.container_name;
+          newState.containers[containerId] = {
+            state: 'running',
+            started_at: event.timestamp,
+            ...event.data,
+          };
+        }
+        break;
+
+      case 'container.stopped':
+      case 'container.killed':
+        if (event.data.container_id || event.data.container_name) {
+          const containerId = event.data.container_id || event.data.container_name;
+          if (newState.containers[containerId]) {
+            newState.containers[containerId].state = 'stopped';
+            newState.containers[containerId].stopped_at = event.timestamp;
+          }
+        }
+        break;
+
+      case 'container.paused':
+        if (event.data.container_id || event.data.container_name) {
+          const containerId = event.data.container_id || event.data.container_name;
+          if (newState.containers[containerId]) {
+            newState.containers[containerId].state = 'paused';
+            newState.containers[containerId].paused_at = event.timestamp;
+          }
+        }
+        break;
+
+      case 'container.unpaused':
+        if (event.data.container_id || event.data.container_name) {
+          const containerId = event.data.container_id || event.data.container_name;
+          if (newState.containers[containerId]) {
+            newState.containers[containerId].state = 'running';
+            newState.containers[containerId].unpaused_at = event.timestamp;
+          }
+        }
+        break;
+
+      case 'job.queued':
+      case 'job.started':
+      case 'job.completed':
+      case 'job.failed':
+      case 'job.cancelled':
+      case 'job.timeout':
+        if (event.data.job_id) {
+          newState.jobs[event.data.job_id] = {
+            ...newState.jobs[event.data.job_id],
+            status: event.event_type.split('.')[1], // Extract status from event type
+            last_updated: event.timestamp,
+            ...event.data,
+          };
+        }
+        break;
+
+      case 'device.online':
+        newState.online = true;
+        newState.last_seen = event.timestamp;
+        break;
+
+      case 'device.offline':
+        newState.online = false;
+        newState.offline_since = event.timestamp;
+        break;
+
+      // Add more event types as needed
+    }
+
+    return newState;
+  }
+
+  /**
+   * Calculate changes between two states
+   */
+  private static calculateStateChanges(
+    oldState: any,
+    newState: any,
+    events: Event[]
+  ): Array<{
+    field: string;
+    old_value: any;
+    new_value: any;
+    events_involved: string[];
+  }> {
+    const changes: Array<{
+      field: string;
+      old_value: any;
+      new_value: any;
+      events_involved: string[];
+    }> = [];
+
+    const allKeys = new Set([
+      ...Object.keys(oldState || {}),
+      ...Object.keys(newState || {}),
+    ]);
+
+    for (const key of allKeys) {
+      const oldValue = oldState?.[key];
+      const newValue = newState?.[key];
+
+      // Deep comparison using JSON stringify
+      if (JSON.stringify(oldValue) !== JSON.stringify(newValue)) {
+        // Find events that might have caused this change
+        const eventsInvolved = events
+          .filter(e => {
+            const dataStr = JSON.stringify(e.data);
+            return dataStr.includes(key) || e.event_type.includes(key);
+          })
+          .map(e => `${e.event_type} (${e.event_id.substring(0, 8)})`);
+
+        changes.push({
+          field: key,
+          old_value: oldValue,
+          new_value: newValue,
+          events_involved: eventsInvolved,
+        });
+      }
+    }
+
+    return changes;
   }
 }
 

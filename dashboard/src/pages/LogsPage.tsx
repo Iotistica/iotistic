@@ -58,6 +58,34 @@ export function LogsPage({ deviceUuid }: LogsPageProps) {
     }
   }, [logs, autoScroll]);
 
+  // Fetch historical logs based on date range
+  const fetchHistoricalLogs = async () => {
+    if (!deviceUuid || !dateFrom || !dateTo) return;
+    
+    setIsLoading(true);
+    try {
+      const params = new URLSearchParams({
+        from: dateFrom,
+        to: dateTo,
+        limit: '1000'
+      });
+      
+      if (selectedService !== 'all') {
+        params.append('service', selectedService);
+      }
+      
+      const response = await fetch(`http://localhost:4002/api/v1/devices/${deviceUuid}/logs?${params}`);
+      if (response.ok) {
+        const data = await response.json();
+        setLogs(data.logs || []);
+      }
+    } catch (error) {
+      console.error('[LogsPage] Error fetching historical logs:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Fetch list of available services
   useEffect(() => {
     const fetchServices = async () => {
@@ -76,6 +104,13 @@ export function LogsPage({ deviceUuid }: LogsPageProps) {
       fetchServices();
     }
   }, [deviceUuid]);
+  
+  // Fetch historical logs when date range or service changes
+  useEffect(() => {
+    if (dateFrom && dateTo) {
+      fetchHistoricalLogs();
+    }
+  }, [dateFrom, dateTo, selectedService, deviceUuid]);
 
   // WebSocket connection for real-time log streaming
   useEffect(() => {
@@ -166,7 +201,7 @@ export function LogsPage({ deviceUuid }: LogsPageProps) {
 
   const handleRefresh = () => {
     setLogs([]);
-    setIsLoading(true);
+    fetchHistoricalLogs();
   };
 
   const handleTogglePause = () => {

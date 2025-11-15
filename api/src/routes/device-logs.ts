@@ -129,18 +129,39 @@ router.get('/devices/:uuid/logs', async (req, res) => {
   try {
     const { uuid } = req.params;
     const serviceName = req.query.service as string | undefined;
-    const limit = parseInt(req.query.limit as string) || 100;
+    const limit = parseInt(req.query.limit as string) || 1000;
     const offset = parseInt(req.query.offset as string) || 0;
+    const from = req.query.from as string | undefined;
+    const to = req.query.to as string | undefined;
 
-    const logs = await DeviceLogsModel.get(uuid, {
+    // Build filter options
+    const filterOptions: any = {
       serviceName,
       limit,
       offset,
-    });
+    };
+
+    // Add date range filtering
+    if (from) {
+      filterOptions.since = new Date(from);
+    }
+    
+    // Note: DeviceLogsModel doesn't have 'until' param, so we'll filter by 'since'
+    // and rely on limit. For proper date range, we'd need to add 'until' support.
+
+    const logs = await DeviceLogsModel.get(uuid, filterOptions);
+    
+    // If 'to' is provided, filter results in memory (temporary solution)
+    let filteredLogs = logs;
+    if (to) {
+      const toDate = new Date(to);
+      toDate.setHours(23, 59, 59, 999); // End of day
+      filteredLogs = logs.filter(log => new Date(log.timestamp) <= toDate);
+    }
 
     res.json({
-      count: logs.length,
-      logs,
+      count: filteredLogs.length,
+      logs: filteredLogs,
     });
   } catch (error: any) {
     console.error('Error getting logs:', error);

@@ -7,10 +7,12 @@
 
 import { getMqttJobsNotifier } from './mqtt-jobs-notifier';
 import { pool } from '../db/connection';
+import { EventPublisher } from './event-sourcing';
 
 export class MqttJobsSubscriber {
   private notifier = getMqttJobsNotifier();
   private initialized = false;
+  private eventPublisher = new EventPublisher('mqtt-jobs-subscriber');
 
   /**
    * Initialize the subscriber and register handlers
@@ -119,6 +121,9 @@ export class MqttJobsSubscriber {
         await pool.query(updateQuery, params);
 
         console.log(`[MqttJobsSubscriber] Updated job ${jobId} status to ${status}`);
+
+        // 🎉 EVENT SOURCING: Publish job lifecycle events
+        await this.publishJobEvent(deviceUuid, jobId, status, existing.rows[0], statusDetails);
       } else {
         // Insert new record (should already exist from job creation, but handle just in case)
         console.warn(`[MqttJobsSubscriber] Job status record not found, creating new one for ${jobId}`);
@@ -146,6 +151,89 @@ export class MqttJobsSubscriber {
     } catch (error) {
       console.error(`[MqttJobsSubscriber] Failed to update job ${jobId}:`, error);
     }
+  }
+
+  /**
+   * Publish job lifecycle events based on status
+   */
+  private async publishJobEvent(
+    deviceUuid: string,
+    jobId: string,
+    status: string,
+    previousRecord: any,
+    statusDetails?: any
+  ): Promise<void> {
+    const eventMap: Record<string, string> = {
+      'IN_PROGRESS': 'job.started',
+      'SUCCEEDED': 'job.completed',
+      'FAILED': 'job.failed',
+      'TIMED_OUT': 'job.timeout',
+      'CANCELED': 'job.cancelled',
+    };
+
+    let eventType = eventMap[status];
+    
+    // Special case: IN_PROGRESS with progress updates
+    if (status === 'IN_PROGRESS' && statusDetails?.progress !== undefined && previousRecord?.status === 'IN_PROGRESS') {
+      eventType = 'job.progress';
+    }
+
+    if (!eventType) {
+      return; // No event for QUEUED or unknown status
+    }
+
+    const eventData: any = {
+      job_id: jobId,
+      status,
+      previous_status: previousRecord?.status,
+    };
+
+    // Add timing information
+    if (eventType === 'job.started') {
+      eventData.started_at = new Date().toISOString();
+      eventData.queued_at = previousRecord?.queued_at;
+    } else if (['job.completed', 'job.failed', 'job.timeout', 'job.cancelled'].includes(eventType)) {
+      eventData.completed_at = new Date().toISOString();
+      eventData.started_at = previousRecord?.started_at;
+      eventData.queued_at = previousRecord?.queued_at;
+      
+      // Calculate duration
+      if (previousRecord?.started_at) {
+        const duration = Date.now() - new Date(previousRecord.started_at).getTime();
+        eventData.duration_ms = duration;
+      }
+    }
+
+    // Add status details
+    if (statusDetails) {
+      if (statusDetails.reason) eventData.reason = statusDetails.reason;
+      if (statusDetails.progress !== undefined) eventData.progress = statusDetails.progress;
+      if (eventType === 'job.failed' && statusDetails.stderr) {
+        eventData.error_output = statusDetails.stderr.substring(0, 500); // Limit size
+      }
+    }
+
+    const severity = eventType === 'job.failed' ? 'error' : 
+                     eventType === 'job.timeout' ? 'warning' : 'info';
+    const impact = eventType === 'job.failed' ? 'medium' : 'low';
+
+    await this.eventPublisher.publish(
+      eventType,
+      'device',
+      deviceUuid,
+      eventData,
+      {
+        metadata: {
+          job_status_details: statusDetails
+        },
+        severity,
+        impact,
+        actor: {
+          type: 'device',
+          id: deviceUuid
+        }
+      }
+    );
   }
 
   /**
