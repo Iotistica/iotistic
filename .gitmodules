@@ -1,0 +1,3 @@
+[submodule "wg-server"]
+	path = wg-server
+	url = https://github.com/Iotistica/iot-wg-server.git
