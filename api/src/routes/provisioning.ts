@@ -190,7 +190,7 @@ router.post('/provisioning-keys', async (req, res) => {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + expiresInDays);
 
-    logger.info(`✅ Provisioning key created: ${id}`);
+    logger.info(`Provisioning key created: ${id}`);
 
     res.status(201).json({
       id,

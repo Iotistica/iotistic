@@ -15,6 +15,7 @@ import { hasPermission, hasAnyPermission } from '../middleware/permissions';
 import { PERMISSIONS } from '../types/permissions';
 import { jwtAuth } from '../middleware/jwt-auth';
 import { EventPublisher } from '../services/event-sourcing';
+import { logger } from '../utils/logger';
 
 const router = express.Router();
 const pool = poolWrapper.pool;
@@ -67,7 +68,7 @@ router.get('/jobs/templates',
       total: result.rows.length,
     });
   } catch (error) {
-    console.error('Error fetching job templates:', error);
+    logger.error('Error fetching job templates:', error);
     return res.status(500).json({
       error: 'Failed to fetch job templates',
       message: error instanceof Error ? error.message : 'Unknown error',
@@ -97,7 +98,7 @@ router.get('/jobs/templates/:id',
 
     return res.status(200).json(result.rows[0]);
   } catch (error) {
-    console.error('Error fetching job template:', error);
+    logger.error('Error fetching job template:', error);
     return res.status(500).json({
       error: 'Failed to fetch job template',
       message: error instanceof Error ? error.message : 'Unknown error',
@@ -128,7 +129,7 @@ router.post('/jobs/templates', async (req: Request, res: Response) => {
 
     return res.status(201).json(result.rows[0]);
   } catch (error: any) {
-    console.error('Error creating job template:', error);
+    logger.error('Error creating job template:', error);
     
     if (error.code === '23505') {  // Unique violation
       return res.status(409).json({
@@ -202,7 +203,7 @@ router.put('/jobs/templates/:id', async (req: Request, res: Response) => {
 
     return res.status(200).json(result.rows[0]);
   } catch (error) {
-    console.error('Error updating job template:', error);
+    logger.error('Error updating job template:', error);
     return res.status(500).json({
       error: 'Failed to update job template',
       message: error instanceof Error ? error.message : 'Unknown error',
@@ -232,7 +233,7 @@ router.delete('/jobs/templates/:id', async (req: Request, res: Response) => {
       id: result.rows[0].id,
     });
   } catch (error) {
-    console.error('Error deleting job template:', error);
+    logger.error('Error deleting job template:', error);
     return res.status(500).json({
       error: 'Failed to delete job template',
       message: error instanceof Error ? error.message : 'Unknown error',
@@ -354,7 +355,7 @@ router.post('/jobs/execute', async (req: Request, res: Response) => {
       `INSERT INTO device_job_status (job_id, device_uuid) VALUES ${deviceStatusValues}`
     );
 
-    console.log(`[Jobs] Created job ${jobId} for ${deviceUuids.length} devices`);
+    logger.info(`Created job ${jobId} for ${deviceUuids.length} devices`);
 
     // 🎉 EVENT SOURCING: Publish job.queued event for each device
     for (const deviceUuid of deviceUuids) {
@@ -401,12 +402,12 @@ router.post('/jobs/execute', async (req: Request, res: Response) => {
             timeout_seconds: (timeout_minutes || 60) * 60,
           });
         }
-        console.log(`[Jobs] Sent MQTT notifications to ${deviceUuids.length} devices`);
+        logger.info(`Sent MQTT notifications to ${deviceUuids.length} devices`);
       } catch (mqttError) {
-        console.error('[Jobs] Failed to send MQTT notifications (HTTP fallback will work):', mqttError);
+        logger.error('Failed to send MQTT notifications (HTTP fallback will work):', mqttError);
       }
     } else {
-      console.log('[Jobs] MQTT not connected - devices will receive jobs via HTTP polling');
+      logger.info('MQTT not connected - devices will receive jobs via HTTP polling');
     }
 
     return res.status(201).json({
@@ -414,7 +415,7 @@ router.post('/jobs/execute', async (req: Request, res: Response) => {
       message: `Job created and queued for ${deviceUuids.length} device(s)`,
     });
   } catch (error) {
-    console.error('Error creating job execution:', error);
+    logger.error('Error creating job execution:', error);
     return res.status(500).json({
       error: 'Failed to create job execution',
       message: error instanceof Error ? error.message : 'Unknown error',
@@ -452,7 +453,7 @@ router.get('/jobs/executions', async (req: Request, res: Response) => {
       offset: parseInt(offset as string),
     });
   } catch (error) {
-    console.error('Error fetching job executions:', error);
+    logger.error('Error fetching job executions:', error);
     return res.status(500).json({
       error: 'Failed to fetch job executions',
       message: error instanceof Error ? error.message : 'Unknown error',
@@ -496,7 +497,7 @@ router.get('/jobs/executions/:jobId', async (req: Request, res: Response) => {
       device_statuses: statusResult.rows,
     });
   } catch (error) {
-    console.error('Error fetching job execution:', error);
+    logger.error('Error fetching job execution:', error);
     return res.status(500).json({
       error: 'Failed to fetch job execution',
       message: error instanceof Error ? error.message : 'Unknown error',
@@ -540,7 +541,7 @@ router.post('/jobs/executions/:jobId/cancel', async (req: Request, res: Response
       job: jobResult.rows[0],
     });
   } catch (error) {
-    console.error('Error canceling job:', error);
+    logger.error('Error canceling job:', error);
     return res.status(500).json({
       error: 'Failed to cancel job',
       message: error instanceof Error ? error.message : 'Unknown error',
@@ -613,7 +614,7 @@ router.get('/devices/:uuid/jobs', async (req: Request, res: Response) => {
       totalPages: Math.ceil(totalCount / parseInt(limit as string)),
     });
   } catch (error) {
-    console.error('Error fetching device jobs:', error);
+    logger.error('Error fetching device jobs:', error);
     return res.status(500).json({
       error: 'Failed to fetch device jobs',
       message: error instanceof Error ? error.message : 'Unknown error',
@@ -651,7 +652,7 @@ async function jobsAuth(req: Request, res: Response, next: any) {
   try {
     const provisioningResult = await validateProvisioningKey(apiKey, req.ip || 'unknown');
     if (provisioningResult.valid) {
-      console.log(`[JobsAuth] Using provisioning key for device ${req.params.uuid}`);
+      logger.info(`Using provisioning key for device ${req.params.uuid}`);
       // Set req.device for compatibility
       req.device = {
         id: 0, // Placeholder
@@ -722,7 +723,7 @@ router.get('/devices/:uuid/jobs/next', jobsAuth, async (req: Request, res: Respo
       created_at: result.rows[0].queued_at,
     });
   } catch (error) {
-    console.error('Error fetching next job:', error);
+    logger.error('Error fetching next job:', error);
     return res.status(500).json({
       error: 'Failed to fetch next job',
       message: error instanceof Error ? error.message : 'Unknown error',
@@ -793,7 +794,7 @@ router.patch('/devices/:uuid/jobs/:jobId/status', deviceAuth, async (req: Reques
 
     return res.status(200).json(result.rows[0]);
   } catch (error) {
-    console.error('Error updating job status:', error);
+    logger.error('Error updating job status:', error);
     return res.status(500).json({
       error: 'Failed to update job status',
       message: error instanceof Error ? error.message : 'Unknown error',
@@ -820,7 +821,7 @@ router.get('/jobs/handlers', async (req: Request, res: Response) => {
       total: result.rows.length,
     });
   } catch (error) {
-    console.error('Error fetching job handlers:', error);
+    logger.error('Error fetching job handlers:', error);
     return res.status(500).json({
       error: 'Failed to fetch job handlers',
       message: error instanceof Error ? error.message : 'Unknown error',
@@ -858,7 +859,7 @@ router.post('/jobs/handlers', async (req: Request, res: Response) => {
 
     return res.status(201).json(result.rows[0]);
   } catch (error: any) {
-    console.error('Error creating job handler:', error);
+    logger.error('Error creating job handler:', error);
 
     if (error.code === '23505') {
       return res.status(409).json({
@@ -927,7 +928,7 @@ router.delete('/jobs/:jobId', async (req: Request, res: Response) => {
 
       await client.query('COMMIT');
 
-      console.log(`[Jobs] Deleted job ${jobId}`);
+      logger.info(`Deleted job ${jobId}`);
 
       return res.status(200).json({
         success: true,
@@ -941,7 +942,7 @@ router.delete('/jobs/:jobId', async (req: Request, res: Response) => {
       client.release();
     }
   } catch (error: any) {
-    console.error('[Jobs] Error deleting job:', error);
+    logger.error('Error deleting job:', error);
     return res.status(500).json({
       error: 'Failed to delete job',
       message: error.message,
@@ -988,7 +989,7 @@ async function updateJobExecutionStats(jobId: string): Promise<void> {
       [stats.succeeded, stats.failed, stats.in_progress, jobStatus, jobId]
     );
   } catch (error) {
-    console.error('Error updating job execution stats:', error);
+    logger.error('Error updating job execution stats:', error);
   }
 }
 

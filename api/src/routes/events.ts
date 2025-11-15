@@ -4,13 +4,249 @@
  */
 
 import express from 'express';
-import { EventStore } from '../services/event-sourcing';
+import { 
+  EventStore,
+  searchEvents,
+  getDeviceTimeline,
+  aggregateByPeriod,
+  getDeviceSummary,
+  type EventSearchCriteria
+} from '../services/event-sourcing';
+import { logger } from '../utils/logger';
 
 export const router = express.Router();
 
 // ============================================================================
 // Event Query Endpoints
 // ============================================================================
+
+/**
+ * Advanced event search with filtering
+ * GET /api/v1/events/search
+ * 
+ * Query params:
+ * - deviceUuid: Filter by device UUID
+ * - eventTypes: Comma-separated event types
+ * - aggregateTypes: Comma-separated aggregate types
+ * - dateFrom: ISO date string
+ * - dateTo: ISO date string
+ * - severity: Comma-separated severity levels
+ * - actorType: Actor type (system, user, device, agent, api, scheduler)
+ * - actorId: Actor ID
+ * - correlationId: Correlation ID
+ * - limit: Max results (default 100, max 1000)
+ * - offset: Pagination offset
+ */
+router.get('/events/search', async (req, res) => {
+  try {
+    const criteria: EventSearchCriteria = {};
+
+    if (req.query.deviceUuid) {
+      criteria.deviceUuid = req.query.deviceUuid as string;
+    }
+
+    if (req.query.eventTypes) {
+      criteria.eventTypes = (req.query.eventTypes as string).split(',').map(t => t.trim());
+    }
+
+    if (req.query.aggregateTypes) {
+      criteria.aggregateTypes = (req.query.aggregateTypes as string).split(',').map(t => t.trim());
+    }
+
+    if (req.query.dateFrom) {
+      criteria.dateFrom = new Date(req.query.dateFrom as string);
+    }
+
+    if (req.query.dateTo) {
+      criteria.dateTo = new Date(req.query.dateTo as string);
+    }
+
+    if (req.query.severity) {
+      criteria.severity = (req.query.severity as string).split(',').map(s => s.trim());
+    }
+
+    if (req.query.actorType) {
+      criteria.actor = { type: req.query.actorType as string };
+      if (req.query.actorId) {
+        criteria.actor.id = req.query.actorId as string;
+      }
+    }
+
+    if (req.query.correlationId) {
+      criteria.correlationId = req.query.correlationId as string;
+    }
+
+    if (req.query.limit) {
+      const limit = parseInt(req.query.limit as string, 10);
+      criteria.limit = Math.min(limit, 1000); // Max 1000
+    }
+
+    if (req.query.offset) {
+      criteria.offset = parseInt(req.query.offset as string, 10);
+    }
+
+    const events = await searchEvents(criteria);
+
+    res.json({
+      success: true,
+      count: events.length,
+      events,
+      criteria: {
+        ...criteria,
+        dateFrom: criteria.dateFrom?.toISOString(),
+        dateTo: criteria.dateTo?.toISOString(),
+      }
+    });
+  } catch (error) {
+    logger.error('Error searching events:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to search events',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * Get chronological event timeline for device
+ * GET /api/v1/events/device/:deviceUuid/timeline
+ * 
+ * Query params:
+ * - sinceDate: ISO date string (get events since this date)
+ * - eventTypes: Comma-separated event types to include
+ * - includeSampled: Include debug-level events (default: false)
+ * - limit: Max events (default 1000)
+ */
+router.get('/events/device/:deviceUuid/timeline', async (req, res) => {
+  try {
+    const { deviceUuid } = req.params;
+    const options: any = {};
+
+    if (req.query.sinceDate) {
+      options.sinceDate = new Date(req.query.sinceDate as string);
+    }
+
+    if (req.query.eventTypes) {
+      options.eventTypes = (req.query.eventTypes as string).split(',').map(t => t.trim());
+    }
+
+    if (req.query.includeSampled) {
+      options.includeSampled = req.query.includeSampled === 'true';
+    }
+
+    if (req.query.limit) {
+      options.limit = parseInt(req.query.limit as string, 10);
+    }
+
+    const events = await getDeviceTimeline(deviceUuid, options);
+
+    res.json({
+      success: true,
+      deviceUuid,
+      count: events.length,
+      events,
+      options: {
+        ...options,
+        sinceDate: options.sinceDate?.toISOString(),
+      }
+    });
+  } catch (error) {
+    logger.error(`Error getting timeline for device ${req.params.deviceUuid}:`, error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get device timeline',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * Aggregate events by time period
+ * GET /api/v1/events/device/:deviceUuid/aggregate
+ * 
+ * Query params:
+ * - period: hour|day|week|month (required)
+ * - dateFrom: ISO date string (required)
+ * - dateTo: ISO date string (required)
+ */
+router.get('/events/device/:deviceUuid/aggregate', async (req, res) => {
+  try {
+    const { deviceUuid } = req.params;
+    const { period, dateFrom, dateTo } = req.query;
+
+    if (!period || !dateFrom || !dateTo) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required parameters',
+        message: 'period, dateFrom, and dateTo are required'
+      });
+    }
+
+    if (!['hour', 'day', 'week', 'month'].includes(period as string)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid period',
+        message: 'period must be one of: hour, day, week, month'
+      });
+    }
+
+    const aggregation = await aggregateByPeriod(
+      deviceUuid,
+      period as 'hour' | 'day' | 'week' | 'month',
+      new Date(dateFrom as string),
+      new Date(dateTo as string)
+    );
+
+    res.json({
+      success: true,
+      deviceUuid,
+      period,
+      dateFrom,
+      dateTo,
+      count: aggregation.length,
+      aggregation
+    });
+  } catch (error) {
+    logger.error(`Error aggregating events for device ${req.params.deviceUuid}:`, error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to aggregate events',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * Get event summary and health score for device
+ * GET /api/v1/events/device/:deviceUuid/summary
+ * 
+ * Query params:
+ * - daysBack: Number of days to analyze (default: 30)
+ */
+router.get('/events/device/:deviceUuid/summary', async (req, res) => {
+  try {
+    const { deviceUuid } = req.params;
+    const daysBack = req.query.daysBack 
+      ? parseInt(req.query.daysBack as string, 10) 
+      : 30;
+
+    const summary = await getDeviceSummary(deviceUuid, daysBack);
+
+    res.json({
+      success: true,
+      deviceUuid,
+      daysBack,
+      summary
+    });
+  } catch (error) {
+    logger.error(`Error getting summary for device ${req.params.deviceUuid}:`, error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get device summary',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
 
 /**
  * Get events for a specific device
@@ -27,7 +263,7 @@ router.get('/events/device/:deviceUuid', async (req, res) => {
     const sinceEventId = req.query.sinceEventId ? parseInt(req.query.sinceEventId as string) : undefined;
     const eventType = req.query.eventType as string | undefined;
 
-    console.log(`[Events API] Fetching events for device: ${deviceUuid}`);
+    logger.info(`Fetching events for device: ${deviceUuid}`);
 
     // Get events for this device
     let events = await EventStore.getAggregateEvents('device', deviceUuid, sinceEventId);
@@ -62,7 +298,7 @@ router.get('/events/device/:deviceUuid', async (req, res) => {
       events: timelineEvents,
     });
   } catch (error) {
-    console.error('[Events API] Error fetching device events:', error);
+    logger.error('Error fetching device events:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to fetch device events',
@@ -79,7 +315,7 @@ router.get('/events/chain/:correlationId', async (req, res) => {
   try {
     const { correlationId } = req.params;
 
-    console.log(`[Events API] Fetching event chain for correlation: ${correlationId}`);
+    logger.info(`Fetching event chain for correlation: ${correlationId}`);
 
     const events = await EventStore.getEventChain(correlationId);
 
@@ -105,7 +341,7 @@ router.get('/events/chain/:correlationId', async (req, res) => {
       events: timelineEvents,
     });
   } catch (error) {
-    console.error('[Events API] Error fetching event chain:', error);
+    logger.error('Error fetching event chain:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to fetch event chain',
@@ -126,7 +362,7 @@ router.get('/events/recent', async (req, res) => {
     const limit = Math.min(parseInt(req.query.limit as string) || 100, 500);
     const aggregateType = req.query.aggregateType as string | undefined;
 
-    console.log(`[Events API] Fetching recent events (limit: ${limit})`);
+    logger.info(`Fetching recent events (limit: ${limit})`);
 
     const events = await EventStore.getRecentEvents(limit, aggregateType);
 
@@ -151,7 +387,7 @@ router.get('/events/recent', async (req, res) => {
       events: timelineEvents,
     });
   } catch (error) {
-    console.error('[Events API] Error fetching recent events:', error);
+    logger.error('Error fetching recent events:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to fetch recent events',
@@ -170,7 +406,7 @@ router.get('/events/stats', async (req, res) => {
   try {
     const daysBack = parseInt(req.query.daysBack as string) || 7;
 
-    console.log(`[Events API] Fetching event stats (${daysBack} days)`);
+    logger.info(`Fetching event stats (${daysBack} days)`);
 
     const stats = await EventStore.getStats(daysBack);
 
@@ -180,7 +416,7 @@ router.get('/events/stats', async (req, res) => {
       stats,
     });
   } catch (error) {
-    console.error('[Events API] Error fetching event stats:', error);
+    logger.error('Error fetching event stats:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to fetch event statistics',
@@ -208,7 +444,7 @@ router.post('/events/device/:deviceUuid/replay', async (req, res) => {
       });
     }
 
-    console.log(`[Events API] Replaying events for device ${deviceUuid} from ${fromTime} to ${toTime}`);
+    logger.info(`Replaying events for device ${deviceUuid} from ${fromTime} to ${toTime}`);
 
     const result = await EventStore.replayEvents(
       deviceUuid,
@@ -224,7 +460,7 @@ router.post('/events/device/:deviceUuid/replay', async (req, res) => {
       ...result,
     });
   } catch (error) {
-    console.error('[Events API] Error replaying events:', error);
+    logger.error('Error replaying events:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to replay events',
@@ -251,7 +487,7 @@ router.post('/events/device/:deviceUuid/snapshot', async (req, res) => {
       });
     }
 
-    console.log(`[Events API] Creating snapshot for device ${deviceUuid} at ${timestamp}`);
+    logger.info(`Creating snapshot for device ${deviceUuid} at ${timestamp}`);
 
     const snapshot = await EventStore.createSnapshot(
       deviceUuid,
@@ -263,7 +499,7 @@ router.post('/events/device/:deviceUuid/snapshot', async (req, res) => {
       ...snapshot,
     });
   } catch (error) {
-    console.error('[Events API] Error creating snapshot:', error);
+    logger.error('Error creating snapshot:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to create snapshot',
@@ -291,7 +527,7 @@ router.post('/events/device/:deviceUuid/compare', async (req, res) => {
       });
     }
 
-    console.log(`[Events API] Comparing states for device ${deviceUuid} between ${time1} and ${time2}`);
+    logger.info(`Comparing states for device ${deviceUuid} between ${time1} and ${time2}`);
 
     const comparison = await EventStore.compareStates(
       deviceUuid,
@@ -309,7 +545,7 @@ router.post('/events/device/:deviceUuid/compare', async (req, res) => {
       ...comparison,
     });
   } catch (error) {
-    console.error('[Events API] Error comparing states:', error);
+    logger.error('Error comparing states:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to compare states',

@@ -15,6 +15,7 @@ import fs from 'fs';
 import { IFCParserService } from '../services/ifc-parser.service';
 import { neo4jService } from '../services/neo4j.service';
 import { query } from '../db/connection';
+import { logger } from '../utils/logger';
 
 const router: Router = express.Router();
 
@@ -49,7 +50,7 @@ router.post('/upload-ifc', upload.single('file'), async (req: Request, res: Resp
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    console.log(`Uploading IFC file: ${req.file.originalname}`);
+    logger.info('Uploading IFC file', { filename: req.file.originalname });
 
     // Initialize IFC parser
     const parser = new IFCParserService();
@@ -58,20 +59,24 @@ router.post('/upload-ifc', upload.single('file'), async (req: Request, res: Resp
     // Parse IFC file
     const hierarchy = await parser.parseIFCFile(req.file.path);
 
-    console.log('IFC Parsing Results:');
-    console.log(`- Project: ${hierarchy.project?.name || 'none'}`);
-    console.log(`- Site: ${hierarchy.site?.name || 'none'}`);
-    console.log(`- Building: ${hierarchy.building?.name || 'none'}`);
-    console.log(`- Floors: ${hierarchy.floors.length}`);
-    hierarchy.floors.forEach(f => console.log(`  - Floor: ${f.name} (ID: ${f.expressId})`));
-    console.log(`- Spaces: ${hierarchy.spaces.length}`);
-    hierarchy.spaces.forEach(s => console.log(`  - Space: ${s.name} (ID: ${s.expressId})`));
-    console.log(`- Edge Devices: ${hierarchy.edgeDevices.length}`);
-    hierarchy.edgeDevices.forEach(d => console.log(`  - Device: ${d.name} (ID: ${d.expressId})`));
-    console.log(`- Sensors: ${hierarchy.sensors.length}`);
-    hierarchy.sensors.forEach(s => console.log(`  - Sensor: ${s.name} (ID: ${s.expressId})`));
-    console.log(`- Relationships: ${hierarchy.relationships.length}`);
-    hierarchy.relationships.forEach(r => console.log(`  - ${r.type}: ${r.from} -> ${r.to}`));
+    logger.info('IFC Parsing Results', {
+      project: hierarchy.project?.name || 'none',
+      site: hierarchy.site?.name || 'none',
+      building: hierarchy.building?.name || 'none',
+      floors: hierarchy.floors.length,
+      spaces: hierarchy.spaces.length,
+      edgeDevices: hierarchy.edgeDevices.length,
+      sensors: hierarchy.sensors.length,
+      relationships: hierarchy.relationships.length
+    });
+    
+    logger.debug('IFC Hierarchy Details', {
+      floors: hierarchy.floors.map(f => ({ name: f.name, id: f.expressId })),
+      spaces: hierarchy.spaces.map(s => ({ name: s.name, id: s.expressId })),
+      edgeDevices: hierarchy.edgeDevices.map(d => ({ name: d.name, id: d.expressId })),
+      sensors: hierarchy.sensors.map(s => ({ name: s.name, id: s.expressId })),
+      relationships: hierarchy.relationships.map(r => ({ type: r.type, from: r.from, to: r.to }))
+    });
 
     // Load into Neo4j
     await neo4jService.loadIFCHierarchy(hierarchy);
@@ -91,7 +96,7 @@ router.post('/upload-ifc', upload.single('file'), async (req: Request, res: Resp
       },
     });
   } catch (error: any) {
-    console.error('Failed to upload IFC:', error);
+    logger.error('Failed to upload IFC', { error: error.message });
     
     // Clean up file on error
     if (req.file && fs.existsSync(req.file.path)) {
@@ -113,11 +118,17 @@ router.get('/', async (req: Request, res: Response) => {
   try {
     const graphData = await neo4jService.getGraphVisualizationData();
     
-    console.log('📊 Graph Data Being Returned:');
-    console.log(`- Nodes: ${graphData.nodes.length}`);
-    console.log(`- Relationships: ${graphData.relationships.length}`);
-    graphData.relationships.forEach(rel => {
-      console.log(`  - ${rel.type}: ${rel.from} -> ${rel.to}`);
+    logger.info('Graph Data Being Returned', {
+      nodes: graphData.nodes.length,
+      relationships: graphData.relationships.length
+    });
+    
+    logger.debug('Graph Relationships', {
+      relationships: graphData.relationships.map(rel => ({
+        type: rel.type,
+        from: rel.from,
+        to: rel.to
+      }))
     });
     
     res.json({
@@ -125,7 +136,7 @@ router.get('/', async (req: Request, res: Response) => {
       data: graphData,
     });
   } catch (error: any) {
-    console.error('Failed to get graph data:', error);
+    logger.error('Failed to get graph data', { error: error.message });
     res.status(500).json({
       error: 'Failed to retrieve graph data',
       message: error.message,
@@ -157,7 +168,7 @@ router.post('/map-device', async (req: Request, res: Response) => {
         deviceName = deviceResult.rows[0].device_name;
       }
     } catch (dbError) {
-      console.warn(`Could not fetch device name for ${deviceUuid}:`, dbError);
+      logger.warn('Could not fetch device name', { deviceUuid, error: dbError });
     }
 
     await neo4jService.mapDeviceToSpace(deviceUuid, spaceExpressId, deviceName);
@@ -167,7 +178,7 @@ router.post('/map-device', async (req: Request, res: Response) => {
       message: `Device ${deviceName || deviceUuid} mapped to space ${spaceExpressId}`,
     });
   } catch (error: any) {
-    console.error('Failed to map device:', error);
+    logger.error('Failed to map device', { error: error.message });
     res.status(500).json({
       error: 'Failed to map device to space',
       message: error.message,
@@ -190,7 +201,7 @@ router.delete('/map-device/:deviceUuid', async (req: Request, res: Response) => 
       message: `Device ${deviceUuid} unmapped from space`,
     });
   } catch (error: any) {
-    console.error('Failed to unmap device:', error);
+    logger.error('Failed to unmap device', { error: error.message });
     res.status(500).json({
       error: 'Failed to unmap device',
       message: error.message,
@@ -227,7 +238,7 @@ router.delete('/node/:nodeId', async (req: Request, res: Response) => {
       message: `Device ${uuid} deleted successfully`,
     });
   } catch (error: any) {
-    console.error('Failed to delete node:', error);
+    logger.error('Failed to delete node', { error: error.message });
     res.status(500).json({
       error: 'Failed to delete node',
       message: error.message,
@@ -248,7 +259,7 @@ router.get('/device-mappings', async (req: Request, res: Response) => {
       data: mappings,
     });
   } catch (error: any) {
-    console.error('Failed to get device mappings:', error);
+    logger.error('Failed to get device mappings', { error: error.message });
     res.status(500).json({
       error: 'Failed to retrieve device mappings',
       message: error.message,

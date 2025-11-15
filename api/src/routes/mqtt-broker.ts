@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import poolWrapper from '../db/connection';
 import bcrypt from 'bcrypt';
+import { logger } from '../utils/logger';
 
 const pool = poolWrapper.pool;
 
@@ -44,7 +45,7 @@ router.get('/brokers', async (req: Request, res: Response) => {
       count: result.rows.length
     });
   } catch (error) {
-    console.error('Error fetching broker configurations:', error);
+    logger.error('Error fetching broker configurations:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to fetch broker configurations'
@@ -69,7 +70,7 @@ router.get('/brokers/summary', async (req: Request, res: Response) => {
       count: result.rows.length
     });
   } catch (error) {
-    console.error('Error fetching broker summary:', error);
+    logger.error('Error fetching broker summary:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to fetch broker summary'
@@ -126,7 +127,7 @@ router.get('/brokers/:id', async (req: Request, res: Response) => {
       data: result.rows[0]
     });
   } catch (error) {
-    console.error('Error fetching broker configuration:', error);
+    logger.error('Error fetching broker configuration:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to fetch broker configuration'
@@ -212,7 +213,7 @@ router.post('/brokers', async (req: Request, res: Response) => {
       data: result.rows[0]
     });
   } catch (error: any) {
-    console.error('Error creating broker configuration:', error);
+    logger.error('Error creating broker configuration:', error);
     
     if (error.code === '23505') {  // Unique violation
       return res.status(409).json({
@@ -349,7 +350,7 @@ router.put('/brokers/:id', async (req: Request, res: Response) => {
       data: result.rows[0]
     });
   } catch (error: any) {
-    console.error('Error updating broker configuration:', error);
+    logger.error('Error updating broker configuration:', error);
     
     if (error.code === '23505') {  // Unique violation
       return res.status(409).json({
@@ -404,7 +405,7 @@ router.delete('/brokers/:id', async (req: Request, res: Response) => {
       message: `Broker configuration "${result.rows[0].name}" deleted successfully`
     });
   } catch (error) {
-    console.error('Error deleting broker configuration:', error);
+    logger.error('Error deleting broker configuration:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to delete broker configuration'
@@ -450,7 +451,7 @@ router.post('/brokers/:id/test', async (req: Request, res: Response) => {
       }
     });
   } catch (error) {
-    console.error('Error testing broker connection:', error);
+    logger.error('Error testing broker connection:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to test broker connection'

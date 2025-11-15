@@ -6,6 +6,7 @@
 import express from 'express';
 import { LicenseValidator } from '../services/license-validator';
 import { DeviceModel } from '../db/models';
+import { logger } from '../utils/logger';
 
 const router = express.Router();
 
@@ -45,8 +46,8 @@ router.get('/license', async (req, res) => {
       },
       upgradeUrl: process.env.BILLING_UPGRADE_URL || 'https://iotistic.ca/upgrade',
     });
-  } catch (error) {
-    console.error('Error fetching license info:', error);
+  } catch (error: any) {
+    logger.error('Error fetching license info', { error: error.message });
     res.status(500).json({ error: 'Internal server error' });
   }
 });

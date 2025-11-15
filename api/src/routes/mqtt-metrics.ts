@@ -5,6 +5,7 @@
 
 import express, { Router } from 'express';
 import fetch from 'node-fetch';
+import { logger } from '../utils/logger';
 
 const router = Router();
 
@@ -56,7 +57,7 @@ router.get('/metrics', async (req, res) => {
       }
     });
   } catch (error: any) {
-    console.error('Error fetching MQTT metrics:', error);
+    logger.error('Error fetching MQTT metrics:', error);
     res.status(503).json({
       error: 'Failed to fetch MQTT metrics',
       message: error.message,
@@ -75,7 +76,7 @@ router.get('/health', async (req, res) => {
     const data = await response.json();
     res.json(data);
   } catch (error: any) {
-    console.error('Error fetching MQTT health:', error);
+    logger.error('Error fetching MQTT health:', error);
     res.status(503).json({
       status: 'error',
       connected: false,

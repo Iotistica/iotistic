@@ -9,6 +9,7 @@ import bcrypt from 'bcrypt';
 import { query } from '../db/connection';
 import { hasPermission, isAdminOrOwner, isOwner, checkUserPermissions } from '../middleware/permissions';
 import { PERMISSIONS, ROLES, UserWithPermissions } from '../types/permissions';
+import { logger } from '../utils/logger';
 
 const router = Router();
 
@@ -35,7 +36,7 @@ router.get('/',
 
       res.json(result.rows);
     } catch (error) {
-      console.error('List users error:', error);
+      logger.error('List users error:', error);
       res.status(500).json({ 
         error: 'Failed to fetch users',
         message: error instanceof Error ? error.message : 'Unknown error'
@@ -73,7 +74,7 @@ router.get('/:id',
 
       res.json(result.rows[0]);
     } catch (error) {
-      console.error('Get user error:', error);
+      logger.error('Get user error:', error);
       res.status(500).json({ 
         error: 'Failed to fetch user',
         message: error instanceof Error ? error.message : 'Unknown error'
@@ -126,7 +127,7 @@ router.post('/',
 
       res.status(201).json(result.rows[0]);
     } catch (error: any) {
-      console.error('Create user error:', error);
+      logger.error('Create user error:', error);
       
       // Handle unique constraint violations
       if (error.code === '23505') {
@@ -224,7 +225,7 @@ router.put('/:id',
 
       res.json(result.rows[0]);
     } catch (error: any) {
-      console.error('Update user error:', error);
+      logger.error('Update user error:', error);
 
       if (error.code === '23505') {
         if (error.constraint === 'users_email_key') {
@@ -279,7 +280,7 @@ router.delete('/:id',
 
       res.status(204).send();
     } catch (error) {
-      console.error('Delete user error:', error);
+      logger.error('Delete user error:', error);
       res.status(500).json({ 
         error: 'Failed to delete user',
         message: error instanceof Error ? error.message : 'Unknown error'

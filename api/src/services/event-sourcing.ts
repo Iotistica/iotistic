@@ -872,6 +872,265 @@ export function objectsAreEqual(obj1: any, obj2: any): boolean {
 }
 
 // ============================================================================
+// EVENT SEARCH & AGGREGATION
+// ============================================================================
+
+export interface EventSearchCriteria {
+  deviceUuid?: string;
+  eventTypes?: string[];
+  aggregateTypes?: string[];
+  dateFrom?: Date;
+  dateTo?: Date;
+  severity?: string[];
+  actor?: { type: string; id?: string };
+  tags?: Record<string, string>;
+  correlationId?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface EventAggregation {
+  period_start: Date;
+  event_type: string;
+  count: number;
+}
+
+export interface DeviceEventSummary {
+  total_events: number;
+  event_type_breakdown: Record<string, number>;
+  critical_events: number;
+  last_activity: Date | null;
+  health_score: number;
+}
+
+/**
+ * Advanced event search with filtering
+ */
+export async function searchEvents(criteria: EventSearchCriteria): Promise<Event[]> {
+  const conditions: string[] = [];
+  const params: any[] = [];
+  let paramCounter = 1;
+
+  if (criteria.deviceUuid) {
+    conditions.push(`aggregate_id = $${paramCounter++}`);
+    params.push(criteria.deviceUuid);
+  }
+
+  if (criteria.eventTypes && criteria.eventTypes.length > 0) {
+    conditions.push(`event_type = ANY($${paramCounter++})`);
+    params.push(criteria.eventTypes);
+  }
+
+  if (criteria.aggregateTypes && criteria.aggregateTypes.length > 0) {
+    conditions.push(`aggregate_type = ANY($${paramCounter++})`);
+    params.push(criteria.aggregateTypes);
+  }
+
+  if (criteria.dateFrom) {
+    conditions.push(`timestamp >= $${paramCounter++}`);
+    params.push(criteria.dateFrom);
+  }
+
+  if (criteria.dateTo) {
+    conditions.push(`timestamp <= $${paramCounter++}`);
+    params.push(criteria.dateTo);
+  }
+
+  if (criteria.severity && criteria.severity.length > 0) {
+    conditions.push(`severity = ANY($${paramCounter++})`);
+    params.push(criteria.severity);
+  }
+
+  if (criteria.actor?.type) {
+    conditions.push(`actor_type = $${paramCounter++}`);
+    params.push(criteria.actor.type);
+    
+    if (criteria.actor.id) {
+      conditions.push(`actor_id = $${paramCounter++}`);
+      params.push(criteria.actor.id);
+    }
+  }
+
+  if (criteria.correlationId) {
+    conditions.push(`correlation_id = $${paramCounter++}`);
+    params.push(criteria.correlationId);
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  const limit = criteria.limit || 100;
+  const offset = criteria.offset || 0;
+
+  const query = `
+    SELECT 
+      event_id, event_type, event_version, timestamp, 
+      aggregate_type, aggregate_id, data, metadata,
+      correlation_id, causation_id, source, checksum,
+      actor_type, actor_id, severity, impact
+    FROM events
+    ${whereClause}
+    ORDER BY timestamp DESC
+    LIMIT $${paramCounter++} OFFSET $${paramCounter++}
+  `;
+
+  params.push(limit, offset);
+
+  const result = await pool.query(query, params);
+  return result.rows;
+}
+
+/**
+ * Get event timeline for device (all events chronologically)
+ */
+export async function getDeviceTimeline(
+  deviceUuid: string,
+  options: {
+    sinceDate?: Date;
+    eventTypes?: string[];
+    includeSampled?: boolean;
+    limit?: number;
+  } = {}
+): Promise<Event[]> {
+  const conditions: string[] = ['aggregate_id = $1'];
+  const params: any[] = [deviceUuid];
+  let paramCounter = 2;
+
+  if (options.sinceDate) {
+    conditions.push(`timestamp >= $${paramCounter++}`);
+    params.push(options.sinceDate);
+  }
+
+  if (options.eventTypes && options.eventTypes.length > 0) {
+    conditions.push(`event_type = ANY($${paramCounter++})`);
+    params.push(options.eventTypes);
+  }
+
+  if (!options.includeSampled) {
+    // Exclude high-frequency debug events
+    conditions.push(`severity NOT IN ('debug')`);
+  }
+
+  const limit = options.limit || 1000;
+
+  const query = `
+    SELECT 
+      e.event_id, e.event_type, e.event_version, e.timestamp,
+      e.aggregate_type, e.aggregate_id, e.data, e.metadata,
+      e.correlation_id, e.causation_id, e.source, e.checksum,
+      e.actor_type, e.actor_id, e.severity, e.impact,
+      et.description as event_description
+    FROM events e
+    LEFT JOIN event_types et ON e.event_type = et.event_type
+    WHERE ${conditions.join(' AND ')}
+    ORDER BY e.timestamp DESC
+    LIMIT $${paramCounter}
+  `;
+
+  params.push(limit);
+
+  const result = await pool.query(query, params);
+  return result.rows;
+}
+
+/**
+ * Aggregate events by time period
+ */
+export async function aggregateByPeriod(
+  deviceUuid: string,
+  period: 'hour' | 'day' | 'week' | 'month',
+  dateFrom: Date,
+  dateTo: Date
+): Promise<EventAggregation[]> {
+  const truncFunc = {
+    hour: 'hour',
+    day: 'day',
+    week: 'week',
+    month: 'month'
+  }[period];
+
+  const query = `
+    SELECT 
+      DATE_TRUNC($1, timestamp) as period_start,
+      event_type,
+      COUNT(*) as count
+    FROM events
+    WHERE aggregate_id = $2
+      AND timestamp >= $3
+      AND timestamp <= $4
+    GROUP BY DATE_TRUNC($1, timestamp), event_type
+    ORDER BY period_start DESC, count DESC
+  `;
+
+  const result = await pool.query(query, [truncFunc, deviceUuid, dateFrom, dateTo]);
+  return result.rows.map(row => ({
+    period_start: row.period_start,
+    event_type: row.event_type,
+    count: parseInt(row.count, 10)
+  }));
+}
+
+/**
+ * Get event summary for device
+ */
+export async function getDeviceSummary(
+  deviceUuid: string,
+  daysBack: number = 30
+): Promise<DeviceEventSummary> {
+  const dateFrom = new Date();
+  dateFrom.setDate(dateFrom.getDate() - daysBack);
+
+  // Get total events and breakdown
+  const summaryQuery = `
+    SELECT 
+      COUNT(*) as total_events,
+      COUNT(*) FILTER (WHERE severity IN ('error', 'critical')) as critical_events,
+      MAX(timestamp) as last_activity,
+      jsonb_object_agg(event_type, event_count) as event_type_breakdown
+    FROM (
+      SELECT 
+        event_type,
+        COUNT(*) as event_count,
+        MAX(timestamp) as timestamp,
+        MAX(severity) as severity
+      FROM events
+      WHERE aggregate_id = $1
+        AND timestamp >= $2
+      GROUP BY event_type
+    ) sub
+  `;
+
+  const result = await pool.query(summaryQuery, [deviceUuid, dateFrom]);
+  const row = result.rows[0];
+
+  // Calculate health score (0-100)
+  // Based on: ratio of error events, recency of activity, variety of events
+  const totalEvents = parseInt(row.total_events || '0', 10);
+  const criticalEvents = parseInt(row.critical_events || '0', 10);
+  const errorRatio = totalEvents > 0 ? criticalEvents / totalEvents : 0;
+  
+  let healthScore = 100;
+  healthScore -= errorRatio * 50; // Up to -50 for errors
+  
+  if (row.last_activity) {
+    const hoursSinceActivity = (Date.now() - new Date(row.last_activity).getTime()) / (1000 * 60 * 60);
+    if (hoursSinceActivity > 24) {
+      healthScore -= Math.min(30, hoursSinceActivity / 2); // Up to -30 for inactivity
+    }
+  } else {
+    healthScore -= 50; // No activity at all
+  }
+
+  healthScore = Math.max(0, Math.min(100, healthScore));
+
+  return {
+    total_events: totalEvents,
+    event_type_breakdown: row.event_type_breakdown || {},
+    critical_events: criticalEvents,
+    last_activity: row.last_activity || null,
+    health_score: Math.round(healthScore)
+  };
+}
+
+// ============================================================================
 // EXPORTS
 // ============================================================================
 
@@ -883,4 +1142,8 @@ export default {
   publishTargetStateChange,
   publishCurrentStateChange,
   publishReconciliationCycle,
+  searchEvents,
+  getDeviceTimeline,
+  aggregateByPeriod,
+  getDeviceSummary,
 };

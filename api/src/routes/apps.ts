@@ -6,6 +6,7 @@
 
 import express from 'express';
 import { query } from '../db/connection';
+import { logger } from '../utils/logger';
 
 export const router = express.Router();
 
@@ -104,7 +105,7 @@ router.post('/applications', async (req, res) => {
       ]
     );
 
-    console.log(`✅ Created application template: ${appName} (ID: ${appId}, slug: ${slug})`);
+    logger.info(`Created application template: ${appName} (ID: ${appId}, slug: ${slug})`);
 
     res.status(201).json({
       appId: app.id,
@@ -118,7 +119,7 @@ router.post('/applications', async (req, res) => {
     });
 
   } catch (error: any) {
-    console.error('Error creating application template:', error);
+    logger.error('Error creating application template:', error);
     res.status(500).json({
       error: 'Failed to create application template',
       message: error.message
@@ -166,7 +167,7 @@ router.get('/applications', async (req, res) => {
     });
 
   } catch (error: any) {
-    console.error('Error listing applications:', error);
+    logger.error('Error listing applications:', error);
     res.status(500).json({
       error: 'Failed to list applications',
       message: error.message
@@ -216,7 +217,7 @@ router.get('/applications/:appId', async (req, res) => {
     });
 
   } catch (error: any) {
-    console.error('Error getting application:', error);
+    logger.error('Error getting application:', error);
     res.status(500).json({
       error: 'Failed to get application',
       message: error.message
@@ -285,7 +286,7 @@ router.patch('/applications/:appId', async (req, res) => {
 
     const app = result.rows[0];
 
-    console.log(`✅ Updated application template: ${app.app_name} (ID: ${appId})`);
+    logger.info(`Updated application template: ${app.app_name} (ID: ${appId})`);
 
     res.json({
       appId: app.id,
@@ -299,7 +300,7 @@ router.patch('/applications/:appId', async (req, res) => {
     });
 
   } catch (error: any) {
-    console.error('Error updating application:', error);
+    logger.error('Error updating application:', error);
     res.status(500).json({
       error: 'Failed to update application',
       message: error.message
@@ -350,7 +351,7 @@ router.delete('/applications/:appId', async (req, res) => {
       });
     }
 
-    console.log(`🗑️  Deleted application template: ${result.rows[0].app_name} (ID: ${appId})`);
+    logger.info(`Deleted application template: ${result.rows[0].app_name} (ID: ${appId})`);
 
     res.json({
       status: 'ok',
@@ -359,7 +360,7 @@ router.delete('/applications/:appId', async (req, res) => {
     });
 
   } catch (error: any) {
-    console.error('Error deleting application:', error);
+    logger.error('Error deleting application:', error);
     res.status(500).json({
       error: 'Failed to delete application',
       message: error.message
@@ -411,7 +412,7 @@ router.post('/apps/next-id', async (req, res) => {
       ]
     );
 
-    console.log(`✅ Generated app ID ${appId} for "${appName}"`);
+    logger.info(`Generated app ID ${appId} for "${appName}"`);
 
     res.json({ 
       appId, 
@@ -419,16 +420,15 @@ router.post('/apps/next-id', async (req, res) => {
       metadata: metadata || {}
     });
 
+
   } catch (error: any) {
-    console.error('Error generating app ID:', error);
-    res.status(500).json({ 
+    logger.error('Error generating app ID:', error);
+    res.status(500).json({
       error: 'Failed to generate app ID',
-      message: error.message 
+      message: error.message
     });
   }
-});
-
-/**
+});/**
  * Generate next service ID
  * POST /api/v1/services/next-id
  * 
@@ -482,7 +482,7 @@ router.post('/services/next-id', async (req, res) => {
       ]
     );
 
-    console.log(`✅ Generated service ID ${serviceId} for "${serviceName}" (app ${appId})`);
+    logger.info(`Generated service ID ${serviceId} for "${serviceName}" (app ${appId})`);
 
     res.json({ 
       serviceId, 
@@ -492,16 +492,15 @@ router.post('/services/next-id', async (req, res) => {
       metadata: fullMetadata
     });
 
+
   } catch (error: any) {
-    console.error('Error generating service ID:', error);
-    res.status(500).json({ 
+    logger.error('Error generating service ID:', error);
+    res.status(500).json({
       error: 'Failed to generate service ID',
-      message: error.message 
+      message: error.message
     });
   }
-});
-
-/**
+});/**
  * Get all registered app/service IDs
  * GET /api/v1/apps-services/registry
  * 
@@ -537,10 +536,10 @@ router.get('/apps-services/registry', async (req, res) => {
     });
 
   } catch (error: any) {
-    console.error('Error fetching app/service registry:', error);
-    res.status(500).json({ 
-      error: 'Failed to fetch registry',
-      message: error.message 
+    logger.error('Error fetching app/service registry:', error);
+    res.status(500).json({
+      error: 'Failed to fetch app/service registry',
+      message: error.message
     });
   }
 });
@@ -593,13 +592,12 @@ router.get('/apps-services/:type/:id', async (req, res) => {
       createdAt: row.created_at
     });
 
+
   } catch (error: any) {
-    console.error('Error fetching app/service:', error);
-    res.status(500).json({ 
+    logger.error('Error fetching app/service:', error);
+    res.status(500).json({
       error: 'Failed to fetch app/service',
-      message: error.message 
+      message: error.message
     });
   }
-});
-
-export default router;
+});export default router;

@@ -25,7 +25,7 @@ import {
   DeviceModel,
   DeviceLogsModel,
 } from '../db/models';
-
+import { logger } from '../utils/logger';
 import deviceAuth, { deviceAuthFromBody } from '../middleware/device-auth';
 
 
@@ -40,7 +40,7 @@ export const router = express.Router();
  * Accepts both JSON array and NDJSON (newline-delimited JSON) formats
  */
 router.post('/device/:uuid/logs', deviceAuth, express.text({ type: 'application/x-ndjson' }), async (req, res) => {
-  console.log(`🔵 POST /device/:uuid/logs endpoint hit! UUID: ${req.params.uuid}`);
+  logger.debug('POST /device/:uuid/logs endpoint hit', { uuid: req.params.uuid });
   try {
     const { uuid } = req.params;
     let logs: any[];
@@ -58,32 +58,37 @@ router.post('/device/:uuid/logs', deviceAuth, express.text({ type: 'application/
           try {
             return JSON.parse(line);
           } catch (e) {
-            console.warn(`⚠️  Failed to parse NDJSON line: ${line.substring(0, 100)}`);
+            logger.warn('Failed to parse NDJSON line', { line: line.substring(0, 100) });
             return null;
           }
         })
         .filter(log => log !== null);
       
-      console.log(`📥 Received logs from device ${uuid.substring(0, 8)}... (NDJSON format)`);
-      console.log(`   Parsed ${logs.length} log entries from NDJSON`);
+      logger.info('Received logs from device (NDJSON format)', { 
+        uuid: uuid.substring(0, 8), 
+        count: logs.length 
+      });
     } else {
       // Standard JSON array format
       logs = req.body;
-      console.log(`📥 Received logs from device ${uuid.substring(0, 8)}... (JSON array format)`);
+      logger.info('Received logs from device (JSON array format)', { 
+        uuid: uuid.substring(0, 8) 
+      });
     }
 
-    console.log(`   Type: ${typeof logs}, Is Array: ${Array.isArray(logs)}, Length: ${logs?.length}`);
-    if (logs && logs.length > 0) {
-      console.log(`   First log:`, JSON.stringify(logs[0], null, 2));
-      console.log(`   First log keys:`, Object.keys(logs[0]));
-    }
+    logger.debug('Log details', { 
+      type: typeof logs, 
+      isArray: Array.isArray(logs), 
+      length: logs?.length,
+      firstLog: logs && logs.length > 0 ? logs[0] : null
+    });
 
     // Ensure device exists
     await DeviceModel.getOrCreate(uuid);
 
     // Store logs
     if (Array.isArray(logs) && logs.length > 0) {
-      console.log(`   📝 About to store ${logs.length} logs...`);
+      logger.debug('Storing logs', { count: logs.length });
       
       // Transform agent log format to API format
       const transformedLogs = logs.map((log: any) => ({
@@ -95,24 +100,24 @@ router.post('/device/:uuid/logs', deviceAuth, express.text({ type: 'application/
       }));
       
       await DeviceLogsModel.store(uuid, transformedLogs);
-      console.log(`   ✅ Stored ${logs.length} log entries`);
+      logger.info('Stored log entries', { count: logs.length, uuid: uuid.substring(0, 8) });
       
       // Publish logs to Redis pub/sub for real-time WebSocket streaming
       try {
         const { redisClient } = await import('../redis/client');
         await redisClient.publish(`device:${uuid}:logs`, JSON.stringify({ logs: transformedLogs }));
-        console.log(`   📡 Published ${transformedLogs.length} logs to Redis pub/sub`);
+        logger.debug('Published logs to Redis pub/sub', { count: transformedLogs.length });
       } catch (error) {
-        console.error(`   ⚠️  Failed to publish logs to Redis:`, error);
+        logger.warn('Failed to publish logs to Redis', { error });
         // Don't fail the request if Redis publish fails
       }
     } else {
-      console.log(`   ⚠️  No logs to store or invalid format`);
+      logger.warn('No logs to store or invalid format');
     }
 
     res.json({ status: 'ok', received: Array.isArray(logs) ? logs.length : 0 });
   } catch (error: any) {
-    console.error('❌ Error storing logs:', error);
+    logger.error('Error storing logs', { error: error.message });
     res.status(500).json({
       error: 'Failed to process logs',
       message: error.message
@@ -164,7 +169,7 @@ router.get('/devices/:uuid/logs', async (req, res) => {
       logs: filteredLogs,
     });
   } catch (error: any) {
-    console.error('Error getting logs:', error);
+    logger.error('Error getting logs', { error: error.message });
     res.status(500).json({
       error: 'Failed to get logs',
       message: error.message
@@ -191,7 +196,7 @@ router.get('/devices/:uuid/logs/services', async (req, res) => {
       services,
     });
   } catch (error: any) {
-    console.error('Error getting log services:', error);
+    logger.error('Error getting log services', { error: error.message });
     res.status(500).json({
       error: 'Failed to get log services',
       message: error.message

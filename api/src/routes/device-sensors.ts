@@ -6,15 +6,21 @@
  * - Config in device_target_state remains source of truth for agent
  * - device_sensors table for efficient querying/display
  * 
- * Endpoints:
+ * CRUD Endpoints:
  * - GET /api/v1/devices/:uuid/sensors - List all sensors
  * - POST /api/v1/devices/:uuid/sensors - Add new sensor
  * - PUT /api/v1/devices/:uuid/sensors/:name - Update sensor
  * - DELETE /api/v1/devices/:uuid/sensors/:name - Delete sensor
+ * 
+ * Health & History Endpoints:
+ * - GET /api/v1/devices/:uuid/device-health - Sensor overview and status
+ * - GET /api/v1/devices/:uuid/protocol-adapters/:protocol/:deviceName/history - Protocol adapter history
  */
 
 import express from 'express';
+import { query } from '../db/connection';
 import { deviceSensorSync } from '../services/device-sensor-sync';
+import { logger } from '../utils/logger';
 
 export const router = express.Router();
 
@@ -39,7 +45,7 @@ router.get('/devices/:uuid/sensors', async (req, res) => {
       count: sensors.length
     });
   } catch (error: any) {
-    console.error('Error getting sensors:', error);
+    logger.error('Error deleting sensor:', error);
     res.status(500).json({
       error: 'Failed to get sensors',
       message: error.message
@@ -95,7 +101,7 @@ router.post('/devices/:uuid/sensors', async (req, res) => {
       isDraft: result.isDraft || false
     });
   } catch (error: any) {
-    console.error('Error adding sensor:', error);
+    logger.error('Error adding sensor:', error);
     
     // Handle duplicate name error
     if (error.message.includes('already exists')) {
@@ -138,7 +144,7 @@ router.put('/devices/:uuid/sensors/:name', async (req, res) => {
       version: result.version
     });
   } catch (error: any) {
-    console.error('Error updating sensor:', error);
+    logger.error('Error updating sensor:', error);
     
     if (error.message?.includes('not found')) {
       return res.status(404).json({
@@ -177,7 +183,7 @@ router.delete('/devices/:uuid/sensors/:name', async (req, res) => {
       version: result.version
     });
   } catch (error: any) {
-    console.error('Error deleting sensor:', error);
+    logger.error('Error deleting sensor:', error);
     
     if (error.message?.includes('not found')) {
       return res.status(404).json({
@@ -193,9 +199,129 @@ router.delete('/devices/:uuid/sensors/:name', async (req, res) => {
   }
 });
 
+// ============================================================================
+// Health Monitoring & Historical Data
+// ============================================================================
+
+/**
+ * Get device sensor overview
+ * Shows configured sensors with protocol breakdown
+ * GET /api/v1/devices/:uuid/device-health
+ */
+router.get('/devices/:uuid/device-health', async (req, res) => {
+  try {
+    const { uuid } = req.params;
+    const { protocolType } = req.query;
+
+    let whereClause = 'device_uuid = $1';
+    const params: any[] = [uuid];
+
+    if (protocolType) {
+      whereClause += ' AND protocol = $2';
+      params.push(protocolType);
+    }
+
+    const result = await query(
+      `SELECT 
+        name,
+        protocol,
+        enabled,
+        poll_interval,
+        connection,
+        data_points,
+        metadata,
+        updated_at,
+        synced_to_config
+      FROM device_sensors
+      WHERE ${whereClause}
+      ORDER BY protocol, name`,
+      params
+    );
+
+    const devices = result.rows.map((row: any) => ({
+      name: row.name,
+      protocol: row.protocol,
+      status: row.enabled ? 'configured' : 'disabled',
+      enabled: row.enabled,
+      pollInterval: row.poll_interval,
+      connection: row.connection,
+      dataPoints: row.data_points,
+      lastUpdated: row.updated_at,
+      synced: row.synced_to_config
+    }));
+
+    const summary = {
+      total: devices.length,
+      enabled: devices.filter((d: any) => d.enabled).length,
+      disabled: devices.filter((d: any) => !d.enabled).length,
+      byProtocol: result.rows.reduce((acc: any, row: any) => {
+        acc[row.protocol] = (acc[row.protocol] || 0) + 1;
+        return acc;
+      }, {})
+    };
+
+    res.json({
+      deviceUuid: uuid,
+      summary,
+      devices
+    });
+  } catch (error: any) {
+    logger.error('Error fetching device sensors:', error);
+    res.status(500).json({
+      error: 'Failed to fetch device sensors',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Get protocol adapter health history for time-series charts
+ * GET /api/v1/devices/:uuid/protocol-adapters/:protocol/:deviceName/history
+ * Query params: ?hours=24 (default)
+ */
+router.get('/devices/:uuid/protocol-adapters/:protocol/:deviceName/history', async (req, res) => {
+  try {
+    const { uuid, protocol, deviceName } = req.params;
+    const hours = parseInt(req.query.hours as string) || 24;
+
+    const result = await query(
+      `SELECT 
+        protocol_type,
+        device_name,
+        connected,
+        last_poll,
+        error_count,
+        last_error,
+        timestamp
+      FROM protocol_adapter_health_history
+      WHERE device_uuid = $1 
+        AND protocol_type = $2
+        AND device_name = $3
+        AND timestamp > NOW() - INTERVAL '1 hour' * $4
+      ORDER BY timestamp DESC
+      LIMIT 1000`,
+      [uuid, protocol, deviceName, hours]
+    );
+
+    res.json({
+      device_uuid: uuid,
+      protocol_type: protocol,
+      device_name: deviceName,
+      hours,
+      count: result.rows.length,
+      history: result.rows
+    });
+  } catch (error: any) {
+    logger.error('Error fetching protocol adapter history:', error);
+    res.status(500).json({
+      error: 'Failed to fetch protocol adapter history',
+      message: error.message
+    });
+  }
+});
 
 // ============================================================================
-// Sensor Configuration Management
+// Legacy/Commented Code (Kept for Reference)
 // ============================================================================
 
 /**

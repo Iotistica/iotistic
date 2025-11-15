@@ -18,18 +18,15 @@ import provisioningRoutes from './routes/provisioning';
 import devicesRoutes from './routes/devices';
 import adminRoutes from './routes/admin';
 import appsRoutes from './routes/apps';
-import webhookRoutes from './routes/webhooks';
 import imageRegistryRoutes from './routes/image-registry';
 import deviceJobsRoutes from './routes/device-jobs';
 import scheduledJobsRoutes from './routes/scheduled-jobs';
 import rotationRoutes from './routes/rotation';
-import digitalTwinRoutes from './routes/digital-twin';
 import digitalTwinGraphRoutes from './routes/digital-twin-graph';
 import eventsRoutes from './routes/events';
 import mqttBrokerRoutes from './routes/mqtt-broker';
 import mqttMetricsRoutes from './routes/mqtt-metrics';
-import sensorsRoutes from './routes/sensors';
-import { router as protocolDevicesRoutes } from './routes/device-sensors';
+import { router as deviceSensorsRoutes } from './routes/device-sensors';
 import { router as trafficRoutes } from './routes/traffic';
 import { router as deviceTagsRoutes } from './routes/device-tags';
 import dashboardLayoutsRoutes from './routes/dashboard-layouts';
@@ -147,12 +144,10 @@ app.use(API_BASE, appsRoutes);
 app.use(API_BASE, deviceStateRoutes);
 app.use(API_BASE, deviceLogsRoutes);
 app.use(API_BASE, deviceMetricsRoutes);
-app.use(`${API_BASE}/webhooks`, webhookRoutes);
 app.use(API_BASE, imageRegistryRoutes);
 app.use(API_BASE, deviceJobsRoutes);
 app.use(API_BASE, scheduledJobsRoutes);
 app.use(API_BASE, rotationRoutes);
-app.use(API_BASE, digitalTwinRoutes);
 app.use(`${API_BASE}/digital-twin/graph`, digitalTwinGraphRoutes);
 app.use(`${API_BASE}/mqtt`, mqttMetricsRoutes);
 
@@ -195,8 +190,7 @@ app.use(`${API_BASE}/postoffice`, createProxyMiddleware({
 
 app.use(API_BASE, eventsRoutes);
 app.use(`${API_BASE}/mqtt`, mqttBrokerRoutes);
-app.use(API_BASE, sensorsRoutes);
-app.use(API_BASE, protocolDevicesRoutes);
+app.use(API_BASE, deviceSensorsRoutes);
 app.use(API_BASE, trafficRoutes);
 app.use(API_BASE, deviceTagsRoutes);
 app.use(`${API_BASE}/dashboard-layouts`, dashboardLayoutsRoutes);
@@ -490,14 +484,6 @@ async function startServer() {
       // Ignore errors during shutdown
     }
     
-    // Stop image monitor
-    try {
-      const { imageMonitor } = await import('./services/image-monitor');
-      imageMonitor.stop();
-    } catch (error) {
-      // Ignore errors during shutdown
-    }
-    
     // Stop job scheduler
     try {
       jobScheduler.stop();
@@ -593,13 +579,6 @@ async function startServer() {
       // Ignore errors during shutdown
     }
     
-    // Stop image monitor
-    try {
-      const { imageMonitor } = await import('./services/image-monitor');
-      imageMonitor.stop();
-    } catch (error) {
-      // Ignore errors during shutdown
-    }
     
     // Stop job scheduler
     try {

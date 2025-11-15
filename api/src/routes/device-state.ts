@@ -106,7 +106,7 @@ router.get('/device/:uuid/state', deviceAuth, async (req, res) => {
     };
 
     // Debug: Log what we're sending to the agent
-    console.log('[API] Sending target state to agent:', {
+    logger.info('Sending target state to agent:', {
       uuid: uuid.substring(0, 8),
       configKeys: Object.keys(response[uuid].config),
       hasLogging: !!response[uuid].config.logging,
@@ -403,7 +403,7 @@ router.post('/devices/:uuid/target-state', deviceAuth, async (req, res) => {
       config,
     });
   } catch (error: any) {
-    console.error('Error setting target state:', error);
+    logger.error('Error setting target state:', error);
     res.status(500).json({
       error: 'Failed to set target state',
       message: error.message

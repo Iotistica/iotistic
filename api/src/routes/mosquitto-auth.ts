@@ -1,10 +1,10 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import { pool } from '../db/connection';
-import baseLogger from '../utils/logger';
+import logger from '../utils/logger';
 
 // Create child logger with Mosquitto Auth context
-const authLogger = baseLogger.child({ module: 'MosquittoAuth' });
+const authLogger = logger.child({ module: 'MosquittoAuth' });
 
 const router = Router();
 

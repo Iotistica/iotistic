@@ -1,5 +1,6 @@
 // Device Traffic Statistics Routes
 import express from 'express';
+import { logger } from '../utils/logger';
 export const router = express.Router();
 import { 
   getTrafficStats, 
@@ -120,7 +121,7 @@ router.get("/traffic-stats/mqtt", async (req, res) => {
       }))
     });
   } catch (error: any) {
-    console.error('Error fetching MQTT traffic stats:', error);
+    logger.error('Error fetching MQTT traffic stats:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to fetch MQTT traffic statistics',
