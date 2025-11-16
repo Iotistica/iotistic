@@ -409,6 +409,7 @@ export default class DeviceAgent {
       provisioned: this.deviceInfo.provisioned,
       hasApiKey: !!this.deviceInfo.deviceApiKey,
       agentVersion: this.deviceInfo.agentVersion,
+      mqtt: this.deviceInfo.mqttBrokerConfig
     });
   }
 
@@ -1159,36 +1160,17 @@ export default class DeviceAgent {
       ? parseInt(process.env.MQTT_LOCAL_PORT) 
       : undefined;
 
-    this.agentLogger?.infoSync('Initializing firewall', {
-      component: LogComponents.agent,
-      mode: firewallMode,
-      deviceApiPort: this.DEVICE_API_PORT,
-      mqttPort: mqttPort || 'not configured',
-    });
+    this.firewall = new AgentFirewall(
+      {
+        enabled: true,
+        mode: firewallMode as 'on' | 'off' | 'auto',
+        deviceApiPort: this.DEVICE_API_PORT,
+        mqttPort,
+      },
+      this.agentLogger
+    );
 
-    try {
-      this.firewall = new AgentFirewall(
-        {
-          enabled: true,
-          mode: firewallMode as 'on' | 'off' | 'auto',
-          deviceApiPort: this.DEVICE_API_PORT,
-          mqttPort,
-        },
-        this.agentLogger
-      );
-
-      await this.firewall.initialize();
-    } catch (error) {
-      this.agentLogger?.errorSync(
-        'Failed to initialize firewall',
-        error instanceof Error ? error : new Error(String(error)),
-        {
-          component: LogComponents.agent,
-          note: 'Agent will continue without firewall protection',
-        }
-      );
-      this.firewall = undefined;
-    }
+    await this.firewall.initialize();
   }
 
   private startAutoReconciliation(): void {

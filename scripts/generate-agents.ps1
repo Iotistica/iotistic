@@ -17,10 +17,14 @@
     Fleet ID for provisioning keys (default: default-fleet)
 .PARAMETER Cleanup
     Cleanup mode: stop containers, remove volumes, and delete images for specified agent range
+.PARAMETER Run
+    Automatically run docker-compose up after generating the file
 .EXAMPLE
     .\generate-agents.ps1 -Count 100
 .EXAMPLE
     .\generate-agents.ps1 -Count 50 -StartIndex 101 -OutputFile docker-compose.agents-101-150.yml
+.EXAMPLE
+    .\generate-agents.ps1 -Count 3 -Run
 .EXAMPLE
     .\generate-agents.ps1 -Cleanup -StartIndex 47 -Count 54
 .EXAMPLE
@@ -36,6 +40,9 @@ param(
     
     # Cleanup Mode
     [switch]$Cleanup,
+    
+    # Run Mode
+    [switch]$Run,
     
     # Agent Configuration
     [string]$NodeEnv = "development",
@@ -53,6 +60,10 @@ param(
     [int]$MaxLogs = 10000,
     [string]$SimulateMemoryLeak = "false",
     [string]$AnomalyDetectionEnabled = "true",
+    [string]$FirewallEnabled = "false",
+    
+    # Simulation Control
+    [switch]$EnableSimulation,
     
     # Container Resources
     [string]$MemLimit = "512m",
@@ -183,7 +194,15 @@ function Get-UniquePort {
 
 # Get simulation configuration based on agent index (varied patterns)
 function Get-SimulationConfig {
-    param([int]$Index)
+    param([int]$Index, [bool]$SimulationEnabled)
+    
+    # If simulation is disabled globally, return disabled config
+    if (-not $SimulationEnabled) {
+        return @{
+            enabled = "false"
+            config = '{}'
+        }
+    }
     
     $mode = $Index % 5
     
@@ -233,7 +252,11 @@ if ($Cleanup) {
 }
 
 Write-Host "Generating $Count agents (indices $StartIndex to $($StartIndex + $Count - 1))..." -ForegroundColor Cyan
-Write-Host "Simulation modes: 20% off, 80% varied patterns (realistic, gradual, spike, random_walk)" -ForegroundColor Gray
+if ($EnableSimulation) {
+    Write-Host "Simulation modes: 20% off, 80% varied patterns (realistic, gradual, spike, random_walk)" -ForegroundColor Gray
+} else {
+    Write-Host "Simulation: DISABLED (all agents in normal operation mode)" -ForegroundColor Gray
+}
 Write-Host "🔑 Generating provisioning keys via API at $ApiUrl..." -ForegroundColor Cyan
 
 $services = @()
@@ -250,7 +273,7 @@ for ($i = $StartIndex; $i -lt ($StartIndex + $Count); $i++) {
     $provisioningKeys += "${agentName}: $apiKey"
     
     $volumeName = "$agentName-data"
-    $simConfig = Get-SimulationConfig $i
+    $simConfig = Get-SimulationConfig -Index $i -SimulationEnabled $EnableSimulation.IsPresent
     
     # Service definition
     $service = @"
@@ -284,9 +307,7 @@ for ($i = $StartIndex; $i -lt ($StartIndex + $Count); $i++) {
       - ANOMALY_DETECTION_ENABLED=$AnomalyDetectionEnabled
       - SIMULATION_MODE=$($simConfig.enabled)
       - SIMULATION_CONFIG=$($simConfig.config)
-    depends_on:
-      api:
-        condition: service_healthy
+      - FIREWALL_ENABLED=$FirewallEnabled
     networks:
       - iotistic-net
 "@
@@ -318,7 +339,7 @@ $networksFooter = @"
 
 networks:
   iotistic-net:
-    external: true
+    driver: bridge
 "@
 
 $content = $header + "`n" + ($services -join "`n") + $volumesHeader + "`n" + ($volumes -join "`n    driver: local`n")
@@ -383,3 +404,19 @@ Write-Host "`nTo start only the new agents:" -ForegroundColor Cyan
 Write-Host "  docker-compose -f $OutputFile up -d" -ForegroundColor Yellow
 Write-Host "`nTo scale down/stop:" -ForegroundColor Cyan
 Write-Host "  docker-compose -f $OutputFile down" -ForegroundColor Yellow
+
+# Auto-run if -Run flag is set
+if ($Run) {
+    Write-Host "`n🚀 Starting agents..." -ForegroundColor Cyan
+    $composeFile = Join-Path $PSScriptRoot ".." $OutputFile
+    docker compose -f $composeFile up -d
+    
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "✅ Agents started successfully!" -ForegroundColor Green
+        Write-Host "`nView logs:" -ForegroundColor Cyan
+        Write-Host "  docker compose -f $OutputFile logs -f" -ForegroundColor Yellow
+    } else {
+        Write-Host "❌ Failed to start agents (exit code: $LASTEXITCODE)" -ForegroundColor Red
+        exit $LASTEXITCODE
+    }
+}

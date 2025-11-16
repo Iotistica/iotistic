@@ -1,37 +1,6 @@
 {
   "version": "0.2.0",
   "configurations": [
-      {
-      "name": "Debug Agent - docker (dont run)",
-      "type": "node",
-      "request": "launch",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
-      "cwd": "${workspaceFolder}/agent",
-      "console": "integratedTerminal",
-      "internalConsoleOptions": "neverOpen",
-      "skipFiles": ["<node_internals>/**"],
-      "restart": true,
-      "sourceMaps": true,
-      
-      "resolveSourceMapLocations": [
-        "${workspaceFolder}/**",
-        "!**/node_modules/**"
-      ],
-      "env": {
-            "PORT":"4002",
-            "CLOUD_API_ENDPOINT":"http://api:4002",
-            "NODE_ENV":"development",
-            "FORCE_COLOR":"1",
-            "MQTT_PERSIST_TO_DB":"true",
-            "MQTT_DB_SYNC_INTERVAL": "70000",
-            "REPORT_INTERVAL_MS":"5000",
-            "METRICS_INTERVAL_MS":"5000",
-            "LOG_COMPRESSION":"true",
-            "PROVISIONING_API_KEY": "e49b7e640d75d9a5efa49b9cc17ce5a4afe0ad65e5bd59ec8a68b801ab488c73",
-          
-      }
-    },
     {
       "name": "Debug Agent - local",
       "type": "node",
@@ -50,33 +19,13 @@
         "!**/node_modules/**"
       ],
       "env": {
-			"CLOUD_API_ENDPOINT":"https://localhost:3443",
+			"CLOUD_API_ENDPOINT":"http://localhost:4002",
 			"MQTT_DB_SYNC_INTERVAL": "70000",
 			"REPORT_INTERVAL_MS":"5000",
 			"METRICS_INTERVAL_MS":"5000",
 			"LOG_COMPRESSION":"true",
 			"REQUIRE_PROVISIONING" : "true",
-			"PROVISIONING_API_KEY": "3564a669790c24cf98ee5f7560c2dfad6b0334abbbf507d31db6efa724bfcf5b",      }
-    },
-
-     {
-      "name": "Debug Agent - k8s",
-      "type": "node",
-      "request": "launch",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
-      "cwd": "${workspaceFolder}/agent",
-      "console": "integratedTerminal",
-      "internalConsoleOptions": "neverOpen",
-      "skipFiles": ["<node_internals>/**"],
-      "restart": true,
-      "sourceMaps": true,
-      "envFile": "${workspaceFolder}/agent/.env",
-      
-      "resolveSourceMapLocations": [
-        "${workspaceFolder}/**",
-        "!**/node_modules/**"
-      ]
+			"PROVISIONING_API_KEY": "d6429f80169fdb1b913649066f91940af0991498bcc5143b4314855a01f22272",      }
     },
     {
       "name": "Debug API",

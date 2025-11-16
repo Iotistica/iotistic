@@ -8,6 +8,7 @@
 import { getMqttJobsNotifier } from './mqtt-jobs-notifier';
 import { pool } from '../db/connection';
 import { EventPublisher } from './event-sourcing';
+import logger from '../utils/logger';
 
 export class MqttJobsSubscriber {
   private notifier = getMqttJobsNotifier();
@@ -30,7 +31,7 @@ export class MqttJobsSubscriber {
     });
 
     this.initialized = true;
-    console.log('[MqttJobsSubscriber] Job update subscriber initialized');
+    logger.info('[MqttJobsSubscriber] Job update subscriber initialized');
   }
 
   /**
@@ -52,7 +53,7 @@ export class MqttJobsSubscriber {
     clientToken?: string;
   }): Promise<void> {
     // Debug: Log raw update object
-    console.log(`[MqttJobsSubscriber] Raw update object:`, JSON.stringify(update, null, 2));
+    logger.info(`[MqttJobsSubscriber] Raw update object:`, JSON.stringify(update, null, 2));
     
     const { deviceUuid, jobId, status, statusDetails } = update;
 
@@ -120,13 +121,13 @@ export class MqttJobsSubscriber {
 
         await pool.query(updateQuery, params);
 
-        console.log(`[MqttJobsSubscriber] Updated job ${jobId} status to ${status}`);
+        logger.info(`[MqttJobsSubscriber] Updated job ${jobId} status to ${status}`);
 
-        // 🎉 EVENT SOURCING: Publish job lifecycle events
+        // Publish job lifecycle events
         await this.publishJobEvent(deviceUuid, jobId, status, existing.rows[0], statusDetails);
       } else {
         // Insert new record (should already exist from job creation, but handle just in case)
-        console.warn(`[MqttJobsSubscriber] Job status record not found, creating new one for ${jobId}`);
+        logger.warn(`[MqttJobsSubscriber] Job status record not found, creating new one for ${jobId}`);
 
         await pool.query(
           `INSERT INTO device_job_status 
@@ -146,10 +147,10 @@ export class MqttJobsSubscriber {
           ]
         );
 
-        console.log(`[MqttJobsSubscriber] Created job status record for ${jobId}`);
+        logger.info(`[MqttJobsSubscriber] Created job status record for ${jobId}`);
       }
     } catch (error) {
-      console.error(`[MqttJobsSubscriber] Failed to update job ${jobId}:`, error);
+      logger.error(`[MqttJobsSubscriber] Failed to update job ${jobId}:`, error);
     }
   }
 
@@ -240,7 +241,7 @@ export class MqttJobsSubscriber {
    * Stop the subscriber
    */
   async stop(): Promise<void> {
-    console.log('[MqttJobsSubscriber] Stopping job update subscriber');
+    logger.info('[MqttJobsSubscriber] Stopping job update subscriber');
     this.notifier.removeHandler('*');
     this.initialized = false;
   }
@@ -255,7 +256,7 @@ export function getMqttJobsSubscriber(): MqttJobsSubscriber {
     
     // Auto-initialize
     instance.initialize().catch((error) => {
-      console.error('[MqttJobsSubscriber] Failed to initialize:', error);
+      logger.error('[MqttJobsSubscriber] Failed to initialize:', error);
     });
   }
   

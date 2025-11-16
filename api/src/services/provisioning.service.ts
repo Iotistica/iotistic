@@ -1,0 +1,463 @@
+/**
+ * Provisioning Service
+ * 
+ * Handles device provisioning business logic including:
+ * - Device registration
+ * - Key exchange
+ * - MQTT credential generation
+ * - VPN configuration (if enabled)
+ * - Target state initialization
+ */
+
+import crypto from 'crypto';
+import bcrypt from 'bcrypt';
+import { query } from '../db/connection';
+import {
+  DeviceModel,
+  DeviceTargetStateModel,
+} from '../db/models';
+import {
+  validateProvisioningKey,
+  incrementProvisioningKeyUsage,
+} from '../utils/provisioning-keys';
+import { wireGuardService } from './wireguard-service';
+import {
+  logAuditEvent,
+  logProvisioningAttempt,
+  checkProvisioningRateLimit,
+  AuditEventType,
+  AuditSeverity
+} from '../utils/audit-logger';
+import { EventPublisher } from './event-sourcing';
+import {
+  getBrokerConfigForDevice,
+  buildBrokerUrl,
+  formatBrokerConfigForClient
+} from '../utils/mqtt-broker-config';
+import { getVpnConfigForDevice, formatVpnConfigForDevice } from '../utils/vpn-config';
+import { SystemConfigModel } from '../db/system-config-model';
+import { generateDefaultTargetState } from './default-target-state-generator';
+import logger from '../utils/logger';
+
+// Initialize event publisher for audit trail
+const eventPublisher = new EventPublisher();
+
+export interface RegistrationRequest {
+  uuid: string;
+  deviceName: string;
+  deviceType: string;
+  deviceApiKey: string;
+  provisioningApiKey: string;
+  applicationId?: number;
+  macAddress?: string;
+  osVersion?: string;
+  agentVersion?: string;
+}
+
+export interface KeyExchangeRequest {
+  deviceApiKey: string;
+}
+
+export interface ProvisioningResponse {
+  id: number;
+  uuid: string;
+  deviceName: string;
+  deviceType: string;
+  applicationId?: number;
+  fleetId: string;
+  createdAt: string;
+  mqtt: {
+    username: string;
+    password: string;
+    broker: string;
+    brokerConfig?: any;
+    topics: {
+      publish: string[];
+      subscribe: string[];
+    };
+  };
+  api?: {
+    tlsConfig: {
+      caCert: string;
+      verifyCertificate: boolean;
+    };
+  };
+  vpn?: {
+    enabled: boolean;
+    type: string;
+    peer: {
+      id: string;
+      ipAddress: string;
+    };
+    server: {
+      endpoint: string;
+      port: number;
+      protocol: string;
+    };
+    config: string;
+  };
+}
+
+export class ProvisioningService {
+  /**
+   * Register a new device
+   */
+  public async registerDevice(
+    data: RegistrationRequest,
+    ipAddress?: string,
+    userAgent?: string
+  ): Promise<ProvisioningResponse> {
+    const { uuid, deviceName, deviceType, deviceApiKey, provisioningApiKey, macAddress, osVersion, agentVersion } = data;
+
+    // Rate limiting check (database-backed)
+    await checkProvisioningRateLimit(ipAddress!);
+
+    // Validate provisioning key
+    const provisioningKeyRecord = await validateProvisioningKey(provisioningApiKey);
+
+    if (!provisioningKeyRecord.valid || !provisioningKeyRecord.keyRecord) {
+      await logProvisioningAttempt(ipAddress!, uuid, null, false, provisioningKeyRecord.error || 'Invalid provisioning key', userAgent);
+      throw new Error(provisioningKeyRecord.error || 'Invalid provisioning key');
+    }
+
+    const keyRecord = provisioningKeyRecord.keyRecord;
+
+    // Check if device already exists and is fully provisioned
+    let device = await DeviceModel.getByUuid(uuid);
+    if (device) {
+      const isFullyProvisioned = device.provisioned_at && device.provisioning_state === 'registered';
+      
+      if (isFullyProvisioned) {
+        await logProvisioningAttempt(ipAddress!, uuid, keyRecord.id, false, 'Device already registered', userAgent);
+        throw new Error('Device already registered');
+      }
+
+    }
+
+    // Generate MQTT credentials
+    const mqttCredentials = await this.generateMqttCredentials(uuid);
+
+    // Generate VPN credentials 
+    const vpnCredentials = await this.generateVpnCredentials(uuid, deviceName, ipAddress);
+
+    // Create or get device record
+    device = await DeviceModel.getOrCreate(uuid);
+
+    const hashedApiKey = await bcrypt.hash(deviceApiKey, 10);
+    
+    // Update device with all provisioning data in a single update
+    await DeviceModel.update(uuid, {
+      device_name: deviceName,
+      device_type: deviceType,
+      device_api_key_hash: hashedApiKey,
+      fleet_id: keyRecord.fleet_id,
+      provisioned_by_key_id: keyRecord.id,
+      mac_address: macAddress || null,
+      os_version: osVersion || null,
+      agent_version: agentVersion || null,
+      mqtt_username: mqttCredentials.username,
+      vpn_enabled: !!vpnCredentials,
+      vpn_ip_address: vpnCredentials?.ipAddress || null,
+      is_online: true,
+      is_active: true,
+      status: 'online',
+      provisioned_at: new Date(),
+      provisioning_state: 'registered'
+    });
+
+    // Create default target state
+    await this.createDefaultTargetState(uuid);
+
+    // Increment provisioning key usage
+    await incrementProvisioningKeyUsage(keyRecord.id);
+
+    // Publish device provisioned event
+    await eventPublisher.publish(
+      'device.provisioned',
+      'device',
+      uuid,
+      {
+        device_name: deviceName,
+        device_type: deviceType,
+        fleet_id: keyRecord.fleet_id,
+        provisioned_at: new Date().toISOString(),
+        ip_address: ipAddress,
+        mac_address: macAddress,
+        os_version: osVersion,
+        agent_version: agentVersion,
+        mqttUsername: mqttCredentials.username
+      }
+    );
+
+    // Audit logging
+    await logAuditEvent({
+      eventType: AuditEventType.DEVICE_REGISTERED,
+      deviceUuid: uuid,
+      ipAddress,
+      userAgent,
+      severity: AuditSeverity.INFO,
+      details: {
+        deviceName,
+        macAddress,
+        fleetId: keyRecord.fleet_id,
+        mqttUsername: mqttCredentials.username
+      }
+    });
+
+    await logProvisioningAttempt(
+      ipAddress!,
+      uuid,
+      keyRecord.id,
+      true,
+      'Device registered successfully',
+      userAgent
+    );
+
+    // Build and return provisioning response
+    return this.buildProvisioningResponse(
+      device,
+      data,
+      keyRecord,
+      mqttCredentials,
+      vpnCredentials
+    );
+  }
+
+  /**
+   * Exchange device API keys
+   */
+  public async exchangeKeys(
+    uuid: string,
+    deviceApiKey: string,
+    ipAddress?: string,
+    userAgent?: string
+  ): Promise<{ apiKey: string }> {
+    // Verify device exists
+    const device = await DeviceModel.getByUuid(uuid);
+    if (!device) {
+      await logAuditEvent({
+        eventType: AuditEventType.KEY_EXCHANGE_FAILED,
+        deviceUuid: uuid,
+        ipAddress,
+        userAgent,
+        severity: AuditSeverity.WARNING,
+        details: { reason: 'Device not found' }
+      });
+      throw new Error('Device not found');
+    }
+
+    // Verify device API key
+    const isValid = device.device_api_key_hash ? await bcrypt.compare(deviceApiKey, device.device_api_key_hash) : false;
+    if (!isValid) {
+      await logAuditEvent({
+        eventType: AuditEventType.KEY_EXCHANGE_FAILED,
+        deviceUuid: uuid,
+        ipAddress,
+        userAgent,
+        severity: AuditSeverity.WARNING,
+        details: { reason: 'Invalid device API key' }
+      });
+      throw new Error('Invalid device API key');
+    }
+
+    // Generate new API key for device
+    const apiKey = crypto.randomBytes(32).toString('hex');
+    const hashedApiKey = await bcrypt.hash(apiKey, 10);
+
+    // Update device with new API key
+    await DeviceModel.update(uuid, { device_api_key_hash: hashedApiKey });
+
+    // Publish key exchange event
+    await eventPublisher.publish(
+      'device.key.exchanged',
+      'device',
+      uuid,
+      {
+        timestamp: new Date().toISOString(),
+        ipAddress,
+        userAgent
+      }
+    );
+
+    await logAuditEvent({
+      eventType: AuditEventType.KEY_EXCHANGE_SUCCESS,
+      deviceUuid: uuid,
+      ipAddress,
+      userAgent,
+      severity: AuditSeverity.INFO,
+      details: { success: true }
+    });
+
+    return { apiKey };
+  }
+
+  /**
+   * Generate MQTT credentials for device
+   */
+  private async generateMqttCredentials(deviceUuid: string): Promise<{ username: string; password: string }> {
+    const username = `device_${deviceUuid}`;
+    const password = crypto.randomBytes(16).toString('base64');
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    // Create MQTT user
+    await query(
+      `INSERT INTO mqtt_users (username, password_hash, is_superuser, is_active)
+       VALUES ($1, $2, false, true)
+       ON CONFLICT (username) DO NOTHING`,
+      [username, passwordHash]
+    );
+
+    // Create MQTT ACL (access 7 = READ + WRITE + SUBSCRIBE)
+    // Use username in both clientid and username fields for compatibility
+    await query(
+      `INSERT INTO mqtt_acls (clientid, username, topic, access, priority)
+       VALUES ($1, $2, $3, 7, 0)
+       ON CONFLICT DO NOTHING`,
+      [username, username, `iot/device/${deviceUuid}/#`]
+    );
+
+    logger.info(`MQTT credentials created for: ${username}`);
+    return { username, password };
+  }
+
+  /**
+   * Generate VPN credentials for device
+   */
+  private async generateVpnCredentials(
+    deviceUuid: string,
+    deviceName: string,
+    ipAddress?: string
+  ): Promise<{ peerId: string; ipAddress: string; config: string } | undefined> {
+    // Check if VPN is enabled
+    if (!wireGuardService.isEnabled()) {
+      return undefined;
+    }
+
+    try {
+      logger.info(`Setting up WireGuard VPN for device: ${deviceUuid}`);
+      
+      const peer = await wireGuardService.createPeer(deviceUuid, deviceName);
+      
+      logger.info(`WireGuard VPN credentials created for device: ${deviceUuid.substring(0, 8)}... (IP: ${peer.ipAddress})`);
+      return {
+        peerId: peer.peerId,
+        ipAddress: peer.ipAddress,
+        config: peer.config
+      };
+    } catch (error: any) {
+      logger.error(`VPN credential creation failed:`, error.message);
+      
+      // Don't fail provisioning if VPN setup fails - continue without VPN
+      await logAuditEvent({
+        eventType: AuditEventType.PROVISIONING_FAILED,
+        deviceUuid,
+        ipAddress,
+        severity: AuditSeverity.WARNING,
+        details: { 
+          reason: 'VPN credential creation failed',
+          error: error.message
+        }
+      });
+      
+      return undefined;
+    }
+  }
+
+  /**
+   * Create default target state for device
+   */
+  private async createDefaultTargetState(deviceUuid: string): Promise<void> {
+    const targetState = await DeviceTargetStateModel.get(deviceUuid);
+    if (!targetState) {
+      const licenseData = await SystemConfigModel.get('license_data');
+      const { apps, config } = generateDefaultTargetState(licenseData);
+      await DeviceTargetStateModel.set(deviceUuid, apps, config, false); // Don't need deployment for default state
+    }
+  }
+
+  /**
+   * Build provisioning response
+   */
+  private async buildProvisioningResponse(
+    device: any,
+    data: RegistrationRequest,
+    provisioningKeyRecord: any,
+    mqttCredentials: { username: string; password: string },
+    vpnCredentials?: { peerId: string; ipAddress: string; config: string }
+  ): Promise<ProvisioningResponse> {
+    const { uuid, deviceName, deviceType, applicationId } = data;
+
+    // Fetch broker configuration
+    const brokerConfig = await getBrokerConfigForDevice(device.uuid);
+    
+    if (brokerConfig) {
+      logger.info(`Using MQTT broker: ${brokerConfig.name} (${buildBrokerUrl(brokerConfig)})`);
+    } else {
+      logger.info('No broker config in database, using environment fallback');
+    }
+
+    const brokerUrl = brokerConfig 
+      ? buildBrokerUrl(brokerConfig)
+      : (process.env.MQTT_BROKER_URL || 'mqtt://mosquitto:1883');
+
+    // Fetch API TLS configuration
+    const apiTlsConfig = await SystemConfigModel.get('api.tls');
+
+    const response: ProvisioningResponse = {
+      id: device.id,
+      uuid: device.uuid,
+      deviceName,
+      deviceType,
+      applicationId,
+      fleetId: provisioningKeyRecord.fleet_id,
+      createdAt: device.created_at.toISOString(),
+      mqtt: {
+        username: mqttCredentials.username,
+        password: mqttCredentials.password,
+        broker: brokerUrl,
+        ...(brokerConfig && {
+          brokerConfig: formatBrokerConfigForClient(brokerConfig)
+        }),
+        topics: {
+          publish: [`iot/device/${device.uuid}/#`],
+          subscribe: [`iot/device/${device.uuid}/#`]
+        }
+      },
+      ...(apiTlsConfig?.caCert && {
+        api: {
+          tlsConfig: {
+            caCert: apiTlsConfig.caCert,
+            verifyCertificate: apiTlsConfig.verifyCertificate !== false
+          }
+        }
+      })
+    };
+
+    // Add VPN configuration if enabled
+    if (vpnCredentials) {
+      const vpnServerEndpoint = process.env.VPN_SERVER_ENDPOINT || 'vpn.iotistic.ca';
+      const vpnServerPort = parseInt(process.env.VPN_SERVER_PORT || '51820');
+      
+      response.vpn = {
+        enabled: true,
+        type: 'wireguard',
+        peer: {
+          id: vpnCredentials.peerId,
+          ipAddress: vpnCredentials.ipAddress
+        },
+        server: {
+          endpoint: vpnServerEndpoint,
+          port: vpnServerPort,
+          protocol: 'udp'
+        },
+        config: vpnCredentials.config
+      };
+      
+      logger.info(`WireGuard VPN configuration added to provisioning response (IP: ${vpnCredentials.ipAddress})`);
+    }
+
+    return response;
+  }
+}
+
+export const provisioningService = new ProvisioningService();

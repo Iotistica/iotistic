@@ -196,6 +196,11 @@ export class DeviceManager {
 			throw new Error('No device info to save');
 		}
 
+		// Ensure backward compatibility: sync deviceApiKey to apiKey field
+		if (this.deviceInfo.deviceApiKey && !this.deviceInfo.apiKey) {
+			this.deviceInfo.apiKey = this.deviceInfo.deviceApiKey;
+		}
+
 		const data = {
 			uuid: this.deviceInfo.uuid,
 			deviceId: this.deviceInfo.deviceId ? parseInt(this.deviceInfo.deviceId) : null,
@@ -203,7 +208,7 @@ export class DeviceManager {
 			deviceType: this.deviceInfo.deviceType || null,
 			deviceApiKey: this.deviceInfo.deviceApiKey || null,
 			provisioningApiKey: this.deviceInfo.provisioningApiKey || null,
-			apiKey: this.deviceInfo.apiKey || null, // Legacy
+			apiKey: this.deviceInfo.apiKey || null, // Legacy (synced from deviceApiKey)
 			apiEndpoint: this.deviceInfo.apiEndpoint || null,
 			registeredAt: this.deviceInfo.registeredAt || null,
 			provisioned: this.deviceInfo.provisioned,
@@ -297,7 +302,7 @@ export class DeviceManager {
 			throw new Error('provisioningApiKey is required for device provisioning');
 		}
 
-		// Ensure deviceApiKey exists
+		// Ensure device API key exists
 		if (!this.deviceInfo.deviceApiKey) {
 			this.deviceInfo.deviceApiKey = generateAPIKey();
 		}

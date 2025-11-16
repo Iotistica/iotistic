@@ -71,7 +71,7 @@ export async function initializeMqtt(): Promise<MqttManager | null> {
     const subscribeToAll = process.env.MQTT_SUBSCRIBE_ALL !== 'false';
     
     if (subscribeToAll) {
-      console.log('📡 Subscribing to all device topics...');
+      logger.info('Subscribing to all device topics...');
       mqttManager.subscribeToAll([
         'sensor',
         'state',

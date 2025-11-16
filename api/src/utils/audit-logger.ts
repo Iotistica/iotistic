@@ -194,13 +194,14 @@ export async function checkProvisioningRateLimit(ipAddress: string): Promise<voi
   );
 
   const attemptCount = parseInt(result.rows[0].attempt_count);
+  const maxAttempts = process.env.NODE_ENV === 'development' ? 100 : 10; // Relaxed for dev
 
-  if (attemptCount > 10) {
+  if (attemptCount > maxAttempts) {
     await logAuditEvent({
       eventType: AuditEventType.RATE_LIMIT_EXCEEDED,
       ipAddress,
       severity: AuditSeverity.WARNING,
-      details: { attemptCount, window: '1 hour' }
+      details: { attemptCount, window: '1 hour', maxAttempts }
     });
     throw new Error('Too many failed provisioning attempts. IP temporarily blocked.');
   }

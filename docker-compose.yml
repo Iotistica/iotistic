@@ -123,7 +123,6 @@ services:
             - DB_USER=${DB_USER:-postgres}
             - DB_PASSWORD=${DB_PASSWORD:-postgres}
             - DB_POOL_SIZE=${DB_POOL_SIZE:-20}
-            - FORCE_COLOR=${FORCE_COLOR:-1}
             - MQTT_BROKER_URL=${MQTT_BROKER_URL:-mqtt://mosquitto:1883}
             - MQTT_USERNAME=${MQTT_USERNAME:-admin}
             - MQTT_PASSWORD=${MQTT_PASSWORD:-iotistic42!}

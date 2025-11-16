@@ -32,17 +32,23 @@ export interface ProvisioningKeyValidationResult {
 
 /**
  * Validate a provisioning key against the database
+ * Optimized with SHA-256 fast hash for O(1) lookup (300ms) vs O(N) bcrypt (N*300ms)
  */
 export async function validateProvisioningKey(
   key: string,
   ipAddress?: string
 ): Promise<ProvisioningKeyValidationResult> {
   try {
-    // Fetch all active, non-expired provisioning keys
+    // Fast lookup using SHA-256 hash (O(1) instead of O(N) bcrypt comparisons)
+    const fastHash = crypto.createHash('sha256').update(key).digest('hex');
+    
     const result = await query<ProvisioningKey>(
       `SELECT * FROM provisioning_keys 
-       WHERE is_active = true 
-       AND expires_at > NOW()`
+       WHERE key_hash_fast = $1
+       AND is_active = true 
+       AND expires_at > NOW()
+       LIMIT 1`,
+      [fastHash]
     );
 
     if (result.rows.length === 0) {
@@ -50,76 +56,74 @@ export async function validateProvisioningKey(
         eventType: AuditEventType.PROVISIONING_KEY_INVALID,
         ipAddress,
         severity: AuditSeverity.WARNING,
-        details: { reason: 'No active provisioning keys found' }
+        details: { reason: 'Invalid provisioning key' }
       });
-      return { valid: false, error: 'No active provisioning keys available' };
+      return { valid: false, error: 'Invalid provisioning key' };
     }
 
-    // Check provided key against each hashed key in database
-    for (const record of result.rows) {
-      const matches = await bcrypt.compare(key, record.key_hash);
-      
-      if (matches) {
-        // Check device limit
-        if (record.devices_provisioned >= record.max_devices) {
-          await logAuditEvent({
-            eventType: AuditEventType.PROVISIONING_LIMIT_EXCEEDED,
-            ipAddress,
-            severity: AuditSeverity.WARNING,
-            details: {
-              keyId: record.id,
-              fleetId: record.fleet_id,
-              limit: record.max_devices,
-              provisioned: record.devices_provisioned
-            }
-          });
-          return { 
-            valid: false, 
-            error: 'Provisioning key device limit exceeded',
-            keyRecord: record // Include key record for audit logging
-          };
-        }
-
-        // Check expiration (double-check)
-        if (new Date(record.expires_at) < new Date()) {
-          await logAuditEvent({
-            eventType: AuditEventType.PROVISIONING_KEY_EXPIRED,
-            ipAddress,
-            severity: AuditSeverity.WARNING,
-            details: {
-              keyId: record.id,
-              fleetId: record.fleet_id,
-              expiredAt: record.expires_at
-            }
-          });
-          return { 
-            valid: false, 
-            error: 'Provisioning key has expired',
-            keyRecord: record // Include key record for audit logging
-          };
-        }
-
-        // Update last used timestamp
-        await query(
-          `UPDATE provisioning_keys 
-           SET last_used_at = NOW() 
-           WHERE id = $1`,
-          [record.id]
-        );
-
-        return { valid: true, keyRecord: record };
-      }
+    // Verify with bcrypt (only 1 comparison now instead of N)
+    const record = result.rows[0];
+    const matches = await bcrypt.compare(key, record.key_hash);
+    
+    if (!matches) {
+      // SHA-256 collision or tampered key - extremely rare
+      await logAuditEvent({
+        eventType: AuditEventType.PROVISIONING_KEY_INVALID,
+        ipAddress,
+        severity: AuditSeverity.WARNING,
+        details: { reason: 'Bcrypt verification failed after fast hash match' }
+      });
+      return { valid: false, error: 'Invalid provisioning key' };
     }
 
-    // No matching key found
-    await logAuditEvent({
-      eventType: AuditEventType.PROVISIONING_KEY_INVALID,
-      ipAddress,
-      severity: AuditSeverity.WARNING,
-      details: { reason: 'Key does not match any active provisioning keys' }
-    });
+    // Check device limit
+    if (record.devices_provisioned >= record.max_devices) {
+      await logAuditEvent({
+        eventType: AuditEventType.PROVISIONING_LIMIT_EXCEEDED,
+        ipAddress,
+        severity: AuditSeverity.WARNING,
+        details: {
+          keyId: record.id,
+          fleetId: record.fleet_id,
+          limit: record.max_devices,
+          provisioned: record.devices_provisioned
+        }
+      });
+      return { 
+        valid: false, 
+        error: 'Provisioning key device limit exceeded',
+        keyRecord: record
+      };
+    }
 
-    return { valid: false, error: 'Invalid provisioning key' };
+    // Check expiration (already checked in query, but double-check for safety)
+    if (new Date(record.expires_at) < new Date()) {
+      await logAuditEvent({
+        eventType: AuditEventType.PROVISIONING_KEY_EXPIRED,
+        ipAddress,
+        severity: AuditSeverity.WARNING,
+        details: {
+          keyId: record.id,
+          fleetId: record.fleet_id,
+          expiredAt: record.expires_at
+        }
+      });
+      return { 
+        valid: false, 
+        error: 'Provisioning key has expired',
+        keyRecord: record
+      };
+    }
+
+    // Update last used timestamp
+    await query(
+      `UPDATE provisioning_keys 
+       SET last_used_at = NOW() 
+       WHERE id = $1`,
+      [record.id]
+    );
+
+    return { valid: true, keyRecord: record };
   } catch (error: any) {
     await logAuditEvent({
       eventType: AuditEventType.PROVISIONING_FAILED,
@@ -156,15 +160,16 @@ export async function createProvisioningKey(
   // Generate a secure random key
   const key = crypto.randomBytes(32).toString('hex');
   const keyHash = await bcrypt.hash(key, BCRYPT_ROUNDS);
+  const keyHashFast = crypto.createHash('sha256').update(key).digest('hex');
   
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + expiresInDays);
 
   const result = await query<{ id: string }>(
-    `INSERT INTO provisioning_keys (key_hash, fleet_id, description, max_devices, expires_at, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO provisioning_keys (key_hash, key_hash_fast, fleet_id, description, max_devices, expires_at, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING id`,
-    [keyHash, fleetId, description, maxDevices, expiresAt, createdBy]
+    [keyHash, keyHashFast, fleetId, description, maxDevices, expiresAt, createdBy]
   );
 
   const keyId = result.rows[0].id;

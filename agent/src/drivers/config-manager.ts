@@ -108,24 +108,8 @@ export class ConfigManager extends EventEmitter {
 			const { sensors: _targetSensors, ...otherTargetFields } = this.targetConfig;
 			const { sensors: currentSensors, ...otherCurrentFields } = this.currentConfig;
 			
-			console.log('[ConfigManager] reconcile - Before Object.assign:', {
-				currentConfigKeys: Object.keys(this.currentConfig),
-				targetConfigKeys: Object.keys(this.targetConfig),
-				otherTargetFields: Object.keys(otherTargetFields),
-				hasCurrentLogging: !!this.currentConfig.logging,
-				hasTargetLogging: !!this.targetConfig.logging,
-			});
-			
 			// Merge non-sensor fields into current config
 			Object.assign(this.currentConfig, otherTargetFields);
-			
-			console.log('[ConfigManager] reconcile - After Object.assign:', {
-				currentConfigKeys: Object.keys(this.currentConfig),
-				hasLogging: !!this.currentConfig.logging,
-				hasFeatures: !!this.currentConfig.features,
-				hasSettings: !!this.currentConfig.settings,
-				loggingValue: this.currentConfig.logging,
-			});
 			
 			// Restore sensors array (will be reconciled separately)
 			if (currentSensors) {
@@ -626,30 +610,7 @@ export class ConfigManager extends EventEmitter {
 	 */
 	private async saveCurrentConfigToDB(): Promise<void> {
 		try {
-			// Debug: Log what we're about to save
-			console.log('[ConfigManager] saveCurrentConfigToDB - About to save:', {
-				keys: Object.keys(this.currentConfig),
-				hasLogging: !!this.currentConfig.logging,
-				hasFeatures: !!this.currentConfig.features,
-				hasSettings: !!this.currentConfig.settings,
-				hasSensors: !!this.currentConfig.sensors,
-				sensorCount: this.currentConfig.sensors?.length || 0,
-				loggingValue: this.currentConfig.logging,
-				featuresValue: this.currentConfig.features,
-				settingsValue: this.currentConfig.settings
-			});
-			
 			const configJson = JSON.stringify(this.currentConfig);
-
-			this.logger?.infoSync('Saving current config to database', {
-				component: LogComponents.configManager,
-				operation: 'saveCurrentConfig',
-				deviceCount: this.currentConfig.sensors?.length || 0,
-				configKeys: Object.keys(this.currentConfig),
-				hasLogging: !!this.currentConfig.logging,
-				hasFeatures: !!this.currentConfig.features,
-				hasSettings: !!this.currentConfig.settings,
-			});
 			
 			// Delete old config snapshots and insert new
 			await db('stateSnapshot')

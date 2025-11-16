@@ -20,7 +20,6 @@ import adminRoutes from './routes/admin';
 import appsRoutes from './routes/apps';
 import imageRegistryRoutes from './routes/image-registry';
 import deviceJobsRoutes from './routes/device-jobs';
-import scheduledJobsRoutes from './routes/scheduled-jobs';
 import rotationRoutes from './routes/rotation';
 import digitalTwinGraphRoutes from './routes/digital-twin-graph';
 import eventsRoutes from './routes/events';
@@ -40,7 +39,6 @@ import alertsRoutes from './routes/alerts';
 import { jobScheduler } from './services/job-scheduler';
 import poolWrapper from './db/connection';
 import { initializeMqtt, shutdownMqtt } from './mqtt';
-import { initializeSchedulers, shutdownSchedulers } from './services/rotation-scheduler';
 import { LicenseValidator } from './services/license-validator';
 import licenseRoutes from './routes/license';
 import jwtAuth from './middleware/jwt-auth';
@@ -146,7 +144,6 @@ app.use(API_BASE, deviceLogsRoutes);
 app.use(API_BASE, deviceMetricsRoutes);
 app.use(API_BASE, imageRegistryRoutes);
 app.use(API_BASE, deviceJobsRoutes);
-app.use(API_BASE, scheduledJobsRoutes);
 app.use(API_BASE, rotationRoutes);
 app.use(`${API_BASE}/digital-twin/graph`, digitalTwinGraphRoutes);
 app.use(`${API_BASE}/mqtt`, mqttMetricsRoutes);
@@ -341,7 +338,7 @@ async function startServer() {
     await redisClient.connect();
     logger.info('✓ Redis client connected successfully');
   } catch (error) {
-    logger.warn('⚠️  Redis connection failed - continuing without real-time features', {
+    logger.warn('Redis connection failed - continuing without real-time features', {
       error: error instanceof Error ? error.message : String(error),
       note: 'This is non-critical - metrics will use PostgreSQL only'
     });
@@ -372,14 +369,7 @@ async function startServer() {
     }
   })();
 
-  // Initialize API key rotation schedulers
-  try {
-    initializeSchedulers();
-    logger.info('API key rotation schedulers started');
-  } catch (error) {
-    logger.warn('Failed to start rotation schedulers', { error });
-    // Don't exit - this is not critical for API operation
-  }
+  // API key rotation is now handled by housekeeper service
 
   const server = app.listen(PORT, () => {
     logger.info('='.repeat(80));
@@ -468,13 +458,7 @@ async function startServer() {
       // Ignore errors during shutdown
     }
     
-    // Shutdown rotation schedulers
-    try {
-      shutdownSchedulers();
-    } catch (error) {
-      // Ignore errors during shutdown
-    }
-    
+    // Rotation schedulers moved to housekeeper service
   
     // Stop heartbeat monitor
     try {
@@ -563,12 +547,7 @@ async function startServer() {
       // Ignore errors during shutdown
     }
     
-    // Shutdown rotation schedulers
-    try {
-      shutdownSchedulers();
-    } catch (error) {
-      // Ignore errors during shutdown
-    }
+    // Rotation schedulers moved to housekeeper service
     
     
     // Stop heartbeat monitor

@@ -266,21 +266,22 @@ export class DeviceTargetStateModel {
   static async set(
     deviceUuid: string,
     apps: any,
-    config: any = {}
+    config: any = {},
+    needsDeployment: boolean = false // Default to false for initial setup
   ): Promise<DeviceTargetState> {
     // Ensure device exists
     await DeviceModel.getOrCreate(deviceUuid);
 
     const result = await query<DeviceTargetState>(
       `INSERT INTO device_target_state (device_uuid, apps, config, version, needs_deployment, updated_at)
-       VALUES ($1, $2, $3, 1, true, CURRENT_TIMESTAMP)
+       VALUES ($1, $2, $3, 1, $4, CURRENT_TIMESTAMP)
        ON CONFLICT (device_uuid) DO UPDATE SET
          apps = $2,
          config = $3,
-         needs_deployment = true,
+         needs_deployment = $4,
          updated_at = CURRENT_TIMESTAMP
        RETURNING *`,
-      [deviceUuid, JSON.stringify(apps), JSON.stringify(config)]
+      [deviceUuid, JSON.stringify(apps), JSON.stringify(config), needsDeployment]
     );
 
     return result.rows[0];

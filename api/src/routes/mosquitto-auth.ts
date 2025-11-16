@@ -145,7 +145,6 @@ router.post('/superuser', async (req: Request, res: Response) => {
     return res.status(403).json({ error: 'Missing username' });
   }
 
-  authLogger.info('Superuser check request', { username });
 
   try {
     // Query superuser status
@@ -162,7 +161,6 @@ router.post('/superuser', async (req: Request, res: Response) => {
     const isSuperuser = result.rows[0].is_superuser;
 
     if (isSuperuser) {
-      authLogger.info('User IS a superuser', { username, isSuperuser: true });
       return res.status(200).json({ success: true });
     } else {
       authLogger.info('User is NOT a superuser', { username, isSuperuser: false });

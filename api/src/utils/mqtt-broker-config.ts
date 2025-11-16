@@ -130,32 +130,32 @@ export function buildBrokerUrl(config: MqttBrokerConfig): string {
  * @returns Sanitized broker configuration object
  */
 export function formatBrokerConfigForClient(config: any) {
-  // Handle both snake_case (from old configs) and camelCase (from JSONB in system_config)
-  const useTls = config.useTls ?? config.use_tls ?? false;
-  const caCert = config.caCert ?? config.ca_cert ?? null;
-  const clientCert = config.clientCert ?? config.client_cert ?? null;
-  const verifyCertificate = config.verifyCertificate ?? config.verify_certificate ?? true;
-  const clientIdPrefix = config.clientIdPrefix ?? config.client_id_prefix ?? 'Iotistic';
-  const keepAlive = config.keepAlive ?? config.keep_alive ?? 60;
-  const cleanSession = config.cleanSession ?? config.clean_session ?? true;
-  const reconnectPeriod = config.reconnectPeriod ?? config.reconnect_period ?? 1000;
-  const connectTimeout = config.connectTimeout ?? config.connect_timeout ?? 30000;
+  const useTls = config.useTls ?? false;
+  const caCert = config.caCert ?? null;
+  const clientCert = config.clientCert ?? null;
+  const verifyCertificate = config.verifyCertificate ??  true;
+  const clientIdPrefix = config.clientIdPrefix ?? 'Iotistic';
+  const keepAlive = config.keepAlive ?? 60;
+  const cleanSession = config.cleanSession ?? true;
+  const reconnectPeriod = config.reconnectPeriod ?? 1000;
+  const connectTimeout = config.connectTimeout ?? 30000;
 
   return {
     protocol: config.protocol,
     host: config.host,
     port: config.port,
     useTls,
-    verifyCertificate,
     clientIdPrefix,
     keepAlive,
     cleanSession,
     reconnectPeriod,
     connectTimeout,
-    // Include CA certificate if present (client may need it for TLS)
-    ...(caCert && { caCert }),
-    // Include client certificate if present
-    ...(clientCert && { clientCert })
+    // Include TLS-related fields only if TLS is enabled
+    ...(useTls && {
+      verifyCertificate,
+      ...(caCert && { caCert }),
+      ...(clientCert && { clientCert })
+    })
   };
 }
 

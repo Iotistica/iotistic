@@ -66,12 +66,6 @@ export class AgentFirewall {
       return;
     }
 
-    this.logger.infoSync('Initializing firewall', {
-      component: LogComponents.firewall,
-      mode: this.config.mode,
-      deviceApiPort: this.config.deviceApiPort,
-      mqttPort: this.config.mqttPort,
-    });
 
     try {
       await this.applyFirewallRules();

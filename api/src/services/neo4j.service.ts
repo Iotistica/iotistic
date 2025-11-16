@@ -112,7 +112,7 @@ export class Neo4jService {
         FOR (s:Space) ON (s.name)
       `);
 
-      console.log('Neo4j schema initialized successfully');
+
     } catch (error) {
       console.error('Failed to initialize schema:', error);
       // Don't throw - constraints might already exist

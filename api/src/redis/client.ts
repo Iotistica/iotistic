@@ -36,7 +36,7 @@ class RedisClient {
     const host = process.env.REDIS_HOST || 'localhost';
     const port = parseInt(process.env.REDIS_PORT || '6379', 10);
 
-     logger.info(`🔄 Connecting to Redis at ${host}:${port}...`);
+     logger.info(`Connecting to Redis at ${host}:${port}...`);
 
     this.client = new Redis({
       host,

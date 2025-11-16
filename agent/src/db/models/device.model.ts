@@ -45,18 +45,22 @@ export class DeviceModel {
       return null;
     }
 
-    // Debug: log what we're getting from database
-    console.log('[DeviceModel] Raw device from DB:', JSON.stringify({
-      hasDevice: !!device,
-      hasApiTlsConfig: !!device.apiTlsConfig,
-      apiTlsConfigType: typeof device.apiTlsConfig,
-      apiTlsConfigLength: device.apiTlsConfig?.length,
-      apiTlsConfigPreview: device.apiTlsConfig?.substring(0, 100)
-    }, null, 2));
+    // Convert provisioned to boolean
+    const provisioned = !!device.provisioned;
+
+    // Debug: log API TLS config only if device is provisioned
+    if (provisioned) {
+      console.log('[DeviceModel] Raw device from DB:', JSON.stringify({
+        hasApiTlsConfig: !!device.apiTlsConfig,
+        apiTlsConfigType: typeof device.apiTlsConfig,
+        apiTlsConfigLength: device.apiTlsConfig?.length,
+        apiTlsConfigPreview: device.apiTlsConfig?.substring(0, 100)
+      }, null, 2));
+    }
 
     return {
       ...device,
-      provisioned: !!device.provisioned,
+      provisioned,
     };
   }
 
