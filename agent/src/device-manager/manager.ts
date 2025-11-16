@@ -19,7 +19,7 @@ import type {
 	ProvisioningConfig, 
 	ProvisionRequest, 
 	ProvisionResponse 
-} from '../device-manager/types';
+} from './types';
 import { buildApiEndpoint, getPackageVersion } from '../utils/api-utils';
 import { DefaultUuidGenerator, generateAPIKey, type UuidGenerator } from '../utils/crypto';
 import type { AgentLogger } from '../logging/agent-logger';

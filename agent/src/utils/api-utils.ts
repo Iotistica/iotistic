@@ -15,6 +15,24 @@
  * ```
  */
 
+import { readFileSync } from 'fs';
+import { join } from 'path';
+
+/**
+ * Get package version from package.json
+ * @returns Package version string or "unknown" if not found
+ */
+export function getPackageVersion(): string {
+	try {
+		const packageJsonPath = join(process.cwd(), "package.json");
+		const content = readFileSync(packageJsonPath, "utf-8");
+		const packageJson = JSON.parse(content);
+		return packageJson.version || "unknown";
+	} catch (error) {
+		return "unknown";
+	}
+}
+
 /**
  * Get API version from environment variable
  * Defaults to 'v1' if not specified

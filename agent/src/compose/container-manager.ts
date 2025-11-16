@@ -29,7 +29,7 @@ import { RetryManager } from './retry-manager';
 import { HealthCheckManager } from './health-check-manager';
 import { HealthProbe } from './types/health-check';
 import * as db from '../db/connection';
-import type { ContainerLogMonitor } from '../logging/monitor';
+import type { ContainerLogMonitor } from '../logging/docker-monitor';
 import type { AgentLogger } from '../logging/agent-logger';
 import { LogComponents } from '../logging/types';
 import * as networkManager from './network-manager';

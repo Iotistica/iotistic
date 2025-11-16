@@ -11,16 +11,16 @@
 
 import { StateReconciler, DeviceState } from "./drivers/state-reconciler.js";
 import ContainerManager from "./compose/container-manager.js";
-import { DeviceManager } from "./provisioning/index.js";
-import type { DeviceInfo } from "./provisioning/types.js";
+import { DeviceManager } from "./device-manager/index.js";
+import type { DeviceInfo } from "./device-manager/types.js";
 import { DeviceAPI } from "./api/index.js";
 import { router as v1Router } from "./api/v1.js";
 import * as deviceActions from "./api/actions.js";
-import { CloudSync } from "./sync.js";
+import { CloudSync } from "./device-manager/sync.js";
 import * as db from "./db/connection.js";
 import { LocalLogBackend } from "./logging/local-backend.js";
 import { CloudLogBackend } from "./logging/cloud-backend.js";
-import { ContainerLogMonitor } from "./logging/monitor.js";
+import { ContainerLogMonitor } from "./logging/docker-monitor.js";
 import { AgentLogger } from "./logging/agent-logger.js";
 import type { LogBackend } from "./logging/types.js";
 import { LogComponents } from "./logging/types.js";

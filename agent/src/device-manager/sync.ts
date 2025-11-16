@@ -17,16 +17,16 @@
  */
 
 import { EventEmitter } from 'events';
-import type { StateReconciler, DeviceState } from './drivers/state-reconciler';
-import type { DeviceManager } from './provisioning';
-import * as systemMetrics from './system/metrics';
-import { ConnectionMonitor } from './network/connection-monitor';
-import { OfflineQueue } from './logging/offline-queue';
-import type { AgentLogger } from './logging/agent-logger';
-import { LogComponents } from './logging/types';
-import { buildDeviceEndpoint, buildApiEndpoint } from './utils/api-utils';
-import { HttpClient, FetchHttpClient } from './lib/http-client';
-import { RetryPolicy } from './utils/retry-policy';
+import type { StateReconciler, DeviceState } from '../drivers/state-reconciler';
+import type { DeviceManager } from '.';
+import * as systemMetrics from '../system/metrics';
+import { ConnectionMonitor } from '../network/connection-monitor';
+import { OfflineQueue } from '../logging/offline-queue';
+import type { AgentLogger } from '../logging/agent-logger';
+import { LogComponents } from '../logging/types';
+import { buildDeviceEndpoint, buildApiEndpoint } from '../utils/api-utils';
+import { HttpClient, FetchHttpClient } from '../lib/http-client';
+import { RetryPolicy } from '../utils/retry-policy';
 
 interface DeviceStateReport {
 	[deviceUuid: string]: {
