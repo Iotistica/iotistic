@@ -152,12 +152,14 @@ export class DeviceManager {
 		const record = await this.dbClient.loadDevice();
 		if (record) {
 			// Debug: log record before parsing
-			console.log('[DeviceManager] Record from DB:', JSON.stringify({
+			this.logger?.debugSync('Record loaded from database', {
+				component: LogComponents.deviceManager,
+				operation: 'loadDeviceInfo',
 				hasRecord: !!record,
 				hasApiTlsConfig: !!record.apiTlsConfig,
 				apiTlsConfigType: typeof record.apiTlsConfig,
 				apiTlsConfigLength: record.apiTlsConfig?.length
-			}, null, 2));
+			});
 
 			this.deviceInfo = {
 				uuid: record.uuid,
@@ -182,11 +184,13 @@ export class DeviceManager {
 		};
 		
 		// Debug: log parsed deviceInfo
-		console.log('[DeviceManager] Parsed deviceInfo:', JSON.stringify({
+		this.logger?.debugSync('Parsed deviceInfo from database', {
+			component: LogComponents.deviceManager,
+			operation: 'loadDeviceInfo',
 			hasDeviceInfo: !!this.deviceInfo,
 			hasApiTlsConfig: !!this.deviceInfo?.apiTlsConfig,
 			apiTlsConfigKeys: this.deviceInfo?.apiTlsConfig ? Object.keys(this.deviceInfo.apiTlsConfig) : []
-		}, null, 2));
+		});
 	}
 }	/**
 	 * Save device info to database

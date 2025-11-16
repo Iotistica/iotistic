@@ -1,5 +1,5 @@
 /**
- * API BINDER - Device ↔ Cloud Communication
+ * Device ↔ Cloud Communication
  * ==========================================
  * 
  * Implements balena-supervisor style communication pattern:
@@ -17,20 +17,16 @@
  */
 
 import { EventEmitter } from 'events';
-import { gzip } from 'zlib';
-import { promisify } from 'util';
-import type { StateReconciler, DeviceState } from '../drivers/state-reconciler';
-import type { DeviceManager } from '../provisioning';
-import * as systemMetrics from '../system/metrics';
-import { ConnectionMonitor } from '../network/connection-monitor';
-import { OfflineQueue } from '../logging/offline-queue';
-import type { AgentLogger } from '../logging/agent-logger';
-import { LogComponents } from '../logging/types';
-import { buildDeviceEndpoint, buildApiEndpoint } from '../utils/api-utils';
-import { HttpClient, FetchHttpClient } from '../lib/http-client';
-import { RetryPolicy } from '../utils/retry-policy';
-
-const gzipAsync = promisify(gzip);
+import type { StateReconciler, DeviceState } from './drivers/state-reconciler';
+import type { DeviceManager } from './provisioning';
+import * as systemMetrics from './system/metrics';
+import { ConnectionMonitor } from './network/connection-monitor';
+import { OfflineQueue } from './logging/offline-queue';
+import type { AgentLogger } from './logging/agent-logger';
+import { LogComponents } from './logging/types';
+import { buildDeviceEndpoint, buildApiEndpoint } from './utils/api-utils';
+import { HttpClient, FetchHttpClient } from './lib/http-client';
+import { RetryPolicy } from './utils/retry-policy';
 
 interface DeviceStateReport {
 	[deviceUuid: string]: {
@@ -39,15 +35,15 @@ interface DeviceStateReport {
 		version?: number; // Which target_state version this device has applied
 		cpu_usage?: number;
 		memory_usage?: number;
-	memory_total?: number;
-	storage_usage?: number;
-	storage_total?: number;
-	temperature?: number;
-	is_online?: boolean;
-	local_ip?: string;
-	os_version?: string;
-	agent_version?: string;
-	uptime?: number;
+		memory_total?: number;
+		storage_usage?: number;
+		storage_total?: number;
+		temperature?: number;
+		is_online?: boolean;
+		local_ip?: string;
+		os_version?: string;
+		agent_version?: string;
+		uptime?: number;
 		top_processes?: Array<{
 			pid: number;
 			name: string;
@@ -171,8 +167,8 @@ export class CloudSync extends EventEmitter {
 		sensorPublish?: any,
 		protocolAdapters?: any,
 		mqttManager?: any,
-		httpClient?: HttpClient,  // NEW: Inject HTTP client for testability
-		anomalyService?: any  // NEW: Anomaly detection service
+		httpClient?: HttpClient,  
+		anomalyService?: any  
 	) {
 		super();
 		this.stateReconciler = stateReconciler;
@@ -212,7 +208,8 @@ export class CloudSync extends EventEmitter {
 		const deviceInfo = this.deviceManager.getDeviceInfo();
 		
 		// Debug: log full device info
-		console.log('[CloudSync] Device info:', JSON.stringify({
+		this.logger?.debugSync('Device info for HTTP client creation', {
+			component: LogComponents.cloudSync,
 			hasDeviceInfo: !!deviceInfo,
 			uuid: deviceInfo?.uuid,
 			hasApiKey: !!deviceInfo?.apiKey,
@@ -220,11 +217,17 @@ export class CloudSync extends EventEmitter {
 			apiTlsConfigKeys: deviceInfo?.apiTlsConfig ? Object.keys(deviceInfo.apiTlsConfig) : [],
 			hasCaCert: !!deviceInfo?.apiTlsConfig?.caCert,
 			caCertLength: deviceInfo?.apiTlsConfig?.caCert?.length
-		}, null, 2));
+		});
 		
 		const endpoint = this.config.cloudApiEndpoint;
 		const isLocalhostHttps = endpoint.startsWith('https://localhost') || 
 		                          endpoint.startsWith('https://127.0.0.1');
+		
+		// Common headers for all HTTP requests
+		const defaultHeaders = {
+			'Content-Type': 'application/json',
+			'X-Device-API-Key': deviceInfo.apiKey || '',
+		};
 		
 		this.logger?.infoSync('Creating HTTP client', {
 			component: LogComponents.cloudSync,
@@ -244,19 +247,13 @@ export class CloudSync extends EventEmitter {
 			
 			return new FetchHttpClient({
 				rejectUnauthorized: false, // Allow self-signed certs for localhost
+				defaultHeaders,
+				defaultTimeout: this.config.apiTimeout,
 			});
 		}
 		
 		// Check if API TLS is configured (production mode with provisioned CA cert)
 		const apiTlsConfig = deviceInfo?.apiTlsConfig;
-		
-		console.log('[CloudSync] apiTlsConfig check:', {
-			hasDeviceInfo: !!deviceInfo,
-			hasApiTlsConfig: !!apiTlsConfig,
-			hasCaCert: !!apiTlsConfig?.caCert,
-			caCertLength: apiTlsConfig?.caCert?.length,
-			verifyCertificate: apiTlsConfig?.verifyCertificate
-		});
 		
 		if (apiTlsConfig?.caCert) {
 			this.logger?.infoSync('Initializing HTTPS client with CA certificate', {
@@ -268,6 +265,8 @@ export class CloudSync extends EventEmitter {
 			return new FetchHttpClient({
 				caCert: apiTlsConfig.caCert.replace(/\\n/g, '\n'), // Fix escaped newlines
 				rejectUnauthorized: apiTlsConfig.verifyCertificate !== false,
+				defaultHeaders,
+				defaultTimeout: this.config.apiTimeout,
 			});
 		}
 		
@@ -276,7 +275,10 @@ export class CloudSync extends EventEmitter {
 			component: LogComponents.cloudSync,
 			endpoint: endpoint
 		});
-		return new FetchHttpClient();
+		return new FetchHttpClient({
+			defaultHeaders,
+			defaultTimeout: this.config.apiTimeout,
+		});
 	}
 	
 	/**
@@ -494,11 +496,8 @@ export class CloudSync extends EventEmitter {
 			// Use injected HTTP client instead of global fetch
 			const response = await this.httpClient.get(endpoint, {
 				headers: {
-					'Content-Type': 'application/json',
-					'X-Device-API-Key': deviceInfo.apiKey || '',
 					...(this.targetStateETag && { 'if-none-match': this.targetStateETag }),
 				},
-				timeout: this.config.apiTimeout
 			});
 		
 			this.logger?.debugSync('Poll response received', {
@@ -1110,40 +1109,11 @@ export class CloudSync extends EventEmitter {
 		
 		// MQTT not available or failed - use HTTP fallback
 		const endpoint = buildApiEndpoint(this.config.cloudApiEndpoint, '/device/state');
-		
-		// Detect protocol from endpoint
 		const protocol = endpoint.startsWith('https://') ? 'https' : 'http';
 		
-		// Convert to JSON
-		const jsonPayload = JSON.stringify(report);
-		const uncompressedSize = Buffer.byteLength(jsonPayload, 'utf8');
-		
-		// Compress with gzip
-		const compressedPayload = await gzipAsync(jsonPayload);
-		const compressedSize = compressedPayload.length;
-		
-		// Calculate compression ratio for logging
-		const compressionRatio = ((1 - compressedSize / uncompressedSize) * 100).toFixed(1);
-		
-		this.logger?.debugSync(`Sending compressed state report via ${protocol.toUpperCase()}`, {
-			component: LogComponents.cloudSync,
-			operation: 'http-compress',
-			uncompressedBytes: uncompressedSize,
-			compressedBytes: compressedSize,
-			compressionRatio: `${compressionRatio}%`,
-			savings: `${uncompressedSize - compressedSize} bytes`,
-			transport: protocol
-		});
-		
-		// Use httpClient.patch() for HTTPS support (handles CA certificates)
-		const response = await this.httpClient.patch(endpoint, compressedPayload, {
-			headers: {
-				'Content-Type': 'application/json',
-				'Content-Encoding': 'gzip',
-				'X-Device-API-Key': deviceInfo.apiKey || '',
-			},
-			timeout: this.config.apiTimeout,
-			compress: false, // Already compressed above
+		// Use httpClient.patch() with compression
+		const response = await this.httpClient.patch(endpoint, report, {
+			compress: true
 		});
 		
 		if (!response.ok) {
@@ -1153,7 +1123,6 @@ export class CloudSync extends EventEmitter {
 		this.logger?.debugSync(`State report sent via ${protocol.toUpperCase()}`, {
 			component: LogComponents.cloudSync,
 			operation: 'http-success',
-			bytes: compressedSize,
 			transport: protocol
 		});
 	}

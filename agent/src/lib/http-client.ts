@@ -23,6 +23,17 @@ export interface HttpClientOptions {
 	caCert?: string;
 	/** Whether to reject unauthorized certificates (default: true) */
 	rejectUnauthorized?: boolean;
+	/** Default headers to include in all requests */
+	defaultHeaders?: Record<string, string>;
+	/** Default timeout for all requests in milliseconds */
+	defaultTimeout?: number;
+}
+
+export interface CompressionStats {
+	uncompressedBytes: number;
+	compressedBytes: number;
+	compressionRatio: number; // Percentage (0-100)
+	savings: number; // Bytes saved
 }
 
 export interface HttpClient {
@@ -41,6 +52,7 @@ export interface HttpClient {
 		headers?: Record<string, string>;
 		timeout?: number;
 		compress?: boolean;
+		onCompressionStats?: (stats: CompressionStats) => void;
 	}): Promise<HttpResponse<T>>;
 	
 	/**
@@ -50,6 +62,7 @@ export interface HttpClient {
 		headers?: Record<string, string>;
 		timeout?: number;
 		compress?: boolean;
+		onCompressionStats?: (stats: CompressionStats) => void;
 	}): Promise<HttpResponse<T>>;
 }
 
@@ -59,10 +72,14 @@ export interface HttpClient {
 export class FetchHttpClient implements HttpClient {
 	private caCert?: string;
 	private rejectUnauthorized: boolean;
+	private defaultHeaders: Record<string, string>;
+	private defaultTimeout?: number;
 
 	constructor(options?: HttpClientOptions) {
 		this.caCert = options?.caCert;
 		this.rejectUnauthorized = options?.rejectUnauthorized !== false;
+		this.defaultHeaders = options?.defaultHeaders || {};
+		this.defaultTimeout = options?.defaultTimeout;
 		
 		// For localhost development with self-signed certs, we need to disable TLS verification
 		// Node.js fetch (undici) doesn't support per-request TLS options well
@@ -87,10 +104,11 @@ export class FetchHttpClient implements HttpClient {
 			});
 		}
 		
+		const timeout = options?.timeout ?? this.defaultTimeout;
 		const response = await fetch(url, {
 			method: 'GET',
-			headers: options?.headers,
-			signal: options?.timeout ? AbortSignal.timeout(options.timeout) : undefined,
+			headers: { ...this.defaultHeaders, ...options?.headers },
+			signal: timeout ? AbortSignal.timeout(timeout) : undefined,
 			// @ts-ignore - Node.js fetch supports agent option
 			...httpsAgent,
 		});
@@ -110,24 +128,16 @@ export class FetchHttpClient implements HttpClient {
 		headers?: Record<string, string>;
 		timeout?: number;
 		compress?: boolean;
+		onCompressionStats?: (stats: CompressionStats) => void;
 	}): Promise<HttpResponse<T>> {
-		let finalBody: any = body;
-		let finalHeaders = { ...options?.headers };
+		const { finalBody, finalHeaders } = await this.prepareBody(body, options);
 		
-		// Handle compression if requested
-		if (options?.compress && typeof body === 'string') {
-			const { gzip } = await import('zlib');
-			const { promisify } = await import('util');
-			const gzipAsync = promisify(gzip);
-			finalBody = await gzipAsync(Buffer.from(body));
-			finalHeaders['Content-Encoding'] = 'gzip';
-		}
-		
+		const timeout = options?.timeout ?? this.defaultTimeout;
 		const response = await fetch(url, {
 			method: 'POST',
 			headers: finalHeaders,
-			body: typeof finalBody === 'string' ? finalBody : JSON.stringify(finalBody),
-			signal: options?.timeout ? AbortSignal.timeout(options.timeout) : undefined,
+			body: finalBody,
+			signal: timeout ? AbortSignal.timeout(timeout) : undefined,
 			// @ts-ignore - Node.js fetch supports agent option
 			...(this.isHttps(url) ? this.getHttpsAgent() : {}),
 		});
@@ -147,24 +157,16 @@ export class FetchHttpClient implements HttpClient {
 		headers?: Record<string, string>;
 		timeout?: number;
 		compress?: boolean;
+		onCompressionStats?: (stats: CompressionStats) => void;
 	}): Promise<HttpResponse<T>> {
-		let finalBody: any = body;
-		let finalHeaders = { ...options?.headers };
+		const { finalBody, finalHeaders } = await this.prepareBody(body, options);
 		
-		// Handle compression if requested
-		if (options?.compress && typeof body === 'string') {
-			const { gzip } = await import('zlib');
-			const { promisify } = await import('util');
-			const gzipAsync = promisify(gzip);
-			finalBody = await gzipAsync(Buffer.from(body));
-			finalHeaders['Content-Encoding'] = 'gzip';
-		}
-		
+		const timeout = options?.timeout ?? this.defaultTimeout;
 		const response = await fetch(url, {
 			method: 'PATCH',
 			headers: finalHeaders,
 			body: finalBody,
-			signal: options?.timeout ? AbortSignal.timeout(options.timeout) : undefined,
+			signal: timeout ? AbortSignal.timeout(timeout) : undefined,
 			// @ts-ignore - Node.js fetch supports agent option
 			...(this.isHttps(url) ? this.getHttpsAgent() : {}),
 		});
@@ -178,6 +180,56 @@ export class FetchHttpClient implements HttpClient {
 			},
 			json: () => response.json() as Promise<T>
 		};
+	}
+
+	/**
+	 * Prepare request body with optional compression
+	 * Centralized logic for POST and PATCH methods
+	 */
+	private async prepareBody(body: any, options?: {
+		headers?: Record<string, string>;
+		compress?: boolean;
+		onCompressionStats?: (stats: CompressionStats) => void;
+	}): Promise<{ finalBody: Buffer | string; finalHeaders: Record<string, string> }> {
+		let finalBody: Buffer | string;
+		const finalHeaders = { ...this.defaultHeaders, ...options?.headers };
+		
+		// Convert objects to JSON string
+		const bodyString = typeof body === 'string' ? body : JSON.stringify(body);
+		
+		// Handle compression if requested
+		if (options?.compress) {
+			const { gzip } = await import('zlib');
+			const { promisify } = await import('util');
+			const gzipAsync = promisify(gzip);
+			
+			const uncompressedBytes = Buffer.byteLength(bodyString, 'utf8');
+			const compressed = await gzipAsync(bodyString);
+			const compressedBytes = compressed.length;
+			
+			// Calculate compression stats
+			const savings = uncompressedBytes - compressedBytes;
+			const compressionRatio = uncompressedBytes > 0 
+				? ((1 - compressedBytes / uncompressedBytes) * 100)
+				: 0;
+			
+			// Call stats callback if provided
+			if (options.onCompressionStats) {
+				options.onCompressionStats({
+					uncompressedBytes,
+					compressedBytes,
+					compressionRatio,
+					savings
+				});
+			}
+			
+			finalBody = compressed;
+			finalHeaders['Content-Encoding'] = 'gzip';
+		} else {
+			finalBody = bodyString;
+		}
+		
+		return { finalBody, finalHeaders };
 	}
 
 	private isHttps(url: string): boolean {

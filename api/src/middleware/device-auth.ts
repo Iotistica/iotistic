@@ -95,7 +95,19 @@ export async function deviceAuth(
     }
 
     // Verify API key using bcrypt
+    logger.debug('Comparing API key', {
+      deviceUuid,
+      apiKeyLength: apiKey.length,
+      apiKeyPrefix: apiKey.substring(0, 16),
+      hashPrefix: device.device_api_key_hash.substring(0, 20)
+    });
+    
     const isValidKey = await bcrypt.compare(apiKey, device.device_api_key_hash);
+    
+    logger.debug('Bcrypt comparison result', {
+      deviceUuid,
+      isValid: isValidKey
+    });
 
     if (!isValidKey) {
       res.status(401).json({

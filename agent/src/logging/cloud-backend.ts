@@ -6,20 +6,18 @@
  * 
  * Features:
  * - Streams logs via HTTP POST
- * - Compression with gzip
  * - Local buffering during network issues
  * - Automatic reconnection with exponential backoff
  * - NDJSON format (newline-delimited JSON)
  */
 
-import { Writable } from 'stream';
-import zlib from 'zlib';
 import type { LogBackend, LogMessage, LogFilter } from './types';
 import { LogComponents } from './types';
 import { buildApiEndpoint } from '../utils/api-utils';
 import type { AgentLogger } from '../logging/agent-logger';
 import { RetryPolicy } from '../utils/retry-policy';
 import { isRetryableNetworkError, getNetworkErrorType } from '../utils/network-errors';
+import { HttpClient, FetchHttpClient } from '../lib/http-client';
 
 /**
  * Summary of dropped logs for analysis
@@ -98,6 +96,7 @@ export class CloudLogBackend implements LogBackend {
 	private samplingRates: Required<NonNullable<CloudLogBackendConfig['samplingRates']>>;
 	private sampledLogCount: number = 0;
 	private totalLogCount: number = 0;
+	private httpClient: HttpClient;
 	
 	/** Circular buffer of dropped log summaries (for later analysis) */
 	private droppedLogSummaries: DroppedLogSummary[] = [];
@@ -120,6 +119,14 @@ export class CloudLogBackend implements LogBackend {
 			maxReconnectInterval: config.maxReconnectInterval ?? 300000, // 5min
 			samplingRates: config.samplingRates ?? { debug: 1, info: 1, warn: 1, error: 1 },
 		};
+		
+		// Initialize HTTP client with default headers
+		this.httpClient = new FetchHttpClient({
+			defaultHeaders: {
+				'X-Device-API-Key': this.config.deviceApiKey
+			},
+			defaultTimeout: 30000 // 30 second timeout
+		});
 		
 		// Initialize sampling rates with defaults
 		this.samplingRates = {
@@ -379,59 +386,20 @@ export class CloudLogBackend implements LogBackend {
 		// Convert to NDJSON (newline-delimited JSON)
 		const ndjson = logs.map(log => JSON.stringify(log)).join('\n') + '\n';
 		
-		// Compress if enabled
-		let body: string | Buffer = ndjson;
-		const headers: Record<string, string> = {
-			'Content-Type': 'application/x-ndjson',
-			'X-Device-API-Key': this.config.deviceApiKey || '',
-		};
-		
-		if (this.config.compression) {
-			body = await this.compress(ndjson);
-			headers['Content-Encoding'] = 'gzip';
-		}
-		
-		// Create abort controller with timeout
-		this.abortController = new AbortController();
-		const timeoutId = setTimeout(() => {
-			this.abortController?.abort();
-		}, 30000); // 30 second timeout
-		
-		try {
-			// Send to cloud
-			const response = await fetch(endpoint, {
-				method: 'POST',
-				headers,
-				body,
-				signal: this.abortController.signal,
-			});
-			
-			clearTimeout(timeoutId);
-			
-			if (!response.ok) {
-				const responseText = await response.text();
-				this.logger?.errorSync(`HTTP ${response.status}: ${response.statusText}`, undefined, { 
-					component: LogComponents.logs,
-					responsePreview: responseText.substring(0, 200)
-				});
-				throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-			}
-		} catch (error) {
-			clearTimeout(timeoutId);
-			throw error;
-		}
-	}
-	
-	private async compress(data: string): Promise<Buffer> {
-		return new Promise((resolve, reject) => {
-			zlib.gzip(data, (err, result) => {
-				if (err) {
-					reject(err);
-				} else {
-					resolve(result);
-				}
-			});
+		// Send to cloud using HTTP client (compression handled automatically)
+		const response = await this.httpClient.post(endpoint, ndjson, {
+			headers: {
+				'Content-Type': 'application/x-ndjson'
+			},
+			compress: this.config.compression
 		});
+		
+		if (!response.ok) {
+			this.logger?.errorSync(`HTTP ${response.status}: ${response.statusText}`, undefined, { 
+				component: LogComponents.logs
+			});
+			throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+		}
 	}
 	
 	private scheduleReconnect(): void {
@@ -619,17 +587,10 @@ export class CloudLogBackend implements LogBackend {
 		);
 		
 		try {
-			const response = await fetch(endpoint, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					'X-Device-API-Key': this.config.deviceApiKey || ''
-				},
-				body: JSON.stringify({
-					summaries: this.droppedLogSummaries,
-					deviceUuid: this.config.deviceUuid,
-					reportedAt: Date.now()
-				})
+			const response = await this.httpClient.post(endpoint, {
+				summaries: this.droppedLogSummaries,
+				deviceUuid: this.config.deviceUuid,
+				reportedAt: Date.now()
 			});
 			
 			if (response.ok) {
