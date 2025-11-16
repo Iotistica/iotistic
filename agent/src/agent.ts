@@ -78,7 +78,7 @@ export default class DeviceAgent {
   private sensorPublish?: SensorPublishFeature;
   private sensors?: SensorsFeature;
   private sensorConfigHandler?: SensorConfigHandler;
-  private anomalyService?: AnomalyDetectionService; // Anomaly detection for metrics
+  private anomalyService?: AnomalyDetectionService; // Edge-based AI anomaly detection for metrics and sensors
   private simulationOrchestrator?: SimulationOrchestrator; // Simulation framework for testing
 
   // Cached target state (updated when target state changes)
@@ -756,6 +756,25 @@ export default class DeviceAgent {
       configSettings.metricsIntervalMs ||
       parseInt(process.env.METRICS_INTERVAL_MS || "300000", 10);
 
+    // Configure edge AI anomaly detection for system metrics and sensors
+    if (this.anomalyService) {
+      this.agentLogger?.infoSync('Configuring edge AI anomaly detection', {
+        component: LogComponents.agent,
+      });
+      
+      // Wire edge AI anomaly service to system metrics
+      const { configureAnomalyFeed: configureSystemMetrics } = await import('./system/metrics.js');
+      configureSystemMetrics(this.anomalyService);
+      
+      // Wire edge AI anomaly service to sensor-publish
+      const { configureAnomalyFeed: configureSensorAnomaly } = await import('./features/sensor-publish/sensor.js');
+      configureSensorAnomaly(this.anomalyService);
+      
+      this.agentLogger?.infoSync('Edge AI anomaly detection configured for system metrics and sensors', {
+        component: LogComponents.agent,
+      });
+    }
+
     this.cloudSync = new CloudSync(
       this.stateReconciler, // Use StateReconciler instead of ContainerManager
       this.deviceManager,
@@ -768,9 +787,7 @@ export default class DeviceAgent {
       this.agentLogger, // Pass the agent logger
       this.sensorPublish, // Pass sensor-publish for health reporting
       this.sensors, // Pass protocol-adapters for health reporting
-      MqttManager.getInstance(), // Pass MQTT manager singleton for state reporting (optional)
-      undefined, // Use default HTTP client
-      this.anomalyService // Pass anomaly detection service for metrics reporting
+      MqttManager.getInstance() // Pass MQTT manager singleton for state reporting (optional)
     );
 
     // Reinitialize device actions with cloudSync for connection health endpoint
@@ -937,6 +954,22 @@ export default class DeviceAgent {
         this.agentLogger!,
         this.deviceInfo.uuid
       );
+
+      // Configure edge AI anomaly detection for sensors (if enabled)
+      if (this.anomalyService) {
+        const { configureAnomalyFeed } = await import(
+          './features/sensor-publish/sensor.js'
+        );
+        configureAnomalyFeed(this.anomalyService);
+
+        this.agentLogger?.infoSync(
+          'Configured edge AI anomaly detection for sensor data',
+          {
+            component: LogComponents.agent,
+            sensorCount: mergedSensors.length,
+          }
+        );
+      }
 
       await this.sensorPublish.start();
 

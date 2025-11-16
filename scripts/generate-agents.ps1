@@ -308,6 +308,7 @@ for ($i = $StartIndex; $i -lt ($StartIndex + $Count); $i++) {
       - SIMULATION_MODE=$($simConfig.enabled)
       - SIMULATION_CONFIG=$($simConfig.config)
       - FIREWALL_ENABLED=$FirewallEnabled
+
     networks:
       - iotistic-net
 "@

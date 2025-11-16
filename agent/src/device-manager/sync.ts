@@ -122,7 +122,6 @@ export class CloudSync extends EventEmitter {
 	private sensorPublish?: any; // Optional sensor-publish feature for health reporting
 	private protocolAdapters?: any; // Optional protocol-adapters feature for health reporting
 	private mqttManager?: any; // Optional MQTT manager for state reporting
-	private anomalyService?: any; // Optional anomaly detection service for alert reporting
 	
 	// Event handlers (stored for proper cleanup)
 	private onlineHandler = () => {
@@ -167,8 +166,7 @@ export class CloudSync extends EventEmitter {
 		sensorPublish?: any,
 		protocolAdapters?: any,
 		mqttManager?: any,
-		httpClient?: HttpClient,  
-		anomalyService?: any  
+		httpClient?: HttpClient
 	) {
 		super();
 		this.stateReconciler = stateReconciler;
@@ -177,7 +175,6 @@ export class CloudSync extends EventEmitter {
 		this.sensorPublish = sensorPublish;
 		this.protocolAdapters = protocolAdapters;
 		this.mqttManager = mqttManager;
-		this.anomalyService = anomalyService;
 		
 		// Set defaults FIRST (needed by createHttpClient)
 		this.config = {
@@ -827,85 +824,46 @@ export class CloudSync extends EventEmitter {
 			this.lastAgentVersion = deviceInfo.agentVersion;
 		}
 		
-		// Add metrics if needed
-		if (includeMetrics) {
-			try {
-				const metrics = await systemMetrics.getSystemMetrics();
-				stateReport[deviceInfo.uuid].cpu_usage = metrics.cpu_usage;
-				stateReport[deviceInfo.uuid].memory_usage = metrics.memory_usage;
-				stateReport[deviceInfo.uuid].memory_total = metrics.memory_total;
-				stateReport[deviceInfo.uuid].storage_usage = metrics.storage_usage ?? undefined;
-				stateReport[deviceInfo.uuid].storage_total = metrics.storage_total ?? undefined;
-				stateReport[deviceInfo.uuid].temperature = metrics.cpu_temp ?? undefined;
-				stateReport[deviceInfo.uuid].uptime = metrics.uptime;
-				stateReport[deviceInfo.uuid].top_processes = metrics.top_processes ?? [];
-				stateReport[deviceInfo.uuid].network_interfaces = metrics.network_interfaces ?? [];
-				
-				// Get IP address from network interfaces (only include if changed)
-				const primaryInterface = metrics.network_interfaces.find(i => i.default);
-				const currentIp = primaryInterface?.ip4;
-				if (currentIp && (currentIp !== this.lastLocalIp || this.lastLocalIp === undefined)) {
-					stateReport[deviceInfo.uuid].local_ip = currentIp;
-					this.lastLocalIp = currentIp;
-				}
-				
-				// Feed metrics to anomaly detection service
-				if (this.anomalyService) {
-					try {
-						// CPU usage
-						if (metrics.cpu_usage !== undefined) {
-							this.anomalyService.processDataPoint({
-								source: 'system',
-								metric: 'cpu_usage',
-								value: metrics.cpu_usage,
-								unit: '%',
-								timestamp: Date.now(),
-								quality: 'GOOD'
-							});
-						}
-						
-						// Memory usage (as percentage)
-						if (metrics.memory_usage !== undefined && metrics.memory_total !== undefined) {
-							const memoryPercent = (metrics.memory_usage / metrics.memory_total) * 100;
-							this.anomalyService.processDataPoint({
-								source: 'system',
-								metric: 'memory_percent',
-								value: memoryPercent,
-								unit: '%',
-								timestamp: Date.now(),
-								quality: 'GOOD'
-							});
-						}
-						
-						// CPU temperature
-						if (metrics.cpu_temp !== undefined) {
-							this.anomalyService.processDataPoint({
-								source: 'system',
-								metric: 'cpu_temp',
-								value: metrics.cpu_temp,
-								unit: '°C',
-								timestamp: Date.now(),
-								quality: 'GOOD'
-							});
-						}
-					} catch (anomalyError) {
-						this.logger?.debugSync('Failed to process metrics for anomaly detection', {
-							component: LogComponents.cloudSync,
-							error: anomalyError instanceof Error ? anomalyError.message : String(anomalyError)
-						});
-					}
-				}
+	// Add metrics if needed
+	if (includeMetrics) {
+		try {
+			const metricsStartTime = Date.now();
+			const metrics = await systemMetrics.getSystemMetrics();
+			const metricsElapsedMs = Date.now() - metricsStartTime;
 			
-			this.lastMetricsTime = now;
-		} catch (error) {
-			this.logger?.warnSync('Failed to collect metrics', {
+			this.logger?.infoSync('System metrics collection completed', {
 				component: LogComponents.cloudSync,
 				operation: 'collect-metrics',
-				error: error instanceof Error ? error.message : String(error)
+				elapsedMs: metricsElapsedMs,
+				elapsedSeconds: (metricsElapsedMs / 1000).toFixed(2)
 			});
-		}
+			
+			stateReport[deviceInfo.uuid].cpu_usage = metrics.cpu_usage;
+			stateReport[deviceInfo.uuid].memory_usage = metrics.memory_usage;
+			stateReport[deviceInfo.uuid].memory_total = metrics.memory_total;
+			stateReport[deviceInfo.uuid].storage_usage = metrics.storage_usage ?? undefined;
+			stateReport[deviceInfo.uuid].storage_total = metrics.storage_total ?? undefined;
+			stateReport[deviceInfo.uuid].temperature = metrics.cpu_temp ?? undefined;
+			stateReport[deviceInfo.uuid].uptime = metrics.uptime;
+			stateReport[deviceInfo.uuid].top_processes = metrics.top_processes ?? [];
+			stateReport[deviceInfo.uuid].network_interfaces = metrics.network_interfaces ?? [];
+			
+			// Get IP address from network interfaces (only include if changed)
+			const primaryInterface = metrics.network_interfaces.find(i => i.default);
+			const currentIp = primaryInterface?.ip4;
+			if (currentIp && (currentIp !== this.lastLocalIp || this.lastLocalIp === undefined)) {
+				stateReport[deviceInfo.uuid].local_ip = currentIp;
+				this.lastLocalIp = currentIp;
+			}
 		
-		// Add sensor health stats (if sensor-publish is enabled)
+		this.lastMetricsTime = now;
+	} catch (error) {
+		this.logger?.warnSync('Failed to collect metrics', {
+			component: LogComponents.cloudSync,
+			operation: 'collect-metrics',
+			error: error instanceof Error ? error.message : String(error)
+		});
+	}		// Add sensor health stats (if sensor-publish is enabled)
 		if (this.sensorPublish) {
 			try {
 				const sensorStats = this.sensorPublish.getStats();
@@ -938,23 +896,7 @@ export class CloudSync extends EventEmitter {
 				});
 			}
 		}
-		
-		// Add anomaly detection data (if anomaly service is enabled)
-		if (this.anomalyService && includeMetrics) {
-			try {
-				const anomalySummary = this.anomalyService.getSummaryForReport(10);
-				if (anomalySummary) {
-					(stateReport[deviceInfo.uuid] as any).anomaly_detection = anomalySummary;
-				}
-			} catch (error) {
-				this.logger?.warnSync('Failed to collect anomaly detection stats', {
-					component: LogComponents.cloudSync,
-					operation: 'collect-anomaly-stats',
-					error: error instanceof Error ? error.message : String(error)
-				});
-			}
-		}
-		
+
 		// Log complete metrics report if metrics were collected
 		if (includeMetrics) {
 			this.logger?.infoSync('Metrics Report', {

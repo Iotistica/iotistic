@@ -1,5 +1,6 @@
 import * as net from 'net';
 import { EventEmitter } from 'events';
+import type { AnomalyDetectionService } from '../../ai/anomaly/index.js';
 import {
   SensorConfig,
   SensorState,
@@ -8,6 +9,20 @@ import {
   SensorStats,
   MessageBatch
 } from './types';
+
+// ============================================================================
+// EDGE AI ANOMALY DETECTION CONFIGURATION
+// ============================================================================
+
+let anomalyService: AnomalyDetectionService | undefined;
+
+/**
+ * Configure edge AI anomaly detection for sensor data
+ * @param service - AnomalyDetectionService instance or undefined to disable
+ */
+export function configureAnomalyFeed(service: AnomalyDetectionService | undefined): void {
+  anomalyService = service;
+}
 
 /**
  * Sensor - Manages connection to Unix domain socket and publishes sensor data
@@ -147,6 +162,159 @@ export class Sensor extends EventEmitter {
    */
   private getSensorName(): string {
     return this.config.name || 'unknown';
+  }
+
+  /**
+   * Feed sensor messages to anomaly detection
+   * Extracts numeric values from all messages and feeds to AnomalyService
+   */
+  private feedMessagesToAnomaly(messages: any[]): void {
+    if (!anomalyService) return;
+
+    const timestamp = new Date();
+    const sensorName = this.getSensorName();
+
+    for (const message of messages) {
+      try {
+        // Parse message if it's a string
+        const data = typeof message === 'string' ? JSON.parse(message) : message;
+
+        // Extract all numeric fields and feed to anomaly detection
+        this.extractNumericFields(data, sensorName, timestamp);
+      } catch (error) {
+        // Skip unparseable messages silently
+        this.logger?.debug(
+          `Could not parse sensor message for anomaly feed: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    }
+  }
+
+  /**
+   * Recursively extract numeric fields from sensor data
+   * Handles nested objects and arrays
+   */
+  private extractNumericFields(
+    data: any,
+    sensorName: string,
+    timestamp: Date,
+    prefix = ''
+  ): void {
+    if (!anomalyService) return;
+
+    const timestampMs = timestamp.getTime();
+
+    if (typeof data === 'number') {
+      // Direct numeric value
+      const metricName = prefix || 'value';
+      anomalyService.processDataPoint({
+        source: 'sensor',
+        metric: `${sensorName}_${metricName}`,
+        value: data,
+        unit: this.inferUnit(metricName),
+        timestamp: timestampMs,
+        quality: 'GOOD',
+        deviceId: this.deviceUuid,
+        tags: {
+          sensorName,
+          field: metricName,
+        },
+      });
+    } else if (typeof data === 'object' && data !== null) {
+      // Object or array - recurse into nested fields
+      for (const [key, value] of Object.entries(data)) {
+        if (typeof value === 'number') {
+          // Feed numeric field
+          const metricName = prefix ? `${prefix}_${key}` : key;
+          anomalyService.processDataPoint({
+            source: 'sensor',
+            metric: `${sensorName}_${metricName}`,
+            value: value,
+            unit: this.inferUnit(key),
+            timestamp: timestampMs,
+            quality: 'GOOD',
+            deviceId: this.deviceUuid,
+            tags: {
+              sensorName,
+              field: metricName,
+            },
+          });
+        } else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+          // Recurse into nested object (max depth 2 to avoid deep nesting)
+          if (!prefix) {
+            this.extractNumericFields(value, sensorName, timestamp, key);
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Infer measurement unit from field name
+   * Returns common units based on field name patterns
+   */
+  private inferUnit(fieldName: string): string {
+    const lower = fieldName.toLowerCase();
+
+    // Temperature
+    if (lower.includes('temp') || lower.includes('temperature')) {
+      return '°C';
+    }
+
+    // Humidity
+    if (lower.includes('humid') || lower.includes('moisture')) {
+      return '%';
+    }
+
+    // Pressure
+    if (lower.includes('pressure') || lower.includes('baro')) {
+      return 'hPa';
+    }
+
+    // Electrical
+    if (lower.includes('voltage') || lower.includes('volt')) {
+      return 'V';
+    }
+    if (lower.includes('current') || lower.includes('ampere') || lower.includes('amp')) {
+      return 'A';
+    }
+    if (lower.includes('power') || lower.includes('watt')) {
+      return 'W';
+    }
+    if (lower.includes('resistance') || lower.includes('ohm')) {
+      return 'Ω';
+    }
+
+    // Gas/Air Quality
+    if (lower.includes('co2') || lower.includes('carbon')) {
+      return 'ppm';
+    }
+    if (lower.includes('gas') || lower.includes('voc') || lower.includes('iaq')) {
+      return 'index';
+    }
+
+    // Light
+    if (lower.includes('light') || lower.includes('lux') || lower.includes('illumin')) {
+      return 'lux';
+    }
+
+    // Distance
+    if (lower.includes('distance') || lower.includes('range')) {
+      return 'cm';
+    }
+
+    // Speed
+    if (lower.includes('speed') || lower.includes('velocity')) {
+      return 'm/s';
+    }
+
+    // Percentage
+    if (lower.includes('percent') || lower.includes('level') || lower.includes('battery')) {
+      return '%';
+    }
+
+    // Default
+    return 'value';
   }
 
   /**
@@ -303,6 +471,12 @@ export class Sensor extends EventEmitter {
       });
       
       await this.mqttConnection.publish(topic, payload, { qos: 1 });
+      
+      // Feed to edge AI anomaly detection if configured
+      // Device processes all sensor data locally with ML
+      if (anomalyService) {
+        this.feedMessagesToAnomaly(this.messageBatch.messages);
+      }
       
       this.stats.messagesPublished += this.messageBatch.messages.length;
       this.stats.bytesPublished += this.messageBatch.totalBytes;
