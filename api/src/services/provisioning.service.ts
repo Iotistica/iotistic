@@ -233,22 +233,22 @@ export class ProvisioningService {
     const password = crypto.randomBytes(16).toString('base64');
     const passwordHash = await bcrypt.hash(password, 10);
 
-    // Create MQTT user
-    await query(
-      `INSERT INTO mqtt_users (username, password_hash, is_superuser, is_active)
-       VALUES ($1, $2, false, true)
-       ON CONFLICT (username) DO NOTHING`,
-      [username, passwordHash]
-    );
+    // Create MQTT user and acls
+     await Promise.all([
+        query(
+          `INSERT INTO mqtt_users (username, password_hash, is_superuser, is_active)
+             VALUES ($1, $2, false, true)
+             ON CONFLICT (username) DO NOTHING`,
+          [username, passwordHash]
+        ),
+        query(
+          `INSERT INTO mqtt_acls (clientid, username, topic, access, priority)
+             VALUES ($1, $2, $3, 7, 0)
+             ON CONFLICT DO NOTHING`,
+          [username, username, `iot/device/${deviceUuid}/#`]
+        )
+      ]);
 
-    // Create MQTT ACL (access 7 = READ + WRITE + SUBSCRIBE)
-    // Use username in both clientid and username fields for compatibility
-    await query(
-      `INSERT INTO mqtt_acls (clientid, username, topic, access, priority)
-       VALUES ($1, $2, $3, 7, 0)
-       ON CONFLICT DO NOTHING`,
-      [username, username, `iot/device/${deviceUuid}/#`]
-    );
 
     logger.info(`MQTT credentials created for: ${username}`);
     return { username, password };
