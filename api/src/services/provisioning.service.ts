@@ -142,12 +142,9 @@ export class ProvisioningService {
     const vpnCredentials = await this.generateVpnCredentials(uuid, deviceName, ipAddress);
 
     // Create or get device record
-    device = await DeviceModel.getOrCreate(uuid);
-
     const hashedApiKey = await bcrypt.hash(deviceApiKey, 10);
-    
-    // Update device with all provisioning data in a single update
-    await DeviceModel.update(uuid, {
+
+    const device = await DeviceModel.upsert(uuid, {
       device_name: deviceName,
       device_type: deviceType,
       device_api_key_hash: hashedApiKey,
@@ -165,6 +162,7 @@ export class ProvisioningService {
       provisioned_at: new Date(),
       provisioning_state: 'registered'
     });
+
 
     // Create default target state
     await this.createDefaultTargetState(uuid);
