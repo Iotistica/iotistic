@@ -163,7 +163,7 @@ services:
            - iotistic-net
     mosquitto:
         image: iegomez/mosquitto-go-auth
-        restart: always
+        restart: unless-stopped
         container_name: iotistic-mosquitto
         ports:
           - "${MOSQUITTO_PORT_EXT:-5883}:1883"        # Non-TLS (local)
@@ -178,6 +178,12 @@ services:
         depends_on:
             postgres:
                 condition: service_healthy
+        healthcheck:
+            test: ["CMD-SHELL", "timeout 5 mosquitto_sub -h localhost -p 1883 -u ${MQTT_USERNAME:-admin} -P ${MQTT_PASSWORD:-iotistic42!} -t '$$SYS/#' -C 1 || exit 1"]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+            start_period: 10s
         networks:
            - iotistic-net
 
