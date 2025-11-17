@@ -170,7 +170,6 @@ export class ProvisioningService {
     // Create default target state
     this.createDefaultTargetState(uuid).catch(err => console.error('Failed to create default target state', err));
 
-
     // Increment provisioning key usage, fire and forget
     incrementProvisioningKeyUsage(keyRecord.id).catch(err => ...);
 
@@ -190,9 +189,8 @@ export class ProvisioningService {
         mqttUsername: mqttCredentials.username
       }).catch(err => logger.error(err));
 
-
-    // Audit logging
-    await logAuditEvent({
+     // Audit logging
+     logAuditEvent({
       eventType: AuditEventType.DEVICE_REGISTERED,
       deviceUuid: uuid,
       ipAddress,
@@ -204,16 +202,18 @@ export class ProvisioningService {
         fleetId: keyRecord.fleet_id,
         mqttUsername: mqttCredentials.username
       }
-    });
+    }).catch(err => logger.error('audit failed', err));
 
-    await logProvisioningAttempt(
-      ipAddress!,
-      uuid,
-      keyRecord.id,
-      true,
-      'Device registered successfully',
-      userAgent
-    );
+    //Log provisioning attempt
+   logProvisioningAttempt(
+        ipAddress!,
+        uuid,
+        keyRecord.id,
+        true,
+        'Device registered successfully',
+        userAgent
+   ).catch(err => logger.error('Failed to log successful provisioning', err));
+
 
     // Build and return provisioning response
     return this.buildProvisioningResponse(
