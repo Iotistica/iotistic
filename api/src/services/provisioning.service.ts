@@ -135,14 +135,15 @@ export class ProvisioningService {
 
     }
 
-    // Generate MQTT credentials
-    const mqttCredentials = await this.generateMqttCredentials(uuid);
-
-    // Generate VPN credentials 
-    const vpnCredentials = await this.generateVpnCredentials(uuid, deviceName, ipAddress);
-
-    // Create or get device record
-    const hashedApiKey = await bcrypt.hash(deviceApiKey, 10);
+    const [
+      hashedApiKey,
+      mqttCredentials,
+      vpnCredentials
+    ] = await Promise.all([
+      bcrypt.hash(deviceApiKey, 10),
+      this.generateMqttCredentials(uuid),
+      this.generateVpnCredentials(uuid, deviceName, ipAddress)
+    ]);
 
     const device = await DeviceModel.upsert(uuid, {
       device_name: deviceName,
