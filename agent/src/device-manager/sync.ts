@@ -26,7 +26,7 @@ import type { AgentLogger } from '../logging/agent-logger';
 import { LogComponents } from '../logging/types';
 import { buildDeviceEndpoint, buildApiEndpoint } from '../utils/api-utils';
 import { HttpClient, FetchHttpClient } from '../lib/http-client';
-import { RetryPolicy } from '../utils/retry-policy';
+import { RetryPolicy, CircuitBreaker, AsyncLock, isAuthError } from '../utils/retry-policy';
 
 interface DeviceStateReport {
 	[deviceUuid: string]: {
@@ -115,6 +115,12 @@ export class CloudSync extends EventEmitter {
 	private pollErrors: number = 0;
 	private reportErrors: number = 0;
 	
+	// Circuit breakers & locks for poll/report protection
+	private pollCircuit: CircuitBreaker;
+	private reportCircuit: CircuitBreaker;
+	private pollLock: AsyncLock;
+	private reportLock: AsyncLock;
+	
 	// Connection monitoring & offline queue
 	private connectionMonitor: ConnectionMonitor;
 	private reportQueue: OfflineQueue<DeviceStateReport>;
@@ -197,6 +203,14 @@ export class CloudSync extends EventEmitter {
 		
 		// Initialize connection monitor (with logger)
 		this.connectionMonitor = new ConnectionMonitor(logger);
+		
+		// Initialize circuit breakers (10 failures = 5min cooldown)
+		this.pollCircuit = new CircuitBreaker(10, 5 * 60 * 1000);
+		this.reportCircuit = new CircuitBreaker(10, 5 * 60 * 1000);
+		
+		// Initialize async locks for deduplication
+		this.pollLock = new AsyncLock();
+		this.reportLock = new AsyncLock();
 		
 		// Initialize offline queue for reports
 		this.reportQueue = new OfflineQueue<DeviceStateReport>('state-reports', 1000);
@@ -455,31 +469,74 @@ export class CloudSync extends EventEmitter {
 			return;
 		}
 		
+		// Check circuit breaker
+		if (this.pollCircuit.isOpen()) {
+			const remaining = this.pollCircuit.getCooldownRemaining();
+			this.logger?.warnSync('Poll circuit breaker open, cooling down', {
+				component: LogComponents.cloudSync,
+				operation: 'poll-circuit-open',
+				cooldownRemainingMs: remaining,
+				cooldownRemainingSec: Math.floor(remaining / 1000),
+				failureCount: this.pollCircuit.getFailureCount()
+			});
+			
+			// Schedule retry after cooldown
+			this.pollTimer = setTimeout(() => this.pollLoop(), remaining + 1000);
+			return;
+		}
+		
+		// Check if already polling (deduplication)
+		if (this.pollLock.isLocked()) {
+			this.logger?.warnSync('Poll already in progress, skipping', {
+				component: LogComponents.cloudSync,
+				operation: 'poll-skip-locked'
+			});
+			this.pollTimer = setTimeout(() => this.pollLoop(), this.config.pollInterval);
+			return;
+		}
+		
 		try {
-			await this.pollTargetState();
+			// Execute with lock protection
+			await this.pollLock.tryExecute(async () => {
+				await this.pollTargetState();
+			});
+			
 			this.pollErrors = 0; // Reset on success
+			this.pollCircuit.recordSuccess(); // Reset circuit breaker
 			this.connectionMonitor.markSuccess('poll'); // Track success
 		} catch (error) {
-			this.pollErrors++;
+			this.pollErrors = Math.min(this.pollErrors + 1, 10); // Cap at 10
+			
+			const circuitOpened = this.pollCircuit.recordFailure();
 			this.connectionMonitor.markFailure('poll', error as Error); // Track failure
 			
 			// Extract the root cause for better error visibility
 			const err = error instanceof Error ? error : new Error(String(error));
 			const cause = (err as any).cause;
 			
-			this.logger?.errorSync('Failed to poll target state', err, {
-				component: LogComponents.cloudSync,
-				operation: 'poll',
-				errorCount: this.pollErrors,
-				...(cause && { 
-					cause: {
-						message: cause.message,
-						code: cause.code,
-						errno: cause.errno,
-						syscall: cause.syscall
-					}
-				})
-			});
+			if (circuitOpened) {
+				this.logger?.errorSync('Poll circuit breaker tripped', err, {
+					component: LogComponents.cloudSync,
+					operation: 'poll-circuit-trip',
+					consecutiveFailures: this.pollCircuit.getFailureCount(),
+					cooldownMs: 5 * 60 * 1000,
+					cooldownMin: 5
+				});
+			} else {
+				this.logger?.errorSync('Failed to poll target state', err, {
+					component: LogComponents.cloudSync,
+					operation: 'poll',
+					errorCount: this.pollErrors,
+					...(cause && { 
+						cause: {
+							message: cause.message,
+							code: cause.code,
+							errno: cause.errno,
+							syscall: cause.syscall
+						}
+					})
+				});
+			}
 		}
 		
 		// Calculate next poll interval (exponential backoff with jitter on errors)
@@ -648,9 +705,40 @@ export class CloudSync extends EventEmitter {
 			return;
 		}
 		
+		// Check circuit breaker
+		if (this.reportCircuit.isOpen()) {
+			const remaining = this.reportCircuit.getCooldownRemaining();
+			this.logger?.warnSync('Report circuit breaker open, cooling down', {
+				component: LogComponents.cloudSync,
+				operation: 'report-circuit-open',
+				cooldownRemainingMs: remaining,
+				cooldownRemainingSec: Math.floor(remaining / 1000),
+				failureCount: this.reportCircuit.getFailureCount()
+			});
+			
+			// Schedule retry after cooldown
+			this.reportTimer = setTimeout(() => this.reportLoop(), remaining + 1000);
+			return;
+		}
+		
+		// Check if already reporting (deduplication)
+		if (this.reportLock.isLocked()) {
+			this.logger?.warnSync('Report already in progress, skipping', {
+				component: LogComponents.cloudSync,
+				operation: 'report-skip-locked'
+			});
+			this.reportTimer = setTimeout(() => this.reportLoop(), this.config.reportInterval);
+			return;
+		}
+		
 		try {
-			await this.reportCurrentState();
+			// Execute with lock protection
+			await this.reportLock.tryExecute(async () => {
+				await this.reportCurrentState();
+			});
+			
 			this.reportErrors = 0; // Reset on success
+			this.reportCircuit.recordSuccess(); // Reset circuit breaker
 			this.connectionMonitor.markSuccess('report'); // Track success
 			
 			// Try to flush offline queue after successful report
@@ -658,26 +746,38 @@ export class CloudSync extends EventEmitter {
 				await this.flushOfflineQueue();
 			}
 		} catch (error) {
-			this.reportErrors++;
+			this.reportErrors = Math.min(this.reportErrors + 1, 10); // Cap at 10
+			
+			const circuitOpened = this.reportCircuit.recordFailure();
 			this.connectionMonitor.markFailure('report', error as Error); // Track failure
 			
 			// Extract the root cause for better error visibility
 			const err = error instanceof Error ? error : new Error(String(error));
 			const cause = (err as any).cause;
 			
-			this.logger?.errorSync('Failed to report current state', err, {
-				component: LogComponents.cloudSync,
-				operation: 'report',
-				errorCount: this.reportErrors,
-				...(cause && { 
-					cause: {
-						message: cause.message,
-						code: cause.code,
-						errno: cause.errno,
-						syscall: cause.syscall
-					}
-				})
-			});
+			if (circuitOpened) {
+				this.logger?.errorSync('Report circuit breaker tripped', err, {
+					component: LogComponents.cloudSync,
+					operation: 'report-circuit-trip',
+					consecutiveFailures: this.reportCircuit.getFailureCount(),
+					cooldownMs: 5 * 60 * 1000,
+					cooldownMin: 5
+				});
+			} else {
+				this.logger?.errorSync('Failed to report current state', err, {
+					component: LogComponents.cloudSync,
+					operation: 'report',
+					errorCount: this.reportErrors,
+					...(cause && { 
+						cause: {
+							message: cause.message,
+							code: cause.code,
+							errno: cause.errno,
+							syscall: cause.syscall
+						}
+					})
+				});
+			}
 		}
 		
 		// Calculate next report interval (exponential backoff with jitter on errors)

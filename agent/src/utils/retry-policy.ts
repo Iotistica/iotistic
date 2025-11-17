@@ -165,3 +165,212 @@ export class RetryPolicy {
 		return cappedDelay;
 	}
 }
+
+/**
+ * Circuit breaker for poll/report loops
+ * Stops trying after max consecutive failures and enters cooldown period
+ * 
+ * Example usage:
+ * ```typescript
+ * const circuit = new CircuitBreaker(10, 5 * 60 * 1000); // 10 failures, 5min cooldown
+ * 
+ * if (circuit.isOpen()) {
+ *   // Skip operation, circuit is cooling down
+ *   return;
+ * }
+ * 
+ * try {
+ *   await operation();
+ *   circuit.recordSuccess(); // Reset counter
+ * } catch (error) {
+ *   const opened = circuit.recordFailure(); // Returns true if circuit just opened
+ *   if (opened) {
+ *     logger.error('Circuit breaker tripped');
+ *   }
+ * }
+ * ```
+ */
+export class CircuitBreaker {
+	private failureCount: number = 0;
+	private openUntil: number = 0;
+	
+	constructor(
+		private maxFailures: number = 10,
+		private cooldownMs: number = 5 * 60 * 1000 // 5 minutes default
+	) {}
+	
+	/**
+	 * Check if circuit breaker is open (in cooldown)
+	 * @returns true if circuit is open and operation should be skipped
+	 */
+	isOpen(): boolean {
+		if (this.openUntil > 0 && Date.now() < this.openUntil) {
+			return true; // Still in cooldown
+		}
+		if (this.openUntil > 0 && Date.now() >= this.openUntil) {
+			this.reset(); // Cooldown expired, try again
+		}
+		return false;
+	}
+	
+	/**
+	 * Record successful operation (resets failure counter)
+	 */
+	recordSuccess(): void {
+		this.failureCount = 0;
+		this.openUntil = 0;
+	}
+	
+	/**
+	 * Record failed operation
+	 * @returns true if circuit just opened (max failures reached)
+	 */
+	recordFailure(): boolean {
+		this.failureCount++;
+		if (this.failureCount >= this.maxFailures) {
+			this.openUntil = Date.now() + this.cooldownMs;
+			return true; // Circuit opened
+		}
+		return false; // Still closed
+	}
+	
+	/**
+	 * Get current consecutive failure count
+	 */
+	getFailureCount(): number {
+		return this.failureCount;
+	}
+	
+	/**
+	 * Get remaining cooldown time in milliseconds
+	 * @returns 0 if circuit is closed
+	 */
+	getCooldownRemaining(): number {
+		if (this.openUntil === 0) return 0;
+		return Math.max(0, this.openUntil - Date.now());
+	}
+	
+	/**
+	 * Manually reset circuit breaker
+	 */
+	reset(): void {
+		this.failureCount = 0;
+		this.openUntil = 0;
+	}
+}
+
+/**
+ * Prevents concurrent executions of async operations
+ * Useful for poll/report loops to prevent overlapping requests
+ * 
+ * Example usage:
+ * ```typescript
+ * const lock = new AsyncLock();
+ * 
+ * // Pattern 1: Manual acquire/release
+ * if (!await lock.acquire()) {
+ *   // Already locked, skip
+ *   return;
+ * }
+ * try {
+ *   await operation();
+ * } finally {
+ *   lock.release();
+ * }
+ * 
+ * // Pattern 2: Auto-managed
+ * const result = await lock.tryExecute(async () => {
+ *   return await operation();
+ * });
+ * if (result === undefined) {
+ *   // Already locked, operation skipped
+ * }
+ * ```
+ */
+export class AsyncLock {
+	private locked: boolean = false;
+	
+	/**
+	 * Try to acquire lock
+	 * @returns true if lock acquired, false if already locked
+	 */
+	async acquire(): Promise<boolean> {
+		if (!this.locked) {
+			this.locked = true;
+			return true; // Acquired immediately
+		}
+		return false; // Already locked
+	}
+	
+	/**
+	 * Release lock
+	 */
+	release(): void {
+		this.locked = false;
+	}
+	
+	/**
+	 * Check if currently locked
+	 */
+	isLocked(): boolean {
+		return this.locked;
+	}
+	
+	/**
+	 * Execute function with lock protection
+	 * @returns Result of function, or undefined if lock could not be acquired
+	 */
+	async tryExecute<T>(fn: () => Promise<T>): Promise<T | undefined> {
+		const acquired = await this.acquire();
+		if (!acquired) return undefined;
+		
+		try {
+			return await fn();
+		} finally {
+			this.release();
+		}
+	}
+}
+
+/**
+ * Check if HTTP error is an auth error (401/403)
+ * Useful for detecting when credentials need refresh
+ */
+export function isAuthError(error: unknown): boolean {
+	if (error && typeof error === 'object' && 'status' in error) {
+		const status = (error as any).status;
+		return status === 401 || status === 403;
+	}
+	return false;
+}
+
+/**
+ * Check if HTTP error is retryable (network errors, timeouts, 5xx)
+ * Auth errors (401/403) are NOT retryable - they need credential refresh
+ */
+export function isRetryableHttpError(error: unknown): boolean {
+	if (!error) return false;
+	
+	// Auth errors - should trigger credential refresh, not retry
+	if (isAuthError(error)) return false;
+	
+	// Network errors (ECONNREFUSED, ETIMEDOUT, etc.)
+	if (error && typeof error === 'object') {
+		const err = error as any;
+		if (err.code === 'ECONNREFUSED' || 
+		    err.code === 'ETIMEDOUT' || 
+		    err.code === 'ENOTFOUND' ||
+		    err.code === 'ECONNRESET' ||
+		    err.name === 'AbortError') {
+			return true;
+		}
+	}
+	
+	// 5xx server errors
+	if (error && typeof error === 'object' && 'status' in error) {
+		const status = (error as any).status;
+		return status >= 500 && status < 600;
+	}
+	
+	return false;
+}

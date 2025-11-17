@@ -685,6 +685,197 @@ export function formatBrokerConfigForClient(config: any) {
 - Automate renewal (certbot for Let's Encrypt)
 - Plan device update rollout before expiry
 
+## 🔄 Cloud Sync Reliability
+
+Robust cloud communication with automatic failure recovery and protection mechanisms.
+
+### Circuit Breaker Protection
+
+The agent implements circuit breakers for both poll and report operations to prevent hammering the cloud API during outages:
+
+**Configuration:**
+- **Failure Threshold**: 10 consecutive failures
+- **Cooldown Period**: 5 minutes
+- **Auto-Reset**: Circuit closes on first success after cooldown
+
+**How It Works:**
+```typescript
+// Poll loop protection
+if (pollCircuit.isOpen()) {
+  // Skip operation, cooling down
+  logger.warn('Poll circuit breaker open', {
+    cooldownRemainingSec: circuit.getCooldownRemaining() / 1000,
+    failureCount: circuit.getFailureCount()
+  });
+  return;
+}
+
+try {
+  await pollTargetState();
+  pollCircuit.recordSuccess(); // Reset counter
+} catch (error) {
+  const opened = pollCircuit.recordFailure();
+  if (opened) {
+    logger.error('Circuit breaker tripped - stopping polls for 5min');
+  }
+}
+```
+
+**Benefits:**
+- Stops wasting resources on unreachable API
+- Prevents log spam during prolonged outages
+- Automatic recovery when API returns
+- Independent circuits for poll/report (isolation)
+
+### Request Deduplication
+
+Async locks prevent overlapping requests if operations take longer than the poll/report interval:
+
+**Problem Scenario:**
+```
+00:00 - Poll starts (takes 90s due to slow network)
+01:00 - Timer fires, another poll attempts to start
+01:30 - First poll still running, second poll blocked
+```
+
+**Solution:**
+```typescript
+// Before executing
+if (pollLock.isLocked()) {
+  logger.warn('Poll already in progress, skipping');
+  return; // Prevents overlap
+}
+
+// Execute with lock
+await pollLock.tryExecute(async () => {
+  await pollTargetState(); // Guaranteed single execution
+});
+```
+
+**Benefits:**
+- No duplicate API calls
+- No race conditions
+- Predictable resource usage
+- Clean error messages
+
+### Error Counter Capping
+
+Error counters are capped at 10 attempts to prevent overflow and extremely long backoff delays:
+
+```typescript
+// Before
+this.pollErrors++; // Could increment forever
+
+// After
+this.pollErrors = Math.min(this.pollErrors + 1, 10); // Capped at 10
+```
+
+**Backoff Schedule** (with 15s base, 2x multiplier, 15min max):
+| Attempt | Delay (without jitter) |
+|---------|------------------------|
+| 1       | 15s                    |
+| 2       | 30s                    |
+| 3       | 60s (1min)             |
+| 4       | 120s (2min)            |
+| 5       | 240s (4min)            |
+| 6       | 480s (8min)            |
+| 7+      | 900s (15min) - capped  |
+
+**Benefits:**
+- Prevents integer overflow
+- Reasonable max retry delay (15min)
+- Predictable behavior
+- Faster recovery after long outages
+
+### Combined Protection
+
+All three mechanisms work together for robust failure handling:
+
+```typescript
+// Example: API down for 30 minutes
+
+// 00:00 - Poll fails (attempt 1, backoff 15s)
+// 00:15 - Poll fails (attempt 2, backoff 30s)
+// 00:45 - Poll fails (attempt 3, backoff 1min)
+// ... continues with exponential backoff ...
+// 10:00 - Poll fails (attempt 10, circuit opens)
+// 10:00 - Circuit breaker activated (5min cooldown)
+// 15:00 - Circuit cooldown expires, resume polling
+// 15:00 - Poll succeeds, all counters reset
+
+// During this time:
+// - No duplicate requests (async lock)
+// - Backoff capped at 15min (error cap)
+// - Stopped trying after 10 failures (circuit breaker)
+```
+
+### Monitoring
+
+All protection mechanisms emit detailed logs for visibility:
+
+```json
+{
+  "component": "cloudSync",
+  "operation": "poll-circuit-open",
+  "cooldownRemainingSec": 180,
+  "failureCount": 10
+}
+
+{
+  "component": "cloudSync", 
+  "operation": "poll-circuit-trip",
+  "consecutiveFailures": 10,
+  "cooldownMs": 300000,
+  "cooldownMin": 5
+}
+
+{
+  "component": "cloudSync",
+  "operation": "poll-skip-locked"
+}
+```
+
+### Configuration
+
+All protection is automatic with sensible defaults:
+
+```typescript
+// Circuit breaker (in constructor)
+this.pollCircuit = new CircuitBreaker(
+  10,              // maxFailures
+  5 * 60 * 1000    // cooldownMs (5 minutes)
+);
+
+// Error counter cap (in loop)
+this.pollErrors = Math.min(this.pollErrors + 1, 10);
+
+// Async lock (automatic)
+this.pollLock = new AsyncLock();
+```
+
+No environment variables needed - works out of the box!
+
+### Utilities
+
+All protection utilities are reusable via `retry-policy.ts`:
+
+```typescript
+import { CircuitBreaker, AsyncLock, isAuthError } from '../utils/retry-policy';
+
+// Circuit breaker
+const circuit = new CircuitBreaker(10, 5 * 60 * 1000);
+if (circuit.isOpen()) { /* skip */ }
+
+// Async lock
+const lock = new AsyncLock();
+await lock.tryExecute(async () => { /* protected operation */ });
+
+// Error classification
+if (isAuthError(error)) { /* refresh credentials */ }
+```
+
+---
+
 ## 🐳 Docker Integration
 
 Deploy, update, and manage containers with full Docker and Kubernetes support.
