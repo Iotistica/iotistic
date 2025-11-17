@@ -38,6 +38,7 @@ import { getVpnConfigForDevice, formatVpnConfigForDevice } from '../utils/vpn-co
 import { SystemConfigModel } from '../db/system-config-model';
 import { generateDefaultTargetState } from './default-target-state-generator';
 import logger from '../utils/logger';
+import configService  from './config.service';
 
 // Initialize event publisher for audit trail
 const eventPublisher = new EventPublisher();
