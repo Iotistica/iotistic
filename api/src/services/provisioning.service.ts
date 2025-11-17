@@ -172,7 +172,7 @@ export class ProvisioningService {
 
 
     // Increment provisioning key usage, fire and forget
-    incrementProvisioningKeyUsage(keyRecord.id).catch(err => ...);
+    this.incrementProvisioningKeyUsage(keyRecord.id).catch(err => ...);
 
     // fire and forget
     eventPublisher.publish( 'device.provisioned',
