@@ -1,3 +1,5 @@
+import { SystemConfigModel } from '../db/system-config-model';
+
 class ConfigService {
   private cache = new Map<string, any>();
   private timestamps = new Map<string, number>();
