@@ -257,45 +257,32 @@ export class ProvisioningService {
   /**
    * Generate VPN credentials for device
    */
-  private async generateVpnCredentials(
-    deviceUuid: string,
-    deviceName: string,
-    ipAddress?: string
-  ): Promise<{ peerId: string; ipAddress: string; config: string } | undefined> {
-    // Check if VPN is enabled
-    if (!wireGuardService.isEnabled()) {
-      return undefined;
-    }
+ private async generateVpnCredentials(
+  deviceUuid: string,
+  deviceName: string,
+  ipAddress?: string
+): Promise<{ peerId: string; ipAddress: string; config: string } | undefined> {
+  if (!wireGuardService.isEnabled()) return undefined;
 
-    try {
-      logger.info(`Setting up WireGuard VPN for device: ${deviceUuid}`);
-      
-      const peer = await wireGuardService.createPeer(deviceUuid, deviceName);
-      
-      logger.info(`WireGuard VPN credentials created for device: ${deviceUuid.substring(0, 8)}... (IP: ${peer.ipAddress})`);
-      return {
-        peerId: peer.peerId,
-        ipAddress: peer.ipAddress,
-        config: peer.config
-      };
-    } catch (error: any) {
-      logger.error(`VPN credential creation failed:`, error.message);
-      
-      // Don't fail provisioning if VPN setup fails - continue without VPN
-      await logAuditEvent({
-        eventType: AuditEventType.PROVISIONING_FAILED,
-        deviceUuid,
-        ipAddress,
-        severity: AuditSeverity.WARNING,
-        details: { 
-          reason: 'VPN credential creation failed',
-          error: error.message
-        }
-      });
-      
-      return undefined;
-    }
+  try {
+    const peer = await wireGuardService.createPeer(deviceUuid, deviceName);
+    logger.info(`WireGuard VPN credentials created for device: ${deviceUuid.substring(0,8)}... (IP: ${peer.ipAddress})`);
+    return { peerId: peer.peerId, ipAddress: peer.ipAddress, config: peer.config };
+  } catch (error: any) {
+    logger.error(`VPN credential creation failed for device ${deviceUuid}: ${error.message}`);
+    
+    // Fire-and-forget audit log
+    logAuditEvent({
+      eventType: AuditEventType.PROVISIONING_FAILED,
+      deviceUuid,
+      ipAddress,
+      severity: AuditSeverity.WARNING,
+      details: { reason: 'VPN credential creation failed', error: error.message }
+    }).catch(err => logger.error('Failed to log VPN provisioning failure', err));
+
+    return undefined;
   }
+}
 
   /**
    * Create default target state for device
