@@ -44,9 +44,6 @@ router.post('/device/:uuid/rotate-key', deviceAuth, rotationRateLimit, async (re
       });
     }
 
-    console.log(`🔄 Device ${req.device.deviceName} (${uuid}) requesting API key rotation`);
-    console.log(`   Reason: ${reason || 'Manual rotation'}`);
-
     const rotation = await rotateDeviceApiKey(uuid, {
       rotationDays: 90,
       gracePeriodDays: 7,
