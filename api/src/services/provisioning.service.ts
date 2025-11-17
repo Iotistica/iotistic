@@ -110,6 +110,8 @@ export class ProvisioningService {
   ): Promise<ProvisioningResponse> {
     const { uuid, deviceName, deviceType, deviceApiKey, provisioningApiKey, macAddress, osVersion, agentVersion } = data;
 
+    const now = new Date();
+
     // Rate limiting check (database-backed)
     await checkProvisioningRateLimit(ipAddress!);
 
@@ -160,34 +162,34 @@ export class ProvisioningService {
       is_online: true,
       is_active: true,
       status: 'online',
-      provisioned_at: new Date(),
+      provisioned_at: now,
       provisioning_state: 'registered'
     });
 
 
     // Create default target state
-    await this.createDefaultTargetState(uuid);
+    this.createDefaultTargetState(uuid).catch(err => console.error('Failed to create default target state', err));
 
-    // Increment provisioning key usage
-    await incrementProvisioningKeyUsage(keyRecord.id);
 
-    // Publish device provisioned event
-    await eventPublisher.publish(
-      'device.provisioned',
+    // Increment provisioning key usage, fire and forget
+    incrementProvisioningKeyUsage(keyRecord.id).catch(err => ...);
+
+    // fire and forget
+    eventPublisher.publish( 'device.provisioned',
       'device',
       uuid,
       {
         device_name: deviceName,
         device_type: deviceType,
         fleet_id: keyRecord.fleet_id,
-        provisioned_at: new Date().toISOString(),
+        provisioned_at: now.toISOString(),
         ip_address: ipAddress,
         mac_address: macAddress,
         os_version: osVersion,
         agent_version: agentVersion,
         mqttUsername: mqttCredentials.username
-      }
-    );
+      }).catch(err => logger.error(err));
+
 
     // Audit logging
     await logAuditEvent({
