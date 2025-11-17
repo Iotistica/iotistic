@@ -9,7 +9,7 @@
  * - Logging
  */
 
-import { StateReconciler, DeviceState } from "./drivers/state-reconciler.js";
+import { StateReconciler, DeviceState } from "./device-manager/reconciler.js";
 import ContainerManager from "./compose/container-manager.js";
 import { DeviceManager } from "./device-manager/index.js";
 import type { DeviceInfo } from "./device-manager/types.js";
@@ -24,7 +24,7 @@ import { ContainerLogMonitor } from "./logging/docker-monitor.js";
 import { AgentLogger } from "./logging/agent-logger.js";
 import type { LogBackend } from "./logging/types.js";
 import { LogComponents } from "./logging/types.js";
-import { JobsFeature } from "./features/jobs/src/jobs-feature.js";
+import { JobsFeature } from "./features/jobs/src/monitor.js";
 import { SensorPublishFeature } from "./features/sensor-publish/index.js";
 import { SensorConfigHandler } from "./features/sensor-publish/config-handler.js";
 import { MqttManager } from "./mqtt/manager.js";

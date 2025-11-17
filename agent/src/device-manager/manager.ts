@@ -90,6 +90,9 @@ export class DeviceManager {
 				deviceId: this.deviceInfo.deviceId,
 				provisioned: this.deviceInfo.provisioned,
 				hasDeviceApiKey: !!this.deviceInfo.deviceApiKey,
+				deviceApiKeyPrefix: this.deviceInfo.deviceApiKey?.substring(0, 16) || 'none',
+				hasApiKey: !!this.deviceInfo.apiKey,
+				apiKeyPrefix: this.deviceInfo.apiKey?.substring(0, 16) || 'none',
 				hasProvisioningKey: !!this.deviceInfo.provisioningApiKey,
 				agentVersion: this.deviceInfo.agentVersion, // Add version to log
 			});
@@ -276,20 +279,25 @@ export class DeviceManager {
 			this.logger?.infoSync('Phase 1: Registering device with provisioning key', {
 				component: LogComponents.deviceManager,
 				operation: 'provision',
+				uuid: this.deviceInfo.uuid,
+				deviceName: this.deviceInfo.deviceName,
+				deviceType: this.deviceInfo.deviceType,
+				hasDeviceApiKey: !!this.deviceInfo.deviceApiKey,
+				hasProvisioningApiKey: !!this.deviceInfo.provisioningApiKey,
 			});
 			const response = await this.registerWithAPI(
 				this.deviceInfo.apiEndpoint || 'http://localhost:3002',
 				{
 				uuid: this.deviceInfo.uuid,
-				deviceName: this.deviceInfo.deviceName,
-				deviceType: this.deviceInfo.deviceType,
-				deviceApiKey: this.deviceInfo.deviceApiKey,
+				deviceName: this.deviceInfo.deviceName!,
+				deviceType: this.deviceInfo.deviceType!,
+				deviceApiKey: this.deviceInfo.deviceApiKey!,
 				applicationId: this.deviceInfo.applicationId,
 				macAddress: this.deviceInfo.macAddress,
 				osVersion: this.deviceInfo.osVersion,
 				agentVersion: this.deviceInfo.agentVersion,
 			},
-				this.deviceInfo.provisioningApiKey
+				this.deviceInfo.provisioningApiKey!
 		);
 
 		// Save server-assigned device ID
@@ -301,7 +309,7 @@ export class DeviceManager {
 		this.deviceInfo.apiTlsConfig = response.api?.tlsConfig; // Save API HTTPS TLS config if provided
 
 		// Phase 2: Exchange keys - verify device can authenticate with deviceApiKey
-			this.logger?.infoSync('Phase 2: Exchanging keys', {
+			this.logger?.debugSync('Phase 2: Exchanging keys', {
 				component: LogComponents.deviceManager,
 				operation: 'provision',
 			});

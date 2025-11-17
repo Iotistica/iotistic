@@ -197,6 +197,11 @@ export class FetchHttpClient implements HttpClient {
 		// Convert objects to JSON string
 		const bodyString = typeof body === 'string' ? body : JSON.stringify(body);
 		
+		// Set Content-Type for JSON bodies (unless already set)
+		if (typeof body !== 'string' && !finalHeaders['Content-Type'] && !finalHeaders['content-type']) {
+			finalHeaders['Content-Type'] = 'application/json';
+		}
+		
 		// Handle compression if requested
 		if (options?.compress) {
 			const { gzip } = await import('zlib');

@@ -21,7 +21,7 @@
 
 import express from 'express';
 import logger from '../utils/logger';
-import * as AlertsService from '../services/alerts-service';
+import * as AlertsService from '../services/alerts.service';
 
 export const router = express.Router();
 

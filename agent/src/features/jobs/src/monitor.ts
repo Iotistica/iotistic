@@ -18,12 +18,12 @@
  * - Unified execution: Single JobEngine handles jobs from both delivery methods
  */
 
-import axios, { AxiosInstance } from 'axios';
-import { BaseFeature, FeatureConfig } from '../../../features/base-feature.js';
+import { HttpClient, FetchHttpClient } from '../../../lib/http-client.js';
+import { BaseFeature, FeatureConfig } from '../../base-feature.js';
 import { AgentLogger } from '../../../logging/agent-logger.js';
 import { LogComponents } from '../../../logging/types.js';
 import { MqttManager } from '../../../mqtt/manager.js';
-import { JobEngine } from './job-engine.js';
+import { JobEngine } from './engine.js';
 import { JobDocument, JobStatus, JobExecutionData } from './types.js';
 import { normalizeApiEndpoint, getApiVersion } from '../../../utils/api-utils.js';
 
@@ -68,7 +68,9 @@ interface JobStatusUpdate {
  */
 export class JobsFeature extends BaseFeature {
   private jobEngine: JobEngine;
-  private httpClient: AxiosInstance;
+  private httpClient: HttpClient;
+  private baseUrl: string = '';
+  private deviceApiKey: string = '';
   private httpPollingInterval?: NodeJS.Timeout;
   private connectionMonitor?: NodeJS.Timeout;
   private lastMqttState: boolean = false;
@@ -100,14 +102,16 @@ export class JobsFeature extends BaseFeature {
     const apiVersion = getApiVersion();
     const normalizedBaseUrl = normalizeApiEndpoint(jobConfig.cloudApiUrl);
     
-    this.httpClient = axios.create({
-      baseURL: `${normalizedBaseUrl}/${apiVersion}`,
-      timeout: 30000,
-      headers: {
+    // Store base URL and API key for building full URLs
+    this.baseUrl = `${normalizedBaseUrl}/${apiVersion}`;
+    this.deviceApiKey = jobConfig.deviceApiKey || '';
+    
+    this.httpClient = new FetchHttpClient({
+      defaultHeaders: {
         'Content-Type': 'application/json',
         'User-Agent': `Iotistic-agent/${deviceUuid}`,
-        'X-Device-API-Key': jobConfig.deviceApiKey || ''
-      }
+      },
+      defaultTimeout: 30000,
     });
   }
 
@@ -213,13 +217,26 @@ export class JobsFeature extends BaseFeature {
    */
   private async pollForJobs(): Promise<void> {
     try {
-      const response = await this.httpClient.get<CloudJob | null>(
-        `/devices/${this.deviceUuid}/jobs/next`
-      );
+      const url = `${this.baseUrl}/devices/${this.deviceUuid}/jobs/next`;
+      const response = await this.httpClient.get<CloudJob | null>(url, {
+        headers: {
+          'X-Device-API-Key': this.deviceApiKey,
+        },
+      });
 
-      if (response.data) {
-        const cloudJob = response.data;
-        this.logger.info(`Received job from HTTP polling: ${cloudJob.job_id}`);
+      if (response.ok && response.status === 200) {
+        const cloudJob = await response.json();
+
+        if (cloudJob) {
+          // Validate job_id
+          if (!cloudJob.job_id) {
+            this.logger.error(`HTTP job response missing job_id`, {
+              cloudJob
+            });
+            return;
+          }
+          
+          this.logger.info(`Received job from HTTP polling: ${cloudJob.job_id}`);
         
         // Validate job document
         if (!cloudJob.job_document) {
@@ -257,9 +274,11 @@ export class JobsFeature extends BaseFeature {
         };
 
         await this.executeJob(jobData);
+        }
       }
     } catch (error: any) {
-      if (error.response?.status !== 404) {
+      // 404 is expected when no jobs available, don't log it
+      if (!error.response || error.response.status !== 404) {
         this.logger.error(`HTTP polling error: ${error.message}`);
       }
     }
@@ -484,14 +503,17 @@ export class JobsFeature extends BaseFeature {
     const mqttManager = MqttManager.getInstance();
     let mqttSuccess = false;
 
+    // Check MQTT health FIRST - skip if disconnected to avoid wasted attempts
+		const mqttHealthy = mqttManager?.isConnected() ?? false;
+
     // Try MQTT first (primary method)
-    if (mqttManager.isConnected()) {
+    if (mqttHealthy) {
       try {
         const updateTopic = `iot/device/${this.deviceUuid}/jobs/${jobId}/update`;
         
         this.logger.debug(`Updating job status via MQTT: ${updateTopic}`, { status: update.status });
         
-        await mqttManager.publish(updateTopic, JSON.stringify(update), { qos: 1 });
+        await mqttManager.publishNoQueue(updateTopic, JSON.stringify(update), { qos: 1 });
         
         mqttSuccess = true;
         this.logger.debug(`Updated job ${jobId} status to ${update.status} via MQTT`);
@@ -504,11 +526,15 @@ export class JobsFeature extends BaseFeature {
     }
 
     // Fallback to HTTP if MQTT failed or not available
-    const url = `/devices/${this.deviceUuid}/jobs/${jobId}/status`;
+    const url = `${this.baseUrl}/devices/${this.deviceUuid}/jobs/${jobId}/status`;
     try {
       this.logger.debug(`Updating job status via HTTP: PATCH ${url}`, { status: update.status });
       
-      await this.httpClient.patch(url, update);
+      await this.httpClient.patch(url, update, {
+        headers: {
+          'X-Device-API-Key': this.deviceApiKey,
+        },
+      });
       
       this.logger.debug(`Updated job ${jobId} status to ${update.status} via HTTP`);
     } catch (error: any) {

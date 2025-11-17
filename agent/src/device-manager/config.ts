@@ -19,7 +19,7 @@ import type {
 	ConfigStep,
 	ConfigReconciliationResult,
 	ProtocolAdapterDevice,
-} from './types.js';
+} from '../drivers/types.js';
 
 interface ConfigManagerEvents {
 	'config-applied': () => void;
@@ -209,16 +209,6 @@ export class ConfigManager extends EventEmitter {
 		
 		const targetDevices = this.targetConfig.sensors || [];
 		const currentDevices = this.currentConfig.sensors || [];
-		
-		// Debug logging
-		this.logger?.infoSync('Calculating config steps', {
-			component: LogComponents.configManager,
-			operation: 'calculateSteps',
-			targetDevicesCount: targetDevices.length,
-			currentDevicesCount: currentDevices.length,
-			targetDeviceIds: targetDevices.map(d => d.id),
-			currentDeviceIds: currentDevices.map(d => d.id),
-		});
 		
 		// Build maps for easier comparison
 		const targetMap = new Map(targetDevices.map(d => [d.id, d]));

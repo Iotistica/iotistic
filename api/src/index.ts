@@ -31,7 +31,7 @@ import { router as deviceTagsRoutes } from './routes/device-tags';
 import dashboardLayoutsRoutes from './routes/dashboard-layouts';
 import mosquittoAuthRoutes from './routes/mosquitto-auth';
 import { trafficLogger} from "./middleware/traffic-logger";
-import { startTrafficFlushService, stopTrafficFlushService } from './services/traffic-flush-service';
+import { startTrafficFlushService, stopTrafficFlushService } from './services/traffic-flush.service';
 import alertsRoutes from './routes/alerts';
 
 // Import jobs

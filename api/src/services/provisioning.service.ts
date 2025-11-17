@@ -20,7 +20,7 @@ import {
   validateProvisioningKey,
   incrementProvisioningKeyUsage,
 } from '../utils/provisioning-keys';
-import { wireGuardService } from './wireguard-service';
+import { wireGuardService } from './wireguard.service';
 import {
   logAuditEvent,
   logProvisioningAttempt,
@@ -221,74 +221,6 @@ export class ProvisioningService {
       mqttCredentials,
       vpnCredentials
     );
-  }
-
-  /**
-   * Exchange device API keys
-   */
-  public async exchangeKeys(
-    uuid: string,
-    deviceApiKey: string,
-    ipAddress?: string,
-    userAgent?: string
-  ): Promise<{ apiKey: string }> {
-    // Verify device exists
-    const device = await DeviceModel.getByUuid(uuid);
-    if (!device) {
-      await logAuditEvent({
-        eventType: AuditEventType.KEY_EXCHANGE_FAILED,
-        deviceUuid: uuid,
-        ipAddress,
-        userAgent,
-        severity: AuditSeverity.WARNING,
-        details: { reason: 'Device not found' }
-      });
-      throw new Error('Device not found');
-    }
-
-    // Verify device API key
-    const isValid = device.device_api_key_hash ? await bcrypt.compare(deviceApiKey, device.device_api_key_hash) : false;
-    if (!isValid) {
-      await logAuditEvent({
-        eventType: AuditEventType.KEY_EXCHANGE_FAILED,
-        deviceUuid: uuid,
-        ipAddress,
-        userAgent,
-        severity: AuditSeverity.WARNING,
-        details: { reason: 'Invalid device API key' }
-      });
-      throw new Error('Invalid device API key');
-    }
-
-    // Generate new API key for device
-    const apiKey = crypto.randomBytes(32).toString('hex');
-    const hashedApiKey = await bcrypt.hash(apiKey, 10);
-
-    // Update device with new API key
-    await DeviceModel.update(uuid, { device_api_key_hash: hashedApiKey });
-
-    // Publish key exchange event
-    await eventPublisher.publish(
-      'device.key.exchanged',
-      'device',
-      uuid,
-      {
-        timestamp: new Date().toISOString(),
-        ipAddress,
-        userAgent
-      }
-    );
-
-    await logAuditEvent({
-      eventType: AuditEventType.KEY_EXCHANGE_SUCCESS,
-      deviceUuid: uuid,
-      ipAddress,
-      userAgent,
-      severity: AuditSeverity.INFO,
-      details: { success: true }
-    });
-
-    return { apiKey };
   }
 
   /**

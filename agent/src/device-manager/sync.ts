@@ -17,7 +17,7 @@
  */
 
 import { EventEmitter } from 'events';
-import type { StateReconciler, DeviceState } from '../drivers/state-reconciler';
+import type { StateReconciler, DeviceState } from './reconciler';
 import type { DeviceManager } from '.';
 import * as systemMetrics from '../system/metrics';
 import { ConnectionMonitor } from '../network/connection-monitor';
@@ -158,6 +158,13 @@ export class CloudSync extends EventEmitter {
 		this.scheduleReport('state-change');
 	};
 	
+	private mqttReconnectHandler = () => {
+		this.logger?.infoSync('MQTT reconnected - triggering fresh state report', {
+			component: LogComponents.cloudSync,
+			operation: 'mqtt-reconnect'
+		});
+	};
+	
 	constructor(
 		stateReconciler: StateReconciler,
 		deviceManager: DeviceManager,
@@ -221,9 +228,9 @@ export class CloudSync extends EventEmitter {
 		                          endpoint.startsWith('https://127.0.0.1');
 		
 		// Common headers for all HTTP requests
+		// Note: X-Device-API-Key is added per-request to ensure fresh credentials
 		const defaultHeaders = {
 			'Content-Type': 'application/json',
-			'X-Device-API-Key': deviceInfo.apiKey || '',
 		};
 		
 		this.logger?.infoSync('Creating HTTP client', {
@@ -231,7 +238,8 @@ export class CloudSync extends EventEmitter {
 			endpoint: endpoint,
 			isLocalhostHttps: isLocalhostHttps,
 			hasApiTlsConfig: !!deviceInfo?.apiTlsConfig,
-			hasCaCert: !!deviceInfo?.apiTlsConfig?.caCert
+			hasCaCert: !!deviceInfo?.apiTlsConfig?.caCert,
+			note: 'API key added per-request for fresh credentials'
 		});
 		
 		// Check if using localhost HTTPS (development mode) - MUST CHECK FIRST
@@ -279,6 +287,19 @@ export class CloudSync extends EventEmitter {
 	}
 	
 	/**
+	 * Update HTTP client with fresh device credentials
+	 * Called after provisioning or device info changes
+	 */
+	public updateHttpClient(): void {
+		this.logger?.infoSync('Updating HTTP client credentials', {
+			component: LogComponents.cloudSync,
+			operation: 'update-credentials'
+		});
+		
+		this.httpClient = this.createHttpClient();
+	}
+	
+	/**
 	 * Setup connection event listeners
 	 */
 	private setupConnectionEventListeners(): void {
@@ -291,6 +312,19 @@ export class CloudSync extends EventEmitter {
 		this.connectionMonitor.on('online', this.onlineHandler);
 		this.connectionMonitor.on('offline', this.offlineHandler);
 		this.connectionMonitor.on('degraded', this.degradedHandler);
+		
+		// Listen to MQTT reconnect events (if MQTT manager is available and is EventEmitter)
+		if (this.mqttManager && typeof this.mqttManager.on === 'function') {
+			if (typeof this.mqttManager.removeListener === 'function') {
+				this.mqttManager.removeListener('connect', this.mqttReconnectHandler);
+			}
+			this.mqttManager.on('connect', this.mqttReconnectHandler);
+			
+			this.logger?.debugSync('Registered MQTT reconnect listener', {
+				component: LogComponents.cloudSync,
+				operation: 'setup-mqtt-listener'
+			});
+		}
 	}
 	
 	/**
@@ -369,6 +403,10 @@ export class CloudSync extends EventEmitter {
 			this.connectionMonitor.removeListener('offline', this.offlineHandler);
 			this.connectionMonitor.removeListener('degraded', this.degradedHandler);
 			this.stateReconciler.removeListener('reconciliation-complete', this.reconciliationCompleteHandler);
+			
+			if (this.mqttManager && typeof this.mqttManager.removeListener === 'function') {
+				this.mqttManager.removeListener('connect', this.mqttReconnectHandler);
+			}
 			
 			this.removeAllListeners();
 			
@@ -483,16 +521,20 @@ export class CloudSync extends EventEmitter {
 		const endpoint = buildDeviceEndpoint(this.config.cloudApiEndpoint, deviceInfo.uuid, '/state');
 		
 		try {
-			this.logger?.debugSync('Polling target state', {
+			// Get fresh API key from device manager
+			const apiKey = deviceInfo.deviceApiKey;
+			
+			this.logger?.infoSync('Polling target state', {
 				component: LogComponents.cloudSync,
 				operation: 'poll',
-				endpoint,
-				currentETag: this.targetStateETag || 'none'
+				currentETag: this.targetStateETag || 'none',
+				hasApiKey: !!apiKey,
+				apiKeyPrefix: apiKey ? apiKey.substring(0, 16) : 'none'
 			});
 			
-			// Use injected HTTP client instead of global fetch
 			const response = await this.httpClient.get(endpoint, {
 				headers: {
+					'X-Device-API-Key': apiKey || '',
 					...(this.targetStateETag && { 'if-none-match': this.targetStateETag }),
 				},
 			});
@@ -786,17 +828,6 @@ export class CloudSync extends EventEmitter {
 		// Build current state report
 		const currentState = await this.stateReconciler.getCurrentState();
 		
-		// Log what we're about to report (info level for visibility)
-		this.logger?.infoSync('Current state config fields', {
-			component: LogComponents.cloudSync,
-			operation: 'report-debug',
-			configKeys: Object.keys(currentState.config || {}),
-			sensorCount: ((currentState.config as any)?.sensors || []).length,
-			hasLogging: !!(currentState.config as any)?.logging,
-			hasFeatures: !!(currentState.config as any)?.features,
-			hasSettings: !!(currentState.config as any)?.settings,
-		});
-		
 		// Get metrics if interval elapsed
 		const includeMetrics = timeSinceLastMetrics >= this.config.metricsInterval;
 		
@@ -899,7 +930,7 @@ export class CloudSync extends EventEmitter {
 
 		// Log complete metrics report if metrics were collected
 		if (includeMetrics) {
-			this.logger?.infoSync('Metrics Report', {
+			this.logger?.debugSync('Metrics Report', {
 				component: LogComponents.metrics,
 				report: stateReport[deviceInfo.uuid],
 			});
@@ -963,7 +994,7 @@ export class CloudSync extends EventEmitter {
 				optimizationDetails.staticFieldsOptimized = true; // Saved bandwidth!
 			}
 			
-			this.logger?.infoSync('Reported current state to cloud', optimizationDetails);
+			this.logger?.infoSync('Reported current state', optimizationDetails);
 			
 		} catch (error) {
 			// Failed to send - queue for later (regardless of connection state)
@@ -1011,35 +1042,36 @@ export class CloudSync extends EventEmitter {
 	private async sendReport(report: DeviceStateReport): Promise<void> {
 		const deviceInfo = this.deviceManager.getDeviceInfo();
 		
-		// Try MQTT first if manager is available and connected
-		if (this.mqttManager) {
+		// Check MQTT health FIRST - skip if disconnected to avoid wasted attempts
+		const mqttHealthy = this.mqttManager?.isConnected() ?? false;
+		
+		// Try MQTT first if manager is available AND healthy
+		if (mqttHealthy) {
 			try {
 				const topic = `iot/device/${deviceInfo.uuid}/state`;
 				const payload = JSON.stringify(report);
 				const payloadSize = Buffer.byteLength(payload, 'utf8');
 				
-				this.logger?.debugSync('Sending state report via MQTT', {
-					component: LogComponents.cloudSync,
-					operation: 'mqtt-publish',
-					topic,
-					bytes: payloadSize,
-					transport: 'mqtt'
-				});
-				
-				// Publish with QoS 1 for guaranteed delivery
-				await this.mqttManager.publish(topic, payload, { qos: 1 });
-				
-				this.logger?.debugSync('State report sent via MQTT', {
-					component: LogComponents.cloudSync,
-					operation: 'mqtt-success',
-					bytes: payloadSize,
-					transport: 'mqtt'
-				});
-				
-				return; // Success - no need for HTTP fallback
+			this.logger?.debugSync('Sending state report via MQTT', {
+				component: LogComponents.cloudSync,
+				operation: 'mqtt-publish',
+				topic,
+				bytes: payloadSize,
+				transport: 'mqtt'
+			});
+			
+			// QoS 1 is better - will help for small network blips
+			await this.mqttManager!.publishNoQueue(topic, payload, { qos: 1 });
+			
+			this.logger?.debugSync('State report sent via MQTT', {
+				component: LogComponents.cloudSync,
+				operation: 'mqtt-success',
+				bytes: payloadSize,
+				transport: 'mqtt'
+			});				return; // Success - no need for HTTP fallback
 				
 			} catch (mqttError) {
-				// MQTT failed - log and fall through to HTTP
+				// MQTT failed (timeout or publish error) - log and fall through to HTTP
 				this.logger?.warnSync('MQTT publish failed, falling back to HTTP', {
 					component: LogComponents.cloudSync,
 					operation: 'mqtt-fallback',
@@ -1047,14 +1079,28 @@ export class CloudSync extends EventEmitter {
 					transport: 'mqtt→http'
 				});
 			}
+		} else if (this.mqttManager) {
+			// MQTT manager exists but is unhealthy - skip MQTT attempt
+			this.logger?.warnSync('MQTT disconnected, using HTTP fallback', {
+				component: LogComponents.cloudSync,
+				operation: 'mqtt-skip',
+				transport: 'http',
+				reason: 'mqtt-unavailable'
+			});
 		}
 		
-		// MQTT not available or failed - use HTTP fallback
+		// MQTT not available, unhealthy, or failed - use HTTP fallback
 		const endpoint = buildApiEndpoint(this.config.cloudApiEndpoint, '/device/state');
 		const protocol = endpoint.startsWith('https://') ? 'https' : 'http';
 		
+		// Get fresh API key from device manager
+		const apiKey = deviceInfo.deviceApiKey;
+		
 		// Use httpClient.patch() with compression
 		const response = await this.httpClient.patch(endpoint, report, {
+			headers: {
+				'X-Device-API-Key': apiKey || '',
+			},
 			compress: true
 		});
 		

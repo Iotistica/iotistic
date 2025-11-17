@@ -20,8 +20,8 @@ import { models as db } from '../db/connection.js';
 import type { AgentLogger } from '../logging/agent-logger.js';
 import { LogComponents } from '../logging/types.js';
 import { ContainerManager } from '../compose/container-manager.js';
-import { ConfigManager } from './config-manager.js';
-import type { DeviceConfig } from './types.js';
+import { ConfigManager } from './config.js';
+import type { DeviceConfig } from '../drivers/types.js';
 
 /**
  * Simple state structure (compatible with existing code)

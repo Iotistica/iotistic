@@ -25,14 +25,8 @@ export async function up(knex) {
 		});
 		
 		console.log('Column renamed successfully');
-	} else {
-		console.log('supervisorVersion column does not exist (already migrated or new installation)');
-	}
+	} 
 	
-	// Set default value from environment variable if agentVersion is null
-	const agentVersion = process.env.AGENT_VERSION || '1.0.0';
-	await knex.raw('UPDATE device SET agentVersion = ? WHERE agentVersion IS NULL', [agentVersion]);
-	console.log(`Set default agent version to ${agentVersion} for devices with null value`);
 }
 
 export async function down(knex) {

@@ -703,7 +703,7 @@ router.get('/devices/:uuid/jobs/next', jobsAuth, async (req: Request, res: Respo
     );
 
     if (result.rows.length === 0) {
-      return res.status(200).json({ message: 'No pending jobs' });
+      return res.status(404).json({ error: 'No pending jobs' });
     }
 
     // Update status to IN_PROGRESS

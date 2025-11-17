@@ -49,7 +49,6 @@ export async function up(knex) {
 	
 	// Show final state
 	const remaining = await knex('stateSnapshot').select('id', 'type', 'createdAt');
-	console.log('Remaining snapshots:');
 	remaining.forEach(row => {
 		console.log(`   - ${row.type}: ID ${row.id} (${row.createdAt})`);
 	});

@@ -5,7 +5,7 @@
  */
 
 import express, { Request, Response } from 'express';
-import * as authService from '../services/auth-service';
+import * as authService from '../services/auth.service';
 import { jwtAuth } from '../middleware/jwt-auth';
 import rateLimit from 'express-rate-limit';
 

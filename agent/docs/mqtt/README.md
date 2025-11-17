@@ -350,13 +350,146 @@ const manager1 = new MqttManager();  // Error: Constructor is private
 const manager = MqttManager.getInstance();
 ```
 
+## Recent Improvements (November 2025)
+
+### 1. **Offline Publish Queue** ✅
+- Messages are automatically queued when MQTT client is offline
+- Queue size limited to 1000 messages (prevents memory overflow)
+- Automatic drain on reconnection
+- Oldest messages dropped when queue is full
+
+**Before:**
+```typescript
+await mqttManager.publish('sensor/temp', '25');  // ❌ Throws error if offline
+```
+
+**After:**
+```typescript
+await mqttManager.publish('sensor/temp', '25');  // ✅ Queues automatically when offline
+// Messages sent when connection restored
+```
+
+### 2. **Exponential Backoff Reconnection** ✅
+- Smart reconnect delays: 1s → 2s → 4s → 8s → 16s → 30s (max)
+- Prevents overwhelming broker with rapid reconnect attempts
+- Follows AWS IoT and Azure IoT Hub patterns
+- Auto-resets backoff counter on successful connection
+
+**Formula:** `delay = min(30000, 1000 * 2^attempt)`
+
+```typescript
+// Attempt 1: 1s delay
+// Attempt 2: 2s delay
+// Attempt 3: 4s delay
+// Attempt 4: 8s delay
+// Attempt 5: 16s delay
+// Attempt 6+: 30s delay (capped)
+```
+
+### 3. **Self-Healing Subscriptions** ✅
+- `subscribe()` automatically reconnects if disconnected
+- No manual reconnection handling needed
+- Stores last broker URL and options for auto-recovery
+
+**Before:**
+```typescript
+if (!mqttManager.isConnected()) {
+  await mqttManager.connect(brokerUrl, options);
+}
+await mqttManager.subscribe('sensor/#', { qos: 1 }, handler);
+```
+
+**After:**
+```typescript
+await mqttManager.subscribe('sensor/#', { qos: 1 }, handler);
+// ✅ Auto-reconnects if needed
+```
+
+### 4. **Structured Lifecycle Logging** ✅
+- Info-level logging for all connection events
+- Detailed context: broker URL, reconnect attempts, queue size
+- Uses `LogComponents.mqtt` for clean formatting
+
+**Events logged:**
+- ✅ `connected` - With broker URL and reconnect attempts
+- ✅ `reconnecting` - With attempt number
+- ✅ `offline` - With pending publish count
+- ✅ `closed` - With queue size and reconnect attempts
+- ✅ `error` - With full error details
+- ✅ `message received` - Debug mode shows topic and payload size
+
+**Example logs:**
+```
+[INFO] [mqtt] Connected to MQTT broker { brokerUrl: 'mqtt://mosquitto:1883', reconnectAttempts: 0 }
+[INFO] [mqtt] MQTT client offline { pendingPublishes: 3 }
+[INFO] [mqtt] MQTT client reconnecting { reconnectAttempts: 2 }
+[INFO] [mqtt] Draining 3 pending MQTT messages
+```
+
+### 5. **Publish Timeout Protection** ✅
+- 5-second timeout prevents hanging promises
+- Protects against MQTT client library glitches
+- Clear error messages identify problematic topics
+
+**Example:**
+```typescript
+try {
+  await mqttManager.publish('sensor/temp', '25');
+} catch (error) {
+  // Error: "MQTT publish timeout after 5s: sensor/temp"
+}
+```
+
+### 6. **Multi-Subscription Support** ✅
+- Array-based handler storage (AWS IoT SDK pattern)
+- Supports multiple subscriptions to same topic with different options
+- Supports overlapping patterns (e.g., `foo/#` and `foo/bar`)
+- Cleaner, simpler code than Map-based approach
+
+**Before (Map-based):**
+```typescript
+Map<string, Set<handler>>  // ❌ Can't handle overlapping patterns well
+```
+
+**After (Array-based):**
+```typescript
+SubscriptionHandler[] = [
+  { pattern: 'foo/#', handler: handler1 },
+  { pattern: 'foo/bar', handler: handler2 }  // ✅ Both fire for 'foo/bar'
+]
+```
+
+**Supports:**
+- ✅ Same topic subscribed multiple times with different QoS
+- ✅ Overlapping wildcards (`sensor/#` and `sensor/+/temperature`)
+- ✅ Independent handler lifecycle management
+
+### 7. **Improved Error Handling** ✅
+- All errors use structured logging with component metadata
+- Handler errors don't crash message routing
+- Detailed context in all error logs
+
+**Example:**
+```typescript
+// Handler throws error
+subscription.handler(topic, payload);  // Throws
+
+// ✅ Error caught and logged, other handlers continue
+logger.errorSync('Error in MQTT handler', error, {
+  component: LogComponents.mqtt,
+  topic: 'sensor/temp',
+  pattern: 'sensor/#'
+});
+```
+
 ## Future Enhancements
 
 - [ ] **Connection pooling** for multiple brokers
-- [ ] **Metrics** for pub/sub operations
-- [ ] **Message buffering** during disconnections
+- [ ] **Message persistence** to disk during long outages
 - [ ] **TLS/SSL support** configuration
 - [ ] **Last Will and Testament (LWT)** configuration
+- [ ] **QoS 2 exactly-once delivery** tracking
+- [ ] **Message compression** for large payloads
 
 ## API Reference
 

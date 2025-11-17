@@ -28,7 +28,6 @@ exports.up = async function(knex) {
       .update({ stateHash: hash });
   }
   
-  console.log(`Added stateHash column and computed hashes for ${snapshots.length} record(s)`);
 };
 
 /**

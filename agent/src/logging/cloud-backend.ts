@@ -102,6 +102,19 @@ export class CloudLogBackend implements LogBackend {
 	private droppedLogSummaries: DroppedLogSummary[] = [];
 	private readonly MAX_DROPPED_SUMMARIES = 50; // Keep last 50 drop events
 	
+	/** Throttling for error/warning logs */
+	private consecutiveFailures: number = 0;
+	private lastErrorLog: number = 0;
+	private lastWarningLog: number = 0;
+	private errorLogThrottle: number = 30000; // Log errors max once per 30 seconds
+	private warningLogThrottle: number = 30000; // Log warnings max once per 30 seconds
+	
+	/** Circuit breaker for cloud logging */
+	private circuitBreakerOpen: boolean = false;
+	private circuitBreakerOpenedAt: number = 0;
+	private readonly CIRCUIT_BREAKER_THRESHOLD = 10; // Open after 10 consecutive failures
+	private readonly CIRCUIT_BREAKER_RESET_MS = 60000; // Try again after 1 minute
+	
 	constructor(config: CloudLogBackendConfig, logger?: AgentLogger) {
 
 		this.logger = logger;
@@ -145,23 +158,38 @@ export class CloudLogBackend implements LogBackend {
 				backoffMultiplier: 2,
 				
 				onRetry: (attempt, error, remaining) => {
-					const errorType = getNetworkErrorType(error);
-					this.logger?.warnSync('Temporary network error, will retry', {
-						component: LogComponents.logs,
-						errorType,
-						consecutiveFailures: attempt,
-						attemptsRemaining: remaining
-					});
+					// Use logger with component to avoid recursive logging
+					const now = Date.now();
+					if (now - this.lastWarningLog > this.warningLogThrottle) {
+						const errorType = getNetworkErrorType(error);
+						this.logger?.warnSync(`Temporary network error (attempt ${attempt}/${attempt + remaining}): ${errorType}`, {
+							component: LogComponents.cloudSync
+						});
+						this.lastWarningLog = now;
+					}
 				},
 				
 				onFailure: (error, attempts) => {
-					const errorType = getNetworkErrorType(error);
-					this.logger?.errorSync('Persistent network error', undefined, {
-						component: LogComponents.logs,
-						errorType,
-						consecutiveFailures: attempts,
-						endpoint: this.config.cloudEndpoint
-					});
+					// Use logger with component to avoid recursive logging
+					this.consecutiveFailures++;
+					
+					// Open circuit breaker if too many failures
+					if (this.consecutiveFailures >= this.CIRCUIT_BREAKER_THRESHOLD && !this.circuitBreakerOpen) {
+						this.circuitBreakerOpen = true;
+						this.circuitBreakerOpenedAt = Date.now();
+						this.logger?.errorSync(`Circuit breaker OPEN - too many failures (${this.consecutiveFailures}). Will retry in ${this.CIRCUIT_BREAKER_RESET_MS / 1000}s`, undefined, {
+							component: LogComponents.cloudSync
+						});
+					}
+					
+					const now = Date.now();
+					if (now - this.lastErrorLog > this.errorLogThrottle) {
+						const errorType = getNetworkErrorType(error);
+						this.logger?.errorSync(`Persistent network error: ${errorType} (failures: ${this.consecutiveFailures})`, undefined, {
+							component: LogComponents.cloudSync
+						});
+						this.lastErrorLog = now;
+					}
 				}
 			},
 			{ isRetryable: isRetryableNetworkError }
@@ -299,6 +327,24 @@ export class CloudLogBackend implements LogBackend {
 			return;
 		}
 		
+		// Check circuit breaker
+		if (this.circuitBreakerOpen) {
+			const now = Date.now();
+			const timeSinceOpen = now - this.circuitBreakerOpenedAt;
+			
+			if (timeSinceOpen < this.CIRCUIT_BREAKER_RESET_MS) {
+				// Circuit still open - silently accumulate logs
+				return;
+			} else {
+				// Try to close circuit breaker
+				this.logger?.infoSync('Circuit breaker attempting reset...', {
+					component: LogComponents.cloudSync
+				});
+				this.circuitBreakerOpen = false;
+				this.consecutiveFailures = 0;
+			}
+		}
+		
 		// Split buffer into smaller batches if too large
 		const batchSize = this.config.batchSize;
 		const batches: LogMessage[][] = [];
@@ -325,15 +371,19 @@ export class CloudLogBackend implements LogBackend {
 				// Use retry policy for network resilience
 				await this.retryPolicy.execute(() => this.sendLogs(batch));
 				
-				this.logger?.infoSync('Successfully sent logs to cloud', { 
-					component: LogComponents.logs,
-					logCount: batch.length,
-					httpStatus: 200
-				});
-				
 				// Reset retry counters on success
 				this.retryCount = 0;
+				const wasCircuitOpen = this.circuitBreakerOpen;
+				this.consecutiveFailures = 0;
+				this.circuitBreakerOpen = false;
 				this.retryPolicy.reset();
+				
+				// Only log recovery if circuit breaker was open (avoid spam)
+				if (wasCircuitOpen) {
+					this.logger?.infoSync(`Circuit breaker CLOSED - connection restored (sent ${batch.length} logs)`, {
+						component: LogComponents.cloudSync
+					});
+				}
 			} catch (error) {
 				// All retries exhausted - create summary before dropping
 				if (this.retryPolicy.hasExhaustedRetries()) {
@@ -395,9 +445,12 @@ export class CloudLogBackend implements LogBackend {
 		});
 		
 		if (!response.ok) {
-			this.logger?.errorSync(`HTTP ${response.status}: ${response.statusText}`, undefined, { 
-				component: LogComponents.logs
-			});
+			// Use console.error to avoid recursive logging
+			const now = Date.now();
+			if (now - this.lastErrorLog > this.errorLogThrottle) {
+				console.error(`[CloudLogBackend] HTTP ${response.status}: ${response.statusText}`);
+				this.lastErrorLog = now;
+			}
 			throw new Error(`HTTP ${response.status}: ${response.statusText}`);
 		}
 	}
@@ -550,25 +603,13 @@ export class CloudLogBackend implements LogBackend {
 			this.droppedLogSummaries.shift(); // Remove oldest
 		}
 		
-		// Log summary locally for immediate visibility
-		this.logger?.warnSync('Dropped logs - summary captured', {
-			component: LogComponents.logs,
-			droppedCount: summary.totalCount,
-			errors: summary.levelCounts.error,
-			warnings: summary.levelCounts.warn,
-			services: Object.keys(summary.serviceCounts).length,
-			reason: summary.reason,
-			estimatedKB: Math.round(summary.estimatedBytes / 1024)
-		});
-		
-		// Log first error sample if available
-		if (summary.errorSamples.length > 0) {
-			const sample = summary.errorSamples[0];
-			this.logger?.errorSync('Sample from dropped errors', undefined, {
-				component: LogComponents.logs,
-				service: sample.serviceName,
-				messagePreview: sample.message.substring(0, 100)
+		// Use logger with component to avoid recursive logging (throttled)
+		const now = Date.now();
+		if (now - this.lastWarningLog > this.warningLogThrottle) {
+			this.logger?.warnSync(`Dropped ${summary.totalCount} logs (${summary.reason}): ${summary.levelCounts.error} errors, ${summary.levelCounts.warn} warnings, ~${Math.round(summary.estimatedBytes / 1024)}KB`, {
+				component: LogComponents.cloudSync
 			});
+			this.lastWarningLog = now;
 		}
 	}
 	

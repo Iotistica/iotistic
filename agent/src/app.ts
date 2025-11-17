@@ -31,7 +31,6 @@ async function gracefulShutdown(signal: string) {
 	try {
 		// Stop the agent (closes Device API, MQTT, etc.)
 		await agent.stop();
-		console.log('Device agent stopped successfully');
 		process.exit(0);
 	} catch (error) {
 		console.error('Error during shutdown:', error);

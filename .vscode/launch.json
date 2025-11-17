@@ -25,7 +25,7 @@
 			"METRICS_INTERVAL_MS":"5000",
 			"LOG_COMPRESSION":"true",
 			"REQUIRE_PROVISIONING" : "true",
-			"PROVISIONING_API_KEY": "d54b8f0943b61a8cd7fa57306fc3598af561d06705d9b362d420c45d2a65d67d",      }
+			"PROVISIONING_API_KEY": "90292cec900ce6e407d1642b5c68ef1f0d7393219dc2b467aefbfbd96bb85454",      }
     },
     {
       "name": "Debug API",

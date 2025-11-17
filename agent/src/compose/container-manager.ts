@@ -153,19 +153,19 @@ export interface ContainerService {
 	};
 }
 
-export interface SimpleApp {
+export interface DeviceApp {
 	appId: number;
 	appName: string;
 	appUuid?: string; // Optional UUID for network naming
 	services: ContainerService[];
 }
 
-export interface SimpleState {
-	apps: Record<number, SimpleApp>; // Keyed by appId
+export interface DeviceState {
+	apps: Record<number, DeviceApp>; // Keyed by appId
 	config?: Record<string, any>; // Optional config from target state
 }
 
-export type SimpleStep =
+export type AppStep =
 	| { action: 'downloadImage'; appId: number; imageName: string }
 	| { action: 'createVolume'; appId: number; volumeName: string }
 	| { action: 'createNetwork'; appId: number; networkName: string }
@@ -209,14 +209,14 @@ export type SimpleStep =
 // ============================================================================
 
 export interface ContainerManagerEvents {
-	'target-state-changed': (state: SimpleState) => void;
-	'current-state-changed': (state: SimpleState) => void;
+	'target-state-changed': (state: DeviceState) => void;
+	'current-state-changed': (state: DeviceState) => void;
 	'state-applied': () => void;
 }
 
 export class ContainerManager extends EventEmitter {
-	private currentState: SimpleState = { apps: {} };
-	private targetState: SimpleState = { apps: {} };
+	private currentState: DeviceState = { apps: {} };
+	private targetState: DeviceState = { apps: {} };
 	private isApplyingState = false;
 	private dockerManager: DockerManager;
 	private retryManager: RetryManager;
@@ -298,7 +298,7 @@ export class ContainerManager extends EventEmitter {
 	/**
 	 * Generate SHA-256 hash of state for efficient comparison
 	 */
-	private getStateHash(state: SimpleState): string {
+	private getStateHash(state: DeviceState): string {
 		const stateJson = JSON.stringify(state);
 		return crypto.createHash('sha256').update(stateJson).digest('hex');
 	}
@@ -468,7 +468,7 @@ export class ContainerManager extends EventEmitter {
 	/**
 	 * Set what containers SHOULD be running (target state)
 	 */
-	public async setTarget(target: SimpleState): Promise<void> {
+	public async setTarget(target: DeviceState): Promise<void> {
 		this.logger?.infoSync('Setting target state', {
 			component: LogComponents.containerManager,
 			operation: 'setTarget',
@@ -510,7 +510,7 @@ export class ContainerManager extends EventEmitter {
 	 * Get what containers ARE running (current state)
 	 * Includes config from target state
 	 */
-	public async getCurrentState(): Promise<SimpleState> {
+	public async getCurrentState(): Promise<DeviceState> {
 		if (this.useRealDocker) {
 			// Query Docker for actual state
 			await this.syncCurrentStateFromDocker();
@@ -684,7 +684,7 @@ export class ContainerManager extends EventEmitter {
 	/**
 	 * Get target state
 	 */
-	public getTargetState(): SimpleState {
+	public getTargetState(): DeviceState {
 		return _.cloneDeep(this.targetState);
 	}
 
@@ -743,7 +743,7 @@ export class ContainerManager extends EventEmitter {
 				component: LogComponents.containerManager,
 				operation: 'applyTargetState'
 			});
-			const failures: Array<{ step: SimpleStep; error: any }> = [];
+			const failures: Array<{ step: AppStep; error: any }> = [];
 
 			for (let i = 0; i < steps.length; i++) {
 				const step = steps[i];
@@ -818,7 +818,7 @@ export class ContainerManager extends EventEmitter {
 	/**
 	 * Simulate updating current state (in real app: query Docker)
 	 */
-	public setCurrentState(state: SimpleState): void {
+	public setCurrentState(state: DeviceState): void {
 		this.currentState = _.cloneDeep(state);
 		this.emit('current-state-changed', state);
 	}
@@ -833,10 +833,10 @@ export class ContainerManager extends EventEmitter {
 	 */
 	private reconcileNetworksForApp(
 		appId: number,
-		currentApp: SimpleApp | undefined,
-		targetApp: SimpleApp | undefined,
-	): SimpleStep[] {
-		const steps: SimpleStep[] = [];
+		currentApp: DeviceApp | undefined,
+		targetApp: DeviceApp | undefined,
+	): AppStep[] {
+		const steps: AppStep[] = [];
 
 		// Collect all network names from current and target services
 		const currentNetworks = new Set<string>();
@@ -889,10 +889,10 @@ export class ContainerManager extends EventEmitter {
 
 	private reconcileVolumesForApp(
 		appId: number,
-		currentApp: SimpleApp | undefined,
-		targetApp: SimpleApp | undefined,
-	): SimpleStep[] {
-		const steps: SimpleStep[] = [];
+		currentApp: DeviceApp | undefined,
+		targetApp: DeviceApp | undefined,
+	): AppStep[] {
+		const steps: AppStep[] = [];
 
 		// Collect all volume names from current and target services
 		const currentVolumes = new Set<string>();
@@ -961,8 +961,8 @@ export class ContainerManager extends EventEmitter {
 	// STEP CALCULATION (The Brain)
 	// ========================================================================
 
-	private calculateSteps(): SimpleStep[] {
-		const steps: SimpleStep[] = [];
+	private calculateSteps(): AppStep[] {
+		const steps: AppStep[] = [];
 		const currentApps = this.currentState.apps;
 		const targetApps = this.targetState.apps;
 
@@ -1030,8 +1030,8 @@ export class ContainerManager extends EventEmitter {
 		return steps;
 	}
 
-	private stepsToRemoveApp(app: SimpleApp): SimpleStep[] {
-		const steps: SimpleStep[] = [];
+	private stepsToRemoveApp(app: DeviceApp): AppStep[] {
+		const steps: AppStep[] = [];
 
 		// Stop and remove all services
 		for (const service of app.services) {
@@ -1054,8 +1054,8 @@ export class ContainerManager extends EventEmitter {
 		return steps;
 	}
 
-	private stepsToAddApp(app: SimpleApp): SimpleStep[] {
-		const steps: SimpleStep[] = [];
+	private stepsToAddApp(app: DeviceApp): AppStep[] {
+		const steps: AppStep[] = [];
 
 		// Download images and start all services
 		for (const service of app.services) {
@@ -1093,10 +1093,10 @@ export class ContainerManager extends EventEmitter {
 	}
 
 	private stepsToUpdateApp(
-		current: SimpleApp,
-		target: SimpleApp,
-	): SimpleStep[] {
-		const steps: SimpleStep[] = [];
+		current: DeviceApp,
+		target: DeviceApp,
+	): AppStep[] {
+		const steps: AppStep[] = [];
 
 		const currentServices = new Map(
 			current.services.map((s) => [s.serviceId, s]),
@@ -1427,7 +1427,7 @@ export class ContainerManager extends EventEmitter {
 	// STEP EXECUTION (with K8s-style error handling)
 	// ========================================================================
 
-	private async executeStep(step: SimpleStep): Promise<void> {
+	private async executeStep(step: AppStep): Promise<void> {
 		const stepKey = this.getStepKey(step);
 
 		switch (step.action) {
@@ -1834,7 +1834,7 @@ export class ContainerManager extends EventEmitter {
 	/**
 	 * Generate unique key for retry tracking
 	 */
-	private getStepKey(step: SimpleStep): string {
+	private getStepKey(step: AppStep): string {
 		switch (step.action) {
 			case 'downloadImage':
 				return `image:${step.imageName}`;
@@ -2010,7 +2010,7 @@ export class ContainerManager extends EventEmitter {
 	 * Sanitize state to ensure all data is in correct format
 	 * Fixes issues with data loaded from database that may have wrong types
 	 */
-	private sanitizeState(state: SimpleState): void {
+	private sanitizeState(state: DeviceState): void {
 		for (const app of Object.values(state.apps)) {
 			// Ensure appId is a number
 			if (typeof app.appId === 'string') {
@@ -2264,7 +2264,7 @@ export class ContainerManager extends EventEmitter {
 		console.log('='.repeat(80) + '\n');
 	}
 
-	private printStateDetails(state: SimpleState): void {
+	private printStateDetails(state: DeviceState): void {
 		const apps = Object.values(state.apps);
 		if (apps.length === 0) {
 			console.log('  (empty)');

@@ -28,7 +28,7 @@ import {
   revokeProvisioningKey,
   listProvisioningKeys
 } from '../utils/provisioning-keys';
-import { wireGuardService } from '../services/wireguard-service';
+import { wireGuardService } from '../services/wireguard.service';
 import {
   logAuditEvent,
   logProvisioningAttempt,
@@ -500,6 +500,22 @@ router.post('/device/register', provisioningLimiter, async (req, res) => {
  * - Comprehensive audit logging
  * - No sensitive information in error messages
  */
+/**
+ * Exchange keys - verify device can authenticate with deviceApiKey
+ * POST /api/v1/device/:uuid/key-exchange
+ * 
+ * Phase 2 of two-phase authentication:
+ * - Verifies deviceApiKey against hashed value in database
+ * - Uses bcrypt.compare for secure verification
+ * - Rate limited (10 attempts per hour)
+ * - Logs all authentication events
+ * 
+ * Security Features:
+ * - Secure key comparison using bcrypt
+ * - Rate limiting to prevent brute force attacks
+ * - Comprehensive audit logging
+ * - No sensitive information in error messages
+ */
 router.post('/device/:uuid/key-exchange', keyExchangeLimiter, async (req, res) => {
   const ipAddress = req.ip;
   const userAgent = req.headers['user-agent'];
@@ -509,7 +525,6 @@ router.post('/device/:uuid/key-exchange', keyExchangeLimiter, async (req, res) =
     const { deviceApiKey } = req.body;
     const authKey = req.headers.authorization?.replace('Bearer ', '');
 
-    // Validate required fields
     if (!deviceApiKey || !authKey) {
       await logAuditEvent({
         eventType: AuditEventType.KEY_EXCHANGE_FAILED,
@@ -525,7 +540,6 @@ router.post('/device/:uuid/key-exchange', keyExchangeLimiter, async (req, res) =
       });
     }
 
-    // Validate key matches between body and header
     if (deviceApiKey !== authKey) {
       await logAuditEvent({
         eventType: AuditEventType.KEY_EXCHANGE_FAILED,
@@ -543,40 +557,89 @@ router.post('/device/:uuid/key-exchange', keyExchangeLimiter, async (req, res) =
 
     logger.info('Key exchange request for device:', uuid.substring(0, 8) + '...');
 
-    // Call service layer for authentication
-    await provisioningService.exchangeKeys(
-      uuid,
-      deviceApiKey,
-      ipAddress,
-      userAgent
-    );
-
-    // Fetch device info for response
+    // Verify device exists
     const device = await DeviceModel.getByUuid(uuid);
+    
+    if (!device) {
+      await logAuditEvent({
+        eventType: AuditEventType.KEY_EXCHANGE_FAILED,
+        deviceUuid: uuid,
+        ipAddress,
+        userAgent,
+        severity: AuditSeverity.WARNING,
+        details: { reason: 'Device not found' }
+      });
+      return res.status(404).json({
+        error: 'Device not found',
+        message: `Device ${uuid} not registered`
+      });
+    }
 
-    logger.info('Key exchange successful - device API key verified');
+    // SECURITY: Verify deviceApiKey against hashed value in database
+    if (!device.device_api_key_hash) {
+      await logAuditEvent({
+        eventType: AuditEventType.KEY_EXCHANGE_FAILED,
+        deviceUuid: uuid,
+        ipAddress,
+        userAgent,
+        severity: AuditSeverity.ERROR,
+        details: { reason: 'No API key hash stored for device' }
+      });
+      return res.status(500).json({
+        error: 'Configuration error',
+        message: 'Device API key not configured'
+      });
+    }
+
+    const keyMatches = await bcrypt.compare(deviceApiKey, device.device_api_key_hash);
+    
+    if (!keyMatches) {
+      await logAuditEvent({
+        eventType: AuditEventType.AUTHENTICATION_FAILED,
+        deviceUuid: uuid,
+        ipAddress,
+        userAgent,
+        severity: AuditSeverity.WARNING,
+        details: { reason: 'Invalid device API key' }
+      });
+      return res.status(401).json({
+        error: 'Authentication failed',
+        message: 'Invalid device API key'
+      });
+    }
+
+
+    await logAuditEvent({
+      eventType: AuditEventType.KEY_EXCHANGE_SUCCESS,
+      deviceUuid: uuid,
+      ipAddress,
+      userAgent,
+      severity: AuditSeverity.INFO,
+      details: { deviceName: device.device_name }
+    });
 
     res.json({
       status: 'ok',
       message: 'Key exchange successful',
       device: {
-        id: device!.id,
-        uuid: device!.uuid,
-        deviceName: device!.device_name,
+        id: device.id,
+        uuid: device.uuid,
+        deviceName: device.device_name,
       }
     });
   } catch (error: any) {
     logger.error('Error during key exchange:', error);
     
-    // Determine appropriate status code
-    let statusCode = 500;
-    if (error.message.includes('not found') || error.message.includes('not registered')) {
-      statusCode = 404;
-    } else if (error.message.includes('Invalid') || error.message.includes('Authentication failed')) {
-      statusCode = 401;
-    }
+    await logAuditEvent({
+      eventType: AuditEventType.KEY_EXCHANGE_FAILED,
+      deviceUuid: req.params.uuid,
+      ipAddress,
+      userAgent,
+      severity: AuditSeverity.ERROR,
+      details: { error: error.message }
+    });
 
-    res.status(statusCode).json({
+    res.status(500).json({
       error: 'Key exchange failed',
       message: error.message
     });

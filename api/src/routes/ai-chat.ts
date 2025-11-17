@@ -3,7 +3,7 @@
  */
 
 import { Router } from 'express';
-import { processAIChat } from '../services/ai-chat-service';
+import { processAIChat } from '../services/ai-chat.service';
 
 const router = Router();
 

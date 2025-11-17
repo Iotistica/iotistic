@@ -1,23 +1,49 @@
 import mqtt, { MqttClient, IClientOptions, IClientPublishOptions } from 'mqtt';
+import { EventEmitter } from 'events';
 import type { AgentLogger } from '../logging/agent-logger';
 import { LogComponents } from '../logging/types';
+
+/**
+ * Subscription handler entry
+ * Supports multiple subscriptions to same or overlapping patterns
+ */
+type SubscriptionHandler = {
+  pattern: string;
+  handler: (topic: string, payload: Buffer) => void;
+};
 
 /**
  * Centralized MQTT Manager - Singleton
  * 
  * This manager provides a single MQTT connection shared across the application.
  * Used by jobs, shadows, logging, and other features that need MQTT.
+ * 
+ * Events:
+ * - 'connect': Emitted when MQTT connection is established
  */
-export class MqttManager {
+export class MqttManager extends EventEmitter {
   private static instance: MqttManager;
   private client: MqttClient | null = null;
   private connected = false;
-  private messageHandlers: Map<string, Set<(topic: string, payload: Buffer) => void>> = new Map();
+  private subscriptionHandlers: SubscriptionHandler[] = [];
   private connectionPromise: Promise<void> | null = null;
   private debug = false;
   private logger?: AgentLogger;
+  private pendingPublishes: Array<{
+    topic: string;
+    payload: string | Buffer;
+    options?: IClientPublishOptions;
+  }> = [];
+  private readonly MAX_PENDING_PUBLISHES = 1000; // Prevent memory overflow
+  private reconnectAttempts = 0;
+  private readonly MAX_RECONNECT_DELAY_MS = 30000; // 30 seconds max
+  private readonly BASE_RECONNECT_DELAY_MS = 1000; // 1 second base
+  private lastBrokerUrl?: string;
+  private lastOptions?: IClientOptions;
 
-  private constructor() {}
+  private constructor() {
+    super();
+  }
 
   public static getInstance(): MqttManager {
     if (!MqttManager.instance) {
@@ -37,6 +63,10 @@ export class MqttManager {
    * Connect to MQTT broker (idempotent - can be called multiple times)
    */
   public async connect(brokerUrl: string, options?: IClientOptions): Promise<void> {
+    // Store connection config for self-healing
+    this.lastBrokerUrl = brokerUrl;
+    this.lastOptions = options;
+    
     // If already connected, return
     if (this.client && this.connected) {
       this.debugLog('Already connected to MQTT broker');
@@ -75,20 +105,39 @@ export class MqttManager {
       this.client = mqtt.connect(brokerUrl, {
         ...options,
         clean: true,
-        reconnectPeriod: 5000,
+        reconnectPeriod: 0, // Disable auto-reconnect, we'll handle it manually
         connectTimeout: 10000,
       });
 
       this.client.on('connect', () => {
         clearTimeout(connectionTimeout);
         this.connected = true;
-        this.debugLog('Connected to MQTT broker');
+        this.reconnectAttempts = 0; // Reset backoff counter on successful connect
+        
+        this.logger?.infoSync('Connected to MQTT broker', {
+          component: LogComponents.mqtt,
+          brokerUrl,
+          reconnectAttempts: 0
+        });
+        
         this.connectionPromise = null;
+        
+        // Drain pending publishes
+        this.drainPendingPublishes();
+        
+        // Emit connect event for listeners (e.g., CloudSync)
+        this.emit('connect');
+        
         resolve();
       });
 
       this.client.on('error', (err) => {
-        this.debugLog(`MQTT error: ${err.message}`);
+        this.logger?.errorSync('MQTT connection error', err, {
+          component: LogComponents.mqtt,
+          brokerUrl,
+          connected: this.connected
+        });
+        
         if (!this.connected) {
           clearTimeout(connectionTimeout);
           this.connectionPromise = null;
@@ -97,17 +146,30 @@ export class MqttManager {
       });
 
       this.client.on('reconnect', () => {
-        this.debugLog('🔄 Reconnecting to MQTT broker...');
+        this.logger?.infoSync('MQTT client reconnecting', {
+          component: LogComponents.mqtt,
+          reconnectAttempts: this.reconnectAttempts + 1
+        });
       });
 
       this.client.on('offline', () => {
         this.connected = false;
-        this.debugLog('📴 MQTT client offline');
+        this.logger?.infoSync('MQTT client offline', {
+          component: LogComponents.mqtt,
+          pendingPublishes: this.pendingPublishes.length
+        });
       });
 
       this.client.on('close', () => {
         this.connected = false;
-        this.debugLog('🔌 MQTT connection closed');
+        this.logger?.infoSync('MQTT connection closed', {
+          component: LogComponents.mqtt,
+          pendingPublishes: this.pendingPublishes.length,
+          reconnectAttempts: this.reconnectAttempts
+        });
+        
+        // Schedule reconnect with exponential backoff
+        this.scheduleReconnect(brokerUrl, options);
       });
 
       // Set up global message handler
@@ -121,6 +183,8 @@ export class MqttManager {
 
   /**
    * Publish message to MQTT topic
+   * 
+   * If offline, queues message for delivery on reconnect.
    */
   public async publish(
     topic: string,
@@ -128,11 +192,58 @@ export class MqttManager {
     options?: IClientPublishOptions
   ): Promise<void> {
     if (!this.client || !this.connected) {
-      throw new Error('MQTT client not connected');
+      // Queue message for delivery on reconnect
+      if (this.pendingPublishes.length >= this.MAX_PENDING_PUBLISHES) {
+        this.logger?.warnSync(`Pending publish queue full (${this.MAX_PENDING_PUBLISHES}), dropping oldest message`, {
+          component: LogComponents.mqtt
+        });
+        this.pendingPublishes.shift(); // Remove oldest
+      }
+      
+      this.pendingPublishes.push({ topic, payload, options });
+      this.debugLog(`Queued message for offline delivery: ${topic} (queue size: ${this.pendingPublishes.length})`);
+      return Promise.resolve();
     }
 
     return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error(`MQTT publish timeout after 5s: ${topic}`));
+      }, 5000);
+      
       this.client!.publish(topic, payload, options || {}, (error) => {
+        clearTimeout(timeout);
+        if (error) {
+          reject(error);
+        } else {
+          resolve();
+        }
+      });
+    });
+  }
+
+
+    /**
+   * Publish message to MQTT topic WITHOUT queueing
+   * 
+   * Throws error immediately if not connected (no offline queue).
+   * Use this for messages that have alternative delivery methods (e.g., HTTP fallback).
+   */
+  public async publishNoQueue(
+    topic: string,
+    payload: string | Buffer,
+    options?: IClientPublishOptions
+  ): Promise<void> {
+    if (!this.client || !this.connected) {
+      throw new Error(`MQTT not connected - cannot publish to ${topic}`);
+    }
+
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error(`MQTT publish timeout after 5s: ${topic}`));
+      }, 5000);
+      
+      this.client!.publish(topic, payload, options || {}, (error) => {
+        clearTimeout(timeout);
         if (error) {
           reject(error);
         } else {
@@ -144,49 +255,66 @@ export class MqttManager {
 
   /**
    * Subscribe to MQTT topic with optional handler
+   * 
+   * Auto-reconnects if disconnected (self-healing).
    */
   public async subscribe(
     topic: string,
     options?: mqtt.IClientSubscribeOptions,
     handler?: (topic: string, payload: Buffer) => void
   ): Promise<void> {
-    if (!this.client || !this.connected) {
-      throw new Error('MQTT client not connected');
+    // Auto-reconnect if disconnected (self-healing)
+    if (!this.isConnected()) {
+      if (!this.lastBrokerUrl) {
+        throw new Error('MQTT client not connected and no broker URL available for reconnect');
+      }
+      this.logger?.infoSync('Auto-reconnecting for subscribe operation', {
+        component: LogComponents.mqtt,
+        topic
+      });
+      await this.connect(this.lastBrokerUrl, this.lastOptions);
     }
 
     return new Promise((resolve, reject) => {
       this.client!.subscribe(topic, options || {}, (error, granted) => {
         if (error) {
           const errorMsg = `Subscribe error: ${error.message || 'Unspecified error'}`;
-          this.debugLog(`❌ ${errorMsg} for topic: ${topic}`);
-          console.error(`[MqttManager] Subscribe failed:`, {
+          this.debugLog(`${errorMsg} for topic: ${topic}`);
+          this.logger?.errorSync(`Subscribe failed for topic: ${topic}`, error, {
+            component: LogComponents.mqtt,
             topic,
-            error: error.message,
             errorCode: (error as any).code,
-            errorName: error.name,
             granted
           });
           reject(new Error(errorMsg));
         } else if (!granted || granted.length === 0) {
           const errorMsg = `Subscribe failed: No subscription granted for topic: ${topic}`;
-          this.debugLog(`❌ ${errorMsg}`);
-          console.error(`[MqttManager] No subscription granted:`, { topic, granted });
+          this.debugLog(`${errorMsg}`);
+          this.logger?.errorSync(errorMsg, undefined, {
+            component: LogComponents.mqtt,
+            topic,
+            granted
+          });
           reject(new Error(errorMsg));
         } else if (granted[0].qos === 128) {
           // QoS 128 means subscription failed (rejected by broker)
           const errorMsg = `Subscribe rejected by broker (QoS=128) for topic: ${topic}`;
-          this.debugLog(`❌ ${errorMsg}`);
-          console.error(`[MqttManager] Subscription rejected:`, { topic, granted });
+          this.debugLog(` ${errorMsg}`);
+          this.logger?.errorSync(errorMsg, undefined, {
+            component: LogComponents.mqtt,
+            topic,
+            granted
+          });
           reject(new Error(errorMsg));
         } else {
           // Register handler for message routing
           if (handler) {
-            if (!this.messageHandlers.has(topic)) {
-              this.messageHandlers.set(topic, new Set());
-            }
-            this.messageHandlers.get(topic)!.add(handler);
+            this.subscriptionHandlers.push({
+              pattern: topic,
+              handler
+            });
           }
-          this.debugLog(`📥 Subscribed to topic: ${topic} (QoS=${granted[0].qos})`);
+          this.debugLog(`Subscribed to topic: ${topic} (QoS=${granted[0].qos})`);
           resolve();
         }
       });
@@ -206,8 +334,11 @@ export class MqttManager {
         if (error) {
           reject(error);
         } else {
-          this.messageHandlers.delete(topic);
-          this.debugLog(`📤 Unsubscribed from topic: ${topic}`);
+          // Remove all handlers for this pattern
+          this.subscriptionHandlers = this.subscriptionHandlers.filter(
+            h => h.pattern !== topic
+          );
+          this.debugLog(`Unsubscribed from topic: ${topic}`);
           resolve();
         }
       });
@@ -230,7 +361,7 @@ export class MqttManager {
     return new Promise((resolve) => {
       this.client!.end(false, {}, () => {
         this.connected = false;
-        this.messageHandlers.clear();
+        this.subscriptionHandlers = [];
         this.debugLog('Disconnected from MQTT broker');
         resolve();
       });
@@ -253,17 +384,22 @@ export class MqttManager {
 
   /**
    * Route incoming messages to registered handlers
+   * Supports overlapping patterns (e.g., foo/# and foo/bar)
    */
   private routeMessage(topic: string, payload: Buffer): void {
-    for (const [subscribedTopic, handlers] of this.messageHandlers.entries()) {
-      if (this.topicMatches(subscribedTopic, topic)) {
-        handlers.forEach((handler) => {
-          try {
-            handler(topic, payload);
-          } catch (error) {
-            console.error(`Error in MQTT message handler for topic ${topic}:`, error);
-          }
-        });
+    this.debugLog(`Received MQTT message: ${topic} (${payload.length} bytes)`);
+    
+    for (const subscription of this.subscriptionHandlers) {
+      if (this.topicMatches(subscription.pattern, topic)) {
+        try {
+          subscription.handler(topic, payload);
+        } catch (error) {
+          this.logger?.errorSync(`Error in MQTT handler for pattern ${subscription.pattern}`, error as Error, {
+            component: LogComponents.mqtt,
+            topic,
+            pattern: subscription.pattern
+          });
+        }
       }
     }
   }
@@ -294,6 +430,61 @@ export class MqttManager {
     return patternParts.length === topicParts.length;
   }
 
+  /**
+   * Schedule reconnect with exponential backoff
+   */
+  private scheduleReconnect(brokerUrl: string, options?: IClientOptions): void {
+    this.reconnectAttempts++;
+    const delay = Math.min(
+      this.MAX_RECONNECT_DELAY_MS,
+      this.BASE_RECONNECT_DELAY_MS * Math.pow(2, this.reconnectAttempts - 1)
+    );
+    
+    this.logger?.infoSync(`Scheduling MQTT reconnect attempt ${this.reconnectAttempts} in ${delay}ms`, {
+      component: LogComponents.mqtt
+    });
+    
+    setTimeout(() => {
+      if (!this.connected && !this.connectionPromise) {
+        this.debugLog(`Reconnecting to MQTT broker (attempt ${this.reconnectAttempts})...`);
+        this.connect(brokerUrl, options).catch((error) => {
+          this.logger?.errorSync(`Reconnect attempt ${this.reconnectAttempts} failed`, error, {
+            component: LogComponents.mqtt
+          });
+        });
+      }
+    }, delay);
+  }
+
+  /**
+   * Drain pending publishes on reconnect
+   */
+  private drainPendingPublishes(): void {
+    if (this.pendingPublishes.length === 0) {
+      return;
+    }
+
+    const count = this.pendingPublishes.length;
+    this.logger?.infoSync(`Draining ${count} pending MQTT messages`, {
+      component: LogComponents.mqtt
+    });
+
+    const messages = [...this.pendingPublishes];
+    this.pendingPublishes = [];
+
+    for (const msg of messages) {
+      this.client!.publish(msg.topic, msg.payload, msg.options || {}, (error) => {
+        if (error) {
+          this.logger?.errorSync(`Failed to drain message to ${msg.topic}`, error, {
+            component: LogComponents.mqtt
+          });
+          // Re-queue failed message
+          this.pendingPublishes.push(msg);
+        }
+      });
+    }
+  }
+
   private debugLog(message: string): void {
     if (this.debug) {
       this.logger?.debugSync(message, {
@@ -303,19 +494,3 @@ export class MqttManager {
   }
 }
 
-/**
- * Usage:
- * 
- * import { MqttManager } from './mqtt/mqtt-manager';
- * 
- * const mqttManager = MqttManager.getInstance();
- * await mqttManager.connect('mqtt://mosquitto:1883');
- * 
- * // Subscribe with handler
- * await mqttManager.subscribe('sensor/temperature', { qos: 1 }, (topic, payload) => {
- *   console.log('Received:', payload.toString());
- * });
- * 
- * // Publish
- * await mqttManager.publish('sensor/temperature', '25.5', { qos: 1 });
- */
