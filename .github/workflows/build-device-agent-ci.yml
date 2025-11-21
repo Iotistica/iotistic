@@ -231,7 +231,7 @@ jobs:
           echo "Checking agent logs for successful startup..."
           
           # Check for Device Configuration Summary
-          if docker logs iotistic-agent 2>&1 | grep -q "Device Configuration Summary"; then
+          if docker logs iotistic-agent 2>&1 | grep -q "Device Agent initialized successfully"; then
             echo "✓ Agent started successfully"
           else
             echo "✗ Agent failed to start properly"
