@@ -5,6 +5,7 @@
 
 import { models, getKnex } from '../connection';
 import { SensorOutputModel } from './sensor-outputs.model';
+// Use require for uuid to avoid ESM/CommonJS mismatch in Jest
 const { v4: uuidv4 } = require('uuid');
 
 export interface DeviceSensor {
