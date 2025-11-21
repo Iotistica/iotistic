@@ -1117,22 +1117,19 @@ export default class DeviceAgent {
 
         // Add protocol adapter device statuses (modbus, can, opcua, etc.)
         if (this.sensors) {
-          const allDeviceStatuses = this.sensors.getAllDeviceStatuses();
+          const allDeviceStatuses = await this.sensors.getAllDeviceStatuses();
 
-          // Iterate through each protocol type (modbus, can, opcua, etc.)
-          allDeviceStatuses.forEach((devices, protocolType) => {
-            devices.forEach((device) => {
-              // Create unique key: {protocol}-{deviceName}
-              const sensorKey = `${protocolType}-${device.deviceName}`;
-              sensorStates[sensorKey] = {
-                type: protocolType,
-                deviceName: device.deviceName,
-                connected: device.connected,
-                lastPoll: device.lastPoll?.toISOString() || null,
-                errorCount: device.errorCount,
-                lastError: device.lastError,
-              };
-            });
+          // Iterate through each device in the record
+          Object.entries(allDeviceStatuses).forEach(([deviceName, device]) => {
+            // Use device name as key since getAllDeviceStatuses returns a flat record
+            sensorStates[deviceName] = {
+              type: device.protocol || 'unknown',
+              deviceName: device.name || deviceName,
+              connected: device.status === 'online',
+              lastPoll: device.lastSeenAt || null,
+              errorCount: 0, // Not available in current structure
+              lastError: null, // Not available in current structure
+            };
           });
         }
       } catch (error) {
