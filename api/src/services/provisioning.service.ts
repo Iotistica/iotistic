@@ -34,8 +34,7 @@ import {
   buildBrokerUrl,
   formatBrokerConfigForClient
 } from '../utils/mqtt-broker-config';
-import { getVpnConfigForDevice, formatVpnConfigForDevice } from '../utils/vpn-config';
-import { SystemConfigModel } from '../db/system-config-model';
+
 import { generateDefaultTargetState } from './default-target-state-generator';
 import logger from '../utils/logger';
 import { configService }  from './config.service';
@@ -126,9 +125,9 @@ export class ProvisioningService {
     const keyRecord = provisioningKeyRecord.keyRecord;
 
     // Check if device already exists and is fully provisioned
-    let device = await DeviceModel.getByUuid(uuid);
-    if (device) {
-      const isFullyProvisioned = device.provisioned_at && device.provisioning_state === 'registered';
+    const existingDevice = await DeviceModel.getByUuid(uuid);
+    if (existingDevice) {
+      const isFullyProvisioned = existingDevice.provisioned_at && existingDevice.provisioning_state === 'registered';
       
       if (isFullyProvisioned) {
         await logProvisioningAttempt(ipAddress!, uuid, keyRecord.id, false, 'Device already registered', userAgent);
@@ -147,6 +146,7 @@ export class ProvisioningService {
       this.generateVpnCredentials(uuid, deviceName, ipAddress)
     ]);
 
+    // Upsert device with all provisioning fields atomically
     const device = await DeviceModel.upsert(uuid, {
       device_name: deviceName,
       device_type: deviceType,
@@ -171,7 +171,7 @@ export class ProvisioningService {
     this.createDefaultTargetState(uuid).catch(err => console.error('Failed to create default target state', err));
 
     // Increment provisioning key usage, fire and forget
-    incrementProvisioningKeyUsage(keyRecord.id).catch(err => ...);
+    incrementProvisioningKeyUsage(keyRecord.id).catch(err => console.error('Failed to increment provisioning key usage', err));
 
     // fire and forget
     eventPublisher.publish( 'device.provisioned',
@@ -290,7 +290,7 @@ export class ProvisioningService {
   private async createDefaultTargetState(deviceUuid: string): Promise<void> {
     const targetState = await DeviceTargetStateModel.get(deviceUuid);
     if (!targetState) {
-      const licenseData = await SystemConfigModel.get('license_data');
+      const licenseData = await configService.get('license_data');
       const { apps, config } = generateDefaultTargetState(licenseData);
       await DeviceTargetStateModel.set(deviceUuid, apps, config, false); // Don't need deployment for default state
     }
@@ -322,7 +322,7 @@ export class ProvisioningService {
       : (process.env.MQTT_BROKER_URL || 'mqtt://mosquitto:1883');
 
     // Fetch API TLS configuration
-    const apiTlsConfig = await SystemConfigModel.get('api.tls');
+    const apiTlsConfig = await configService.get('api.tls');
 
     const response: ProvisioningResponse = {
       id: device.id,

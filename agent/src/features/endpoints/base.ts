@@ -58,6 +58,10 @@ export abstract class BaseProtocolAdapter extends EventEmitter {
   protected deviceStatuses: Map<string, DeviceStatus> = new Map();
   protected running = false;
   
+  // Performance tracking
+  protected pollHistory: Map<string, boolean[]> = new Map(); // Track last N poll results (true=success, false=fail)
+  protected readonly pollHistorySize = 100; // Track last 100 polls for success rate
+  
   // Configuration
   protected readonly maxBackoffDelay = 60000; // 60 seconds max
   protected readonly initialBackoffDelay = 1000; // 1 second
@@ -378,9 +382,79 @@ export abstract class BaseProtocolAdapter extends EventEmitter {
         deviceName: name,
         connected: false,
         lastPoll: null,
+        lastSeen: null,
         errorCount: 0,
-        lastError: null
+        lastError: null,
+        responseTimeMs: null,
+        pollSuccessRate: 1.0, // Start optimistic
+        registersUpdated: 0,
+        communicationQuality: 'offline'
       });
+      
+      // Initialize poll history
+      this.pollHistory.set(name, []);
+    }
+  }
+
+  /**
+   * Record poll result and update metrics
+   */
+  protected recordPollResult(
+    deviceName: string, 
+    success: boolean, 
+    responseTimeMs?: number,
+    registersUpdated?: number
+  ): void {
+    const status = this.deviceStatuses.get(deviceName);
+    if (!status) return;
+
+    const now = new Date();
+    status.lastPoll = now;
+
+    // Update success/failure tracking
+    const history = this.pollHistory.get(deviceName) || [];
+    history.push(success);
+    
+    // Keep only last N results
+    if (history.length > this.pollHistorySize) {
+      history.shift();
+    }
+    this.pollHistory.set(deviceName, history);
+
+    // Calculate success rate
+    const successCount = history.filter(r => r).length;
+    status.pollSuccessRate = history.length > 0 ? successCount / history.length : 1.0;
+
+    if (success) {
+      status.lastSeen = now;
+      status.responseTimeMs = responseTimeMs ?? null;
+      status.registersUpdated = registersUpdated ?? 0;
+      status.errorCount = 0; // Reset on success
+      status.lastError = null;
+    } else {
+      status.errorCount++;
+    }
+
+    // Update communication quality based on success rate and connection state
+    status.communicationQuality = this.calculateCommunicationQuality(status);
+  }
+
+  /**
+   * Calculate communication quality based on metrics
+   */
+  protected calculateCommunicationQuality(status: DeviceStatus): 'good' | 'degraded' | 'poor' | 'offline' {
+    if (!status.connected) {
+      return 'offline';
+    }
+
+    const successRate = status.pollSuccessRate;
+    
+    if (successRate >= 0.95) {
+      return 'good';
+    } else if (successRate >= 0.75) {
+      return 'degraded';
+    } else {
+      return 'poor';
     }
   }
 

@@ -308,7 +308,15 @@ for ($i = $StartIndex; $i -lt ($StartIndex + $Count); $i++) {
       - SIMULATION_MODE=$($simConfig.enabled)
       - SIMULATION_CONFIG=$($simConfig.config)
       - FIREWALL_ENABLED=$FirewallEnabled
-
+      - ENABLE_PROTOCOL_ADAPTERS=true
+      - ENABLE_SENSOR_PUBLISH=true
+      - ENABLE_FIRST_BOOT_DISCOVERY=true
+      - MODBUS_TCP_HOST=iotistic-modbus-sim
+      - MODBUS_TCP_PORT=502
+      - MODBUS_SLAVE_RANGE_START=1
+      - MODBUS_SLAVE_RANGE_END=10
+      - MODBUS_TIMEOUT=2000
+      - OPCUA_DISCOVERY_URLS=
     networks:
       - iotistic-net
 "@

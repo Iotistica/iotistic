@@ -1,0 +1,33 @@
+# Node modules - will be installed in container
+**/node_modules
+**/npm-debug.log
+
+# Build artifacts (but keep dist for plugins)
+**/.rollup.cache
+
+# IDE
+**/.vscode
+**/.idea
+
+# OS files
+**/.DS_Store
+**/Thumbs.db
+
+# Git
+**/.git
+**/.gitignore
+
+# Test and coverage
+**/coverage
+**/test-results
+**/playwright-report
+
+# Temp files
+**/*.tmp
+**/*.log
+
+# Source files (only need dist for plugins)
+data/@iotistic/nr-devices-plugin/src
+data/@iotistic/nr-devices-plugin/test
+data/@iotistic/nr-devices-plugin/rollup.config.js
+data/@iotistic/nr-devices-plugin/tsconfig.json

@@ -22,6 +22,10 @@ import { SensorDataPoint, SocketOutput } from './types.js';
 import { SensorOutputModel } from '../../db/models/sensor-outputs.model.js';
 import { DeviceSensorModel } from '../../db/models/sensors.model.js';
 
+// Type imports only (no runtime loading)
+import type { OPCUAAdapter } from './opcua/opcua-adapter.js';
+import type { OPCUAAdapterConfig } from './opcua/types.js';
+
 export interface SensorConfig extends FeatureConfig {
   modbus?: {
     enabled: boolean;
@@ -32,11 +36,13 @@ export interface SensorConfig extends FeatureConfig {
   };
   opcua?: {
     enabled: boolean;
+    config?: OPCUAAdapterConfig; // Optional: provide config directly, otherwise load from database
   };
 }
 
 export class SensorsFeature extends BaseFeature {
   private modbusAdapter?: ModbusAdapter;
+  private opcuaAdapter?: OPCUAAdapter;
   private socketServers: Map<string, SocketServer> = new Map();
 
   constructor(
@@ -63,14 +69,14 @@ export class SensorsFeature extends BaseFeature {
       await this.startModbusAdapter();
     }
 
+    // Start OPC-UA adapter if enabled
+    if ((this.config as SensorConfig).opcua?.enabled) {
+      await this.startOPCUAAdapter();
+    }
+
     // TODO: Start CAN adapter when implemented
     if ((this.config as SensorConfig).can?.enabled) {
       this.logger.warn('CAN adapter not yet implemented');
-    }
-
-    // TODO: Start OPC-UA adapter when implemented
-    if ((this.config as SensorConfig).opcua?.enabled) {
-      this.logger.warn('OPC-UA adapter not yet implemented');
     }
 
     this.emit('started');
@@ -86,6 +92,12 @@ export class SensorsFeature extends BaseFeature {
       this.modbusAdapter = undefined;
     }
 
+    // Stop OPC-UA adapter
+    if (this.opcuaAdapter) {
+      await this.opcuaAdapter.stop();
+      this.opcuaAdapter = undefined;
+    }
+
     // Stop all socket servers
     for (const [protocol, server] of this.socketServers) {
       this.logger.info(`Stopping ${protocol} socket server`);
@@ -93,7 +105,7 @@ export class SensorsFeature extends BaseFeature {
     }
     this.socketServers.clear();
 
-    // TODO: Stop other adapters
+    // TODO: Stop other adapters (CAN, etc.)
 
     this.emit('stopped');
   }
@@ -127,7 +139,28 @@ export class SensorsFeature extends BaseFeature {
             slaveId: d.connection.slaveId || 1,
             connection: d.connection as any, // Connection config stored in database
             pollInterval: d.poll_interval,
-            registers: d.data_points || []
+            registers: (d.data_points || []).map((dp: any) => {
+              // Convert string type to numeric function code
+              let functionCode = dp.functionCode;
+              if (!functionCode && dp.type) {
+                const typeMap: Record<string, number> = {
+                  'coil': 1,           // READ_COILS
+                  'discrete': 2,       // READ_DISCRETE_INPUTS
+                  'holding': 3,        // READ_HOLDING_REGISTERS
+                  'input': 4,          // READ_INPUT_REGISTERS
+                };
+                functionCode = typeMap[dp.type.toLowerCase()];
+              }
+              
+              return {
+                ...dp,
+                functionCode,
+                dataType: dp.dataType || 'float32',
+                count: dp.count || (dp.dataType === 'float32' || dp.dataType === 'int32' || dp.dataType === 'uint32' ? 2 : 1),
+                scale: dp.scale !== undefined ? dp.scale : 1,
+                offset: dp.offset !== undefined ? dp.offset : 0,
+              };
+            })
           }) as any), // Type assertion - database stores full ModbusDevice config
           logging: {
             level: 'info',
@@ -192,10 +225,111 @@ export class SensorsFeature extends BaseFeature {
   }
 
   /**
+   * Start OPC-UA adapter
+   */
+  private async startOPCUAAdapter(): Promise<void> {
+    try {
+      let opcuaDevices: any[];
+      let outputConfig: SocketOutput;
+
+      // Load config from provided config object or database
+      if (this.config.opcua!.config) {
+        // Use provided config
+        opcuaDevices = this.config.opcua!.config.devices;
+      } else {
+        // Load devices from database
+        const dbDevices = await DeviceSensorModel.getEnabled('opcua');
+        if (dbDevices.length === 0) {
+          this.logger.warn('No OPC-UA devices found in database');
+          return;
+        }
+        
+        // Convert database format to OPCUADeviceConfig array
+        opcuaDevices = dbDevices.map(d => ({
+          name: d.name,
+          protocol: 'opcua',
+          enabled: d.enabled,
+          connection: d.connection,
+          pollInterval: d.poll_interval,
+          dataPoints: (d.data_points || []).map((dp: any) => ({
+            ...dp,
+            dataType: dp.dataType || 'number',
+            scalingFactor: dp.scalingFactor || dp.scale || 1,
+            offset: dp.offset || 0
+          })),
+          metadata: d.metadata || {}
+        }));
+      }
+
+      // Load output config from database
+      const dbOutput = await SensorOutputModel.getOutput('opcua');
+      if (!dbOutput) {
+        throw new Error('OPC-UA output configuration not found in database');
+      }
+      outputConfig = {
+        socketPath: dbOutput.socket_path,
+        dataFormat: dbOutput.data_format as 'json' | 'csv',
+        delimiter: dbOutput.delimiter,
+        includeTimestamp: dbOutput.include_timestamp,
+        includeDeviceName: dbOutput.include_device_name
+      };
+
+      // Create socket server for OPC-UA protocol
+      const opcuaSocket = new SocketServer(outputConfig, this.logger);
+      await opcuaSocket.start();
+      this.socketServers.set('opcua', opcuaSocket);
+      this.logger.info(`OPC-UA socket server started at: ${outputConfig.socketPath}`);
+
+      // Dynamically import OPC-UA adapter (only loads node-opcua-client when needed)
+      const { OPCUAAdapter } = await import('./opcua/opcua-adapter.js');
+      
+      // Create OPC-UA adapter (constructor takes device array, not config object)
+      this.opcuaAdapter = new OPCUAAdapter(opcuaDevices);
+
+      // Wire up event handlers
+      this.opcuaAdapter.on('started', () => {
+        this.logger.info('OPC-UA adapter started');
+      });
+
+      this.opcuaAdapter.on('data', (dataPoints: SensorDataPoint[]) => {
+        // Route data from adapter to socket server
+        opcuaSocket.sendData(dataPoints);
+      });
+
+      this.opcuaAdapter.on('device-connected', (deviceName: string) => {
+        this.logger.info(`OPC-UA device connected: ${deviceName}`);
+      });
+
+      this.opcuaAdapter.on('device-disconnected', (deviceName: string) => {
+        this.logger.warn(`OPC-UA device disconnected: ${deviceName}`);
+      });
+
+      this.opcuaAdapter.on('device-error', (deviceName: string, error: Error) => {
+        this.logger.error(`OPC-UA device error [${deviceName}]: ${error.message}`);
+      });
+
+      // Start adapter
+      await this.opcuaAdapter.start();
+      
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Failed to start OPC-UA adapter: ${errorMessage}`);
+      throw error;
+    }
+  }
+
+  /**
    * Get Modbus adapter instance (for testing/debugging)
    */
   getModbusAdapter(): ModbusAdapter | undefined {
     return this.modbusAdapter;
+  }
+
+  /**
+   * Get OPC-UA adapter instance (for testing/debugging)
+   */
+  getOPCUAAdapter(): OPCUAAdapter | undefined {
+    return this.opcuaAdapter;
   }
 
   /**
@@ -213,21 +347,15 @@ export class SensorsFeature extends BaseFeature {
       }
     }
 
-    // TODO: Add CAN device statuses when implemented
-    // if (this.canAdapter) {
-    //   const canStatuses = this.canAdapter.getDeviceStatuses();
-    //   if (canStatuses.length > 0) {
-    //     statuses.set('can', canStatuses);
-    //   }
-    // }
+    // Collect OPC-UA device statuses
+    if (this.opcuaAdapter) {
+      const opcuaStatuses = this.opcuaAdapter.getDeviceStatuses();
+      if (opcuaStatuses.length > 0) {
+        statuses.set('opcua', opcuaStatuses);
+      }
+    }
 
-    // TODO: Add OPC-UA device statuses when implemented
-    // if (this.opcuaAdapter) {
-    //   const opcuaStatuses = this.opcuaAdapter.getDeviceStatuses();
-    //   if (opcuaStatuses.length > 0) {
-    //     statuses.set('opcua', opcuaStatuses);
-    //   }
-    // }
+    // TODO: Add CAN device statuses when implemented
 
     return statuses;
   }

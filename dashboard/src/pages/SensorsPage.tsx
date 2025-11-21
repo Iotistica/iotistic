@@ -28,6 +28,7 @@ interface SensorsPageProps {
 }
 
 interface Sensor {
+  uuid?: string; // Unique identifier for the sensor
   name: string;
   state: string;
   healthy: boolean;
@@ -85,6 +86,7 @@ export const SensorsPage: React.FC<SensorsPageProps> = ({
       }));
       
       const devices = (data.devices || []).map((d: any) => ({
+        uuid: d.uuid || d.configId, // Use uuid from table, fallback to configId
         name: d.name,
         state: d.connected ? 'CONNECTED' : 'DISCONNECTED',
         healthy: d.connected,
@@ -172,13 +174,16 @@ export const SensorsPage: React.FC<SensorsPageProps> = ({
     }
   };
 
-  const handleToggleSensorEnabled = async (sensorName: string, currentEnabled: boolean) => {
+  const handleToggleSensorEnabled = async (sensor: Sensor, currentEnabled: boolean) => {
     try {
       const newEnabled = !currentEnabled;
       
+      // Use uuid as identifier (preferred), fallback to name for backward compatibility
+      const identifier = sensor.uuid || sensor.name;
+      
       // Update sensor in backend
       const response = await fetch(
-        buildApiUrl(`/api/v1/devices/${deviceUuid}/sensors/${encodeURIComponent(sensorName)}`),
+        buildApiUrl(`/api/v1/devices/${deviceUuid}/sensors/${encodeURIComponent(identifier)}`),
         {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -193,7 +198,7 @@ export const SensorsPage: React.FC<SensorsPageProps> = ({
       // Refresh sensor list
       await fetchSensors();
 
-      toast.success(`Sensor "${sensorName}" ${newEnabled ? 'enabled' : 'disabled'}`);
+      toast.success(`Sensor "${sensor.name}" ${newEnabled ? 'enabled' : 'disabled'}`);
     } catch (error: any) {
       toast.error(`Failed to toggle sensor: ${error.message}`);
     }
@@ -382,7 +387,7 @@ export const SensorsPage: React.FC<SensorsPageProps> = ({
                           </span>
                           <Switch
                             checked={sensor.enabled !== undefined ? sensor.enabled : true}
-                            onCheckedChange={() => handleToggleSensorEnabled(sensor.name, sensor.enabled !== undefined ? sensor.enabled : true)}
+                            onCheckedChange={() => handleToggleSensorEnabled(sensor, sensor.enabled !== undefined ? sensor.enabled : true)}
                             className="data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-gray-300"
                           />
                         </div>

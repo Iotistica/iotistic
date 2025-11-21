@@ -3,7 +3,7 @@ import { SystemConfigModel } from '../db/system-config-model';
 class ConfigService {
   private cache = new Map<string, any>();
   private timestamps = new Map<string, number>();
-  private ttl = 5000;
+  private ttl = 3600000; // 1 hour
 
   async get(key: string) {
     const now = Date.now();

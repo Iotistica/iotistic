@@ -14,11 +14,13 @@
 import { query } from '../db/connection';
 import { EventPublisher } from './event-sourcing';
 import logger from '../utils/logger';
+import { v4 as uuidv4 } from 'uuid';
 
 const eventPublisher = new EventPublisher();
 
 export interface SensorDeviceConfig {
   id?: string; // UUID - generated at creation, persists through lifecycle
+  uuid?: string; // Stable identifier for cloud/edge sync (survives name changes)
   name: string;
   protocol: 'modbus' | 'can' | 'opcua' | 'mqtt';
   enabled: boolean;
@@ -49,35 +51,37 @@ export class DeviceSensorSyncService {
     try {
       // Get existing sensors from table
       const existingResult = await query(
-        'SELECT name FROM device_sensors WHERE device_uuid = $1',
+        'SELECT name, uuid FROM device_sensors WHERE device_uuid = $1',
         [deviceUuid]
       );
-      const existingNames = new Set(existingResult.rows.map((r: any) => r.name));
-      const configNames = new Set(configDevices.map(d => d.name));
+      const existingUuids = new Set(existingResult.rows.map((r: any) => r.uuid).filter(Boolean));
+      const configUuids = new Set(configDevices.map(d => d.uuid).filter(Boolean));
 
       // 1. Insert or update sensors from config
       for (const sensor of configDevices) {
-        if (existingNames.has(sensor.name)) {
-          // Update existing
+        if (sensor.uuid && existingUuids.has(sensor.uuid)) {
+          // Update existing sensor by UUID (stable identifier)
           // If reconciliation from agent, mark as deployed
           // Otherwise, mark as pending (just triggered deployment)
           const deploymentStatus = isReconciliation ? 'deployed' : 'pending';
           
           await query(
             `UPDATE device_sensors SET
-              protocol = $1,
-              enabled = $2,
-              poll_interval = $3,
-              connection = $4,
-              data_points = $5,
-              metadata = $6,
-              updated_by = $7,
-              config_version = $8,
+              name = $1,
+              protocol = $2,
+              enabled = $3,
+              poll_interval = $4,
+              connection = $5,
+              data_points = $6,
+              metadata = $7,
+              updated_by = $8,
+              config_version = $9,
               synced_to_config = true,
-              deployment_status = $9,
-              config_id = $10
-            WHERE device_uuid = $11 AND name = $12`,
+              deployment_status = $10,
+              config_id = $11
+            WHERE device_uuid = $12 AND uuid = $13`,
             [
+              sensor.name,
               sensor.protocol,
               sensor.enabled,
               sensor.pollInterval,
@@ -89,7 +93,7 @@ export class DeviceSensorSyncService {
               deploymentStatus,
               sensor.id || null, // Populate config_id from config JSON
               deviceUuid,
-              sensor.name
+              sensor.uuid
             ]
           );
           logger.info(`Updated: ${sensor.name} (${sensor.protocol}) - ${deploymentStatus}`);
@@ -101,12 +105,13 @@ export class DeviceSensorSyncService {
           
           await query(
             `INSERT INTO device_sensors (
-              device_uuid, name, protocol, enabled, poll_interval,
+              device_uuid, uuid, name, protocol, enabled, poll_interval,
               connection, data_points, metadata, created_by, updated_by,
               config_version, synced_to_config, deployment_status, config_id
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true, $12, $13)`,
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, true, $13, $14)`,
             [
               deviceUuid,
+              sensor.uuid,
               sensor.name,
               sensor.protocol,
               sensor.enabled,
@@ -125,14 +130,14 @@ export class DeviceSensorSyncService {
         }
       }
 
-      // 2. Delete sensors removed from config
-      for (const existingName of existingNames) {
-        if (!configNames.has(existingName)) {
+      // 2. Delete sensors removed from config (by UUID)
+      for (const row of existingResult.rows) {
+        if (row.uuid && !configUuids.has(row.uuid)) {
           await query(
-            'DELETE FROM device_sensors WHERE device_uuid = $1 AND name = $2',
-            [deviceUuid, existingName]
+            'DELETE FROM device_sensors WHERE device_uuid = $1 AND uuid = $2',
+            [deviceUuid, row.uuid]
           );
-          logger.info(`   Deleted: ${existingName} (removed from config)`);
+          logger.info(`   Deleted: ${row.name} (removed from config)`);
         }
       }
 
@@ -221,7 +226,7 @@ export class DeviceSensorSyncService {
     try {
       // Get all sensors from table
       const result = await query(
-        `SELECT id, name, protocol, enabled, poll_interval, connection, data_points, metadata
+        `SELECT id, uuid, name, protocol, enabled, poll_interval, connection, data_points, metadata
          FROM device_sensors
          WHERE device_uuid = $1
          ORDER BY created_at`,
@@ -231,6 +236,7 @@ export class DeviceSensorSyncService {
       // Convert to config format
       const configDevices = result.rows.map((row: any) => ({
         id: row.id.toString(), // Convert database id to string for consistency
+        uuid: row.uuid, // Include UUID for stable identifier
         name: row.name,
         protocol: row.protocol,
         enabled: row.enabled,
@@ -303,10 +309,29 @@ export class DeviceSensorSyncService {
         ? JSON.parse(currentState.config) 
         : currentState.config;
       
-      const runningSensors: SensorDeviceConfig[] = config?.sensors || [];
+      const agentSensors = config?.sensors || [];
       const currentVersion = currentState.version || 0;
 
-      logger.info(`Agent reports ${runningSensors.length} running sensors (version ${currentVersion})`);
+      logger.info(`Agent reports ${agentSensors.length} running sensors (version ${currentVersion})`);
+
+      // Convert agent format (ProtocolAdapterDevice) to API format (SensorDeviceConfig)
+      // Agent sends: { id, name, protocol, connectionString (JSON string), pollInterval, enabled (number 0/1), metadata }
+      // API expects: { id, uuid, name, protocol, connection (object), dataPoints, pollInterval, enabled (boolean), metadata }
+      const runningSensors: SensorDeviceConfig[] = agentSensors.map((sensor: any) => ({
+        id: sensor.id,
+        uuid: sensor.id, // Agent uses UUID as id
+        name: sensor.name,
+        protocol: sensor.protocol,
+        enabled: Boolean(sensor.enabled), // Convert 0/1 to boolean
+        pollInterval: sensor.pollInterval,
+        connection: typeof sensor.connectionString === 'string' 
+          ? JSON.parse(sensor.connectionString) 
+          : sensor.connection || {},
+        dataPoints: sensor.dataPoints || [],
+        metadata: sensor.metadata || {}
+      }));
+
+      logger.info(`Converted ${runningSensors.length} sensors from agent format to API format`);
 
       // Sync table to match agent's reality (not desired state!)
       await this.syncConfigToTable(deviceUuid, runningSensors, currentVersion, 'agent-reconciliation');
@@ -349,6 +374,7 @@ export class DeviceSensorSyncService {
       // Return sensors in API format
       return result.rows.map((row: any) => ({
         id: row.id,
+        uuid: row.uuid, // Stable identifier for cloud/edge sync
         configId: row.config_id, // UUID from config JSON
         name: row.name,
         protocol: row.protocol,
@@ -415,7 +441,12 @@ export class DeviceSensorSyncService {
       }
 
       // 3. Add sensor to config (SOURCE OF TRUTH)
-      existingDevices.push(sensor);
+      // Generate UUID if not provided (stable identifier for cloud/edge sync)
+      const sensorWithUuid = {
+        ...sensor,
+        uuid: sensor.uuid || uuidv4()
+      };
+      existingDevices.push(sensorWithUuid);
       config.sensors = existingDevices;
 
       // 4. Save updated config WITHOUT incrementing version (draft state)
@@ -447,7 +478,7 @@ export class DeviceSensorSyncService {
       logger.info(`User must click "Deploy" to trigger deployment and add to sensors table`);
 
       return {
-        sensor,
+        sensor: sensorWithUuid,
         isDraft: true,
         message: 'Sensor saved to config. Click "Deploy" to trigger deployment.'
       };
@@ -459,14 +490,15 @@ export class DeviceSensorSyncService {
 
   /**
    * Update sensor device (CORRECT PATTERN: Update config first)
+   * NOTE: sensorIdentifier can be either UUID (preferred) or name (backward compatibility)
    */
   async updateSensor(
     deviceUuid: string,
-    sensorName: string,
+    sensorIdentifier: string,
     updates: Partial<SensorDeviceConfig>,
     userId?: string
   ): Promise<any> {
-    logger.info(`Updating sensor "${sensorName}" for device ${deviceUuid.substring(0, 8)}...`);
+    logger.info(`Updating sensor "${sensorIdentifier}" for device ${deviceUuid.substring(0, 8)}...`);
 
     try {
       // 1. Get current target state
@@ -484,10 +516,30 @@ export class DeviceSensorSyncService {
       const config = typeof state.config === 'string' ? JSON.parse(state.config) : state.config;
       const existingDevices: SensorDeviceConfig[] = config.sensors || [];
 
-      // 2. Find and update sensor in config (SOURCE OF TRUTH)
-      const sensorIndex = existingDevices.findIndex(d => d.name === sensorName);
+      // 2. Find sensor - check both config and table
+      // First try to find in config by UUID or name
+      let sensorIndex = existingDevices.findIndex(d => 
+        d.uuid === sensorIdentifier || d.name === sensorIdentifier
+      );
+      
+      // If not in config, check if it exists in device_sensors table
       if (sensorIndex === -1) {
-        throw new Error(`Sensor "${sensorName}" not found`);
+        const tableResult = await query(
+          'SELECT uuid, name FROM device_sensors WHERE device_uuid = $1 AND (uuid = $2 OR name = $2)',
+          [deviceUuid, sensorIdentifier]
+        );
+        
+        if (tableResult.rows.length === 0) {
+          throw new Error(`Sensor "${sensorIdentifier}" not found`);
+        }
+        
+        // Found in table but not in config - find by name as fallback
+        const tableSensor = tableResult.rows[0];
+        sensorIndex = existingDevices.findIndex(d => d.name === tableSensor.name);
+        
+        if (sensorIndex === -1) {
+          throw new Error(`Sensor "${sensorIdentifier}" exists in table but not in config`);
+        }
       }
 
       existingDevices[sensorIndex] = {
@@ -520,13 +572,14 @@ export class DeviceSensorSyncService {
         'device',
         deviceUuid,
         {
-          sensor_name: sensorName,
+          sensor_name: existingDevices[sensorIndex].name,
+          sensor_uuid: existingDevices[sensorIndex].uuid,
           updates,
           version: newVersion
         }
       );
 
-      logger.info(`Updated sensor "${sensorName}" in config (version: ${newVersion})`);
+      logger.info(`Updated sensor "${existingDevices[sensorIndex].name}" in config (version: ${newVersion})`);
 
       return {
         sensor: existingDevices[sensorIndex],
@@ -540,13 +593,14 @@ export class DeviceSensorSyncService {
 
   /**
    * Delete sensor device (CORRECT PATTERN: Delete from config first)
+   * NOTE: sensorIdentifier can be either UUID (preferred) or name (backward compatibility)
    */
   async deleteSensor(
     deviceUuid: string,
-    sensorName: string,
+    sensorIdentifier: string,
     userId?: string
   ): Promise<any> {
-    logger.info(`Deleting sensor "${sensorName}" for device ${deviceUuid.substring(0, 8)}...`);
+    logger.info(`Deleting sensor "${sensorIdentifier}" for device ${deviceUuid.substring(0, 8)}...`);
 
     try {
       // 1. Get current target state
@@ -564,11 +618,21 @@ export class DeviceSensorSyncService {
       const config = typeof state.config === 'string' ? JSON.parse(state.config) : state.config;
       let existingDevices: SensorDeviceConfig[] = config.sensors || [];
 
-      // 2. Remove sensor from config (SOURCE OF TRUTH)
-      existingDevices = existingDevices.filter(d => d.name !== sensorName);
+      // 2. Find sensor to delete (for event logging)
+      const sensorToDelete = existingDevices.find(d => 
+        d.uuid === sensorIdentifier || d.name === sensorIdentifier
+      );
+      if (!sensorToDelete) {
+        throw new Error(`Sensor "${sensorIdentifier}" not found`);
+      }
+
+      // 3. Remove sensor from config (SOURCE OF TRUTH) by UUID if available, otherwise by name
+      existingDevices = existingDevices.filter(d => 
+        d.uuid !== sensorIdentifier && d.name !== sensorIdentifier
+      );
       config.sensors = existingDevices;
 
-      // 3. Save updated target state
+      // 4. Save updated target state
       const updateResult = await query(
         `UPDATE device_target_state SET
            apps = $1,
@@ -583,21 +647,22 @@ export class DeviceSensorSyncService {
 
       const newVersion = updateResult.rows[0].version;
 
-      // 4. Sync config → table (will delete from table)
+      // 5. Sync config → table (will delete from table)
       await this.syncConfigToTable(deviceUuid, existingDevices, newVersion, userId);
 
-      // 5. Publish event
+      // 6. Publish event
       await eventPublisher.publish(
         'device_sensor.deleted',
         'device',
         deviceUuid,
         {
-          sensor_name: sensorName,
+          sensor_name: sensorToDelete.name,
+          sensor_uuid: sensorToDelete.uuid,
           version: newVersion
         }
       );
 
-      logger.info(`Deleted sensor "${sensorName}" from config (version: ${newVersion})`);
+      logger.info(`Deleted sensor "${sensorToDelete.name}" from config (version: ${newVersion})`);
 
       return {
         version: newVersion

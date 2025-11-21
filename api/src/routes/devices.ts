@@ -188,22 +188,45 @@ router.get('/devices', async (req, res) => {
     const isOnline = req.query.online === 'true' ? true : 
                      req.query.online === 'false' ? false : 
                      undefined;
+    
+    // Extract pagination parameters from query
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const filter = (req.query.filter as string)?.toLowerCase() || 'all';
 
     const devices = await DeviceModel.list({ isOnline });
 
+    // Apply filter based on provisioning_state or is_online
+    let filteredDevices = devices;
+    if (filter === 'active') {
+      filteredDevices = devices.filter(d => d.is_online === true);
+    } else if (filter === 'inactive') {
+      filteredDevices = devices.filter(d => d.is_online === false);
+    }
+
+    // Calculate pagination
+    const totalDevices = filteredDevices.length;
+    const totalPages = Math.ceil(totalDevices / limit);
+    const offset = (page - 1) * limit;
+    const paginatedDevices = filteredDevices.slice(offset, offset + limit);
+
     // Enhance with state info
     const enhancedDevices = await Promise.all(
-      devices.map(async (device) => {
+      paginatedDevices.map(async (device) => {
         const targetState = await DeviceTargetStateModel.get(device.uuid);
         const currentState = await DeviceCurrentStateModel.get(device.uuid);
 
         return {
+          id: device.uuid,
           uuid: device.uuid,
+          name: device.device_name,
           device_name: device.device_name,
           device_type: device.device_type,
+          state: device.is_online ? 'active' : 'inactive',
           provisioning_state: device.provisioning_state,
           status: device.status,
           is_online: device.is_online,
+          lastSeen: device.last_connectivity_event,
           last_connectivity_event: device.last_connectivity_event,
           ip_address: device.ip_address,
           os_version: device.os_version,
@@ -218,6 +241,12 @@ router.get('/devices', async (req, res) => {
           current_apps_count: currentState ? Object.keys(currentState.apps || {}).length : 0,
           last_reported: currentState?.reported_at,
           created_at: device.created_at,
+          metrics: {
+            cpu: device.cpu_usage,
+            memory: device.memory_usage,
+            io: Math.floor(Math.random() * 70 + 10), // Placeholder
+            pw: Math.floor(Math.random() * 70 + 10)  // Placeholder
+          }
         };
       })
     );
@@ -225,6 +254,12 @@ router.get('/devices', async (req, res) => {
     res.json({
       count: enhancedDevices.length,
       devices: enhancedDevices,
+      pagination: {
+        page,
+        limit,
+        totalDevices,
+        totalPages
+      }
     });
   } catch (error: any) {
     logger.error('Error listing devices', {

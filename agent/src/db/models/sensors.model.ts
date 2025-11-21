@@ -5,9 +5,11 @@
 
 import { models, getKnex } from '../connection';
 import { SensorOutputModel } from './sensor-outputs.model';
+const { v4: uuidv4 } = require('uuid');
 
 export interface DeviceSensor {
   id?: number;
+  uuid?: string; // Stable identifier for cloud/edge sync (survives name changes)
   name: string;
   protocol: 'modbus' | 'can' | 'opcua';
   enabled: boolean;
@@ -15,12 +17,13 @@ export interface DeviceSensor {
   connection: Record<string, any>; // Connection config (host, port, serial, etc.)
   data_points?: any[]; // Protocol-agnostic: Modbus registers, OPC-UA nodes, CAN messages, etc.
   metadata?: Record<string, any>; // Additional protocol-specific config
+  lastSeenAt?: Date; // Last seen during discovery (for stale device detection)
   created_at?: Date;
   updated_at?: Date;
 }
 
 export class DeviceSensorModel {
-  private static table = 'sensors';
+  private static table = 'endpoints';
 
   /**
    * Get all protocol adapter devices
@@ -30,7 +33,15 @@ export class DeviceSensorModel {
     if (protocol) {
       query.where('protocol', protocol);
     }
-    return await query.orderBy('name');
+    const devices = await query.orderBy('name');
+    
+    // Parse JSON fields (SQLite stores as TEXT)
+    return devices.map((d: any) => ({
+      ...d,
+      connection: typeof d.connection === 'string' ? JSON.parse(d.connection) : d.connection,
+      data_points: d.data_points ? (typeof d.data_points === 'string' ? JSON.parse(d.data_points) : d.data_points) : null,
+      metadata: d.metadata ? (typeof d.metadata === 'string' ? JSON.parse(d.metadata) : d.metadata) : null,
+    }));
   }
 
   /**
@@ -40,16 +51,33 @@ export class DeviceSensorModel {
     const device = await models(this.table)
       .where('name', name)
       .first();
-    return device || null;
+    
+    if (!device) return null;
+    
+    // Parse JSON fields (SQLite stores as TEXT)
+    return {
+      ...device,
+      connection: typeof device.connection === 'string' ? JSON.parse(device.connection) : device.connection,
+      data_points: device.data_points ? (typeof device.data_points === 'string' ? JSON.parse(device.data_points) : device.data_points) : null,
+      metadata: device.metadata ? (typeof device.metadata === 'string' ? JSON.parse(device.metadata) : device.metadata) : null,
+    };
   }
 
   /**
    * Get enabled devices for a protocol
    */
   static async getEnabled(protocol: string): Promise<DeviceSensor[]> {
-    return await models(this.table)
+    const devices = await models(this.table)
       .where({ protocol, enabled: true })
       .orderBy('name');
+    
+    // Parse JSON fields (SQLite stores as TEXT)
+    return devices.map((d: any) => ({
+      ...d,
+      connection: typeof d.connection === 'string' ? JSON.parse(d.connection) : d.connection,
+      data_points: d.data_points ? (typeof d.data_points === 'string' ? JSON.parse(d.data_points) : d.data_points) : null,
+      metadata: d.metadata ? (typeof d.metadata === 'string' ? JSON.parse(d.metadata) : d.metadata) : null,
+    }));
   }
 
   /**
@@ -58,9 +86,11 @@ export class DeviceSensorModel {
   static async create(device: DeviceSensor): Promise<DeviceSensor> {
     const [id] = await models(this.table).insert({
       ...device,
+      uuid: device.uuid || uuidv4(), // Generate UUID if not provided
       connection: JSON.stringify(device.connection),
       data_points: device.data_points ? JSON.stringify(device.data_points) : null,
       metadata: device.metadata ? JSON.stringify(device.metadata) : null,
+      lastSeenAt: device.lastSeenAt ? (device.lastSeenAt instanceof Date ? device.lastSeenAt.toISOString() : device.lastSeenAt) : null,
     });
 
     return await this.getById(id);
@@ -84,6 +114,9 @@ export class DeviceSensorModel {
     if (updates.metadata) {
       updateData.metadata = JSON.stringify(updates.metadata);
     }
+    if (updates.lastSeenAt) {
+      updateData.lastSeenAt = updates.lastSeenAt instanceof Date ? updates.lastSeenAt.toISOString() : updates.lastSeenAt;
+    }
 
     await models(this.table)
       .where('name', name)
@@ -106,9 +139,47 @@ export class DeviceSensorModel {
    * Get device by ID
    */
   private static async getById(id: number): Promise<DeviceSensor> {
-    return await models(this.table)
+    const device = await models(this.table)
       .where('id', id)
       .first();
+    
+    // Parse JSON fields (SQLite stores as TEXT)
+    return {
+      ...device,
+      connection: typeof device.connection === 'string' ? JSON.parse(device.connection) : device.connection,
+      data_points: device.data_points ? (typeof device.data_points === 'string' ? JSON.parse(device.data_points) : device.data_points) : null,
+      metadata: device.metadata ? (typeof device.metadata === 'string' ? JSON.parse(device.metadata) : device.metadata) : null,
+    };
+  }
+
+  /**
+   * Get stale devices (not seen in X days)
+   * NEVER auto-deletes - just marks for user review
+   */
+  static async getStaleDevices(daysThreshold = 7): Promise<DeviceSensor[]> {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysThreshold);
+
+    const devices = await models(this.table)
+      .where('lastSeenAt', '<', cutoffDate.toISOString())
+      .orWhereNull('lastSeenAt')
+      .orderBy('lastSeenAt', 'asc');
+
+    return devices.map((d: any) => ({
+      ...d,
+      connection: typeof d.connection === 'string' ? JSON.parse(d.connection) : d.connection,
+      data_points: d.data_points ? (typeof d.data_points === 'string' ? JSON.parse(d.data_points) : d.data_points) : null,
+      metadata: d.metadata ? (typeof d.metadata === 'string' ? JSON.parse(d.metadata) : d.metadata) : null,
+    }));
+  }
+
+  /**
+   * Update lastSeenAt timestamp for a device
+   */
+  static async updateLastSeen(fingerprint: string): Promise<void> {
+    await models(this.table)
+      .where('metadata', 'like', `%"fingerprint":"${fingerprint}"%`)
+      .update({ lastSeenAt: new Date().toISOString() });
   }
 
   /**

@@ -31,7 +31,7 @@ import { MqttManager } from "./mqtt/manager.js";
 import {
   SensorsFeature as SensorsFeature,
   SensorConfig,
-} from "./features/sensors/index.js";
+} from "./features/endpoints/index.js";
 import { AgentFirewall } from "./network/firewall.js";
 import { AgentUpdater } from "./updater.js";
 import { getMacAddress, getOsVersion } from "./system/metrics.js";
@@ -47,6 +47,7 @@ import {
 import { AnomalyDetectionService } from "./ai/anomaly/index.js";
 import { loadConfigFromEnv } from "./ai/anomaly/utils.js";
 import { SimulationOrchestrator, loadSimulationConfig } from "./simulation/index.js";
+import { DiscoveryService } from "./features/discovery/discovery-service.js";
 import { readFileSync } from "fs";
 import { join } from "path";
 
@@ -80,6 +81,7 @@ export default class DeviceAgent {
   private sensorConfigHandler?: SensorConfigHandler;
   private anomalyService?: AnomalyDetectionService; // Edge-based AI anomaly detection for metrics and sensors
   private simulationOrchestrator?: SimulationOrchestrator; // Simulation framework for testing
+  private discoveryService?: DiscoveryService; // Protocol discovery (Modbus, OPC-UA, CAN, etc.)
 
   // Cached target state (updated when target state changes)
   private cachedTargetState: any = null;
@@ -156,8 +158,8 @@ export default class DeviceAgent {
       const enableJobs = configFeatures.enableDeviceJobs ?? process.env.ENABLE_CLOUD_JOBS === "true";
       const enableSensorPublish = configFeatures.enableDeviceSensorPublish ??process.env.ENABLE_SENSOR_PUBLISH === "true";
 
-      // Auto-enable protocol adapters if sensors are configured in target state
-      const hasSensors = this.cachedTargetState?.config?.sensors &&Array.isArray(this.cachedTargetState.config.sensors) &&this.cachedTargetState.config.sensors.length > 0;
+      // Auto-enable protocol adapters if sensors are configured in target state OR env var is set
+      const hasSensors = (this.cachedTargetState?.config?.sensors &&Array.isArray(this.cachedTargetState.config.sensors) &&this.cachedTargetState.config.sensors.length > 0) || process.env.ENABLE_PROTOCOL_ADAPTERS === "true";
 
       // Get system settings from config (with defaults)
       const reconciliationIntervalMs = configSettings.reconciliationIntervalMs || this.RECONCILIATION_INTERVAL;
@@ -208,6 +210,9 @@ export default class DeviceAgent {
       // 10.5. Initialize Simulation Orchestrator (AFTER Anomaly Detection, used for testing)
       await this.initializeSimulationMode();
 
+      // 10.7. Initialize Discovery Service (protocol auto-discovery)
+      await this.initializeDiscoveryService();
+
       // 11. Initialize API Binder (AFTER features are initialized so it can access sensor health)
       await this.initializeDeviceSync(configSettings);
 
@@ -254,7 +259,7 @@ export default class DeviceAgent {
       maxLogs: parseInt(process.env.MAX_LOGS || "1000", 10),
       maxAge: parseInt(process.env.LOG_MAX_AGE || "3600000", 10), // 1 hour
       enableFilePersistence: process.env.LOG_FILE_PERSISTANCE === 'true', //TODO: should be coming from target state later
-      logDir: process.env.LOG_DIR || "./data/logs",
+      logDir: process.env.LOG_DIR || "/app/data/logs",
       maxFileSize: parseInt(process.env.MAX_LOG_FILE_SIZE || "5242880", 10), // 5MB
     });
     await this.logBackend.initialize();
@@ -662,6 +667,52 @@ export default class DeviceAgent {
     }
   }
 
+  private async initializeDiscoveryService(): Promise<void> {
+    this.agentLogger?.infoSync("Initializing Discovery Service", {
+      component: LogComponents.agent,
+    });
+
+    try {
+      // Create discovery service
+      this.discoveryService = new DiscoveryService(this.agentLogger);
+      await this.discoveryService.init();
+
+      // Check if first boot discovery should run
+      const enableFirstBootDiscovery = process.env.ENABLE_FIRST_BOOT_DISCOVERY === 'true';
+      
+      if (enableFirstBootDiscovery) {
+        this.agentLogger?.infoSync("Running first boot discovery", {
+          component: LogComponents.agent,
+        });
+        
+        // Run discovery in background (don't block startup)
+        this.discoveryService.runDiscovery({ 
+          trigger: 'first_boot', 
+          validate: true 
+        }).catch(error => {
+          this.agentLogger?.errorSync(
+            "First boot discovery failed",
+            error as Error,
+            { component: LogComponents.agent }
+          );
+        });
+      }
+
+      this.agentLogger?.infoSync("Discovery Service initialized", {
+        component: LogComponents.agent,
+        firstBootDiscovery: enableFirstBootDiscovery,
+      });
+    } catch (error) {
+      this.agentLogger?.errorSync(
+        "Failed to initialize Discovery Service",
+        error as Error,
+        { component: LogComponents.agent }
+      );
+      // Don't fail startup - discovery is optional
+      this.discoveryService = undefined;
+    }
+  }
+
   private async initializeSimulationMode(): Promise<void> {
     try {
       // Load simulation configuration from environment
@@ -866,78 +917,52 @@ export default class DeviceAgent {
     });
 
     try {
-      // Parse sensor configuration from environment (fallback)
-      let envSensors: any[] = [];
-      const sensorConfigStr = process.env.SENSOR_PUBLISH_CONFIG;
-      if (sensorConfigStr) {
-        try {
-          const envConfig = JSON.parse(sensorConfigStr);
-          envSensors = envConfig.sensors || [];
-          this.agentLogger?.debugSync(
-            "Loaded sensor config from environment variable",
-            {
-              component: LogComponents.agent,
-              sensorCount: envSensors.length,
-            }
-          );
-        } catch (error) {
-          this.agentLogger?.errorSync(
-            "Failed to parse SENSOR_PUBLISH_CONFIG",
-            error instanceof Error ? error : new Error(String(error)),
-            {
-              component: LogComponents.agent,
-            }
-          );
-        }
-      }
+      // Load sensor output configurations from database (socket paths for Protocol Adapters)
+      const { SensorOutputModel } = await import('./db/models/sensor-outputs.model.js');
+      const { DeviceSensorModel } = await import('./db/models/sensors.model.js');
+      
+      const sensorOutputs = await SensorOutputModel.getAll();
 
-      // Get sensor configuration from target state (takes precedence)
-      let targetStateSensors: any[] = [];
-      try {
-        const targetState = this.containerManager?.getTargetState();
-        if (
-          targetState?.config?.sensors &&
-          Array.isArray(targetState.config.sensors)
-        ) {
-          targetStateSensors = targetState.config.sensors;
-          this.agentLogger?.debugSync(
-            "Loaded sensor config from target state",
-            {
-              component: LogComponents.agent,
-              sensorCount: targetStateSensors.length,
-            }
-          );
-        }
-      } catch (error) {
-        this.agentLogger?.debugSync(
-          "Could not load sensors from target state",
-          {
-            component: LogComponents.agent,
-            error: error instanceof Error ? error.message : String(error),
-          }
-        );
-      }
-
-      // Merge configurations: env sensors as base, target state sensors override/add
-      const mergedSensors = [...envSensors];
-      for (const targetSensor of targetStateSensors) {
-        const existingIndex = mergedSensors.findIndex(
-          (s: any) => s.name === targetSensor.name
-        );
-        if (existingIndex >= 0) {
-          // Override existing sensor from env with target state config
-          mergedSensors[existingIndex] = targetSensor;
-        } else {
-          // Add new sensor from target state
-          mergedSensors.push(targetSensor);
-        }
-      }
-
-      // If no sensors configured at all, log warning and skip initialization
-      if (mergedSensors.length === 0) {
-        this.agentLogger?.warnSync("No sensor configurations found", {
+      if (sensorOutputs.length === 0) {
+        this.agentLogger?.warnSync("No sensor outputs configured in database", {
           component: LogComponents.agent,
-          note: "Add sensors via dashboard or set SENSOR_PUBLISH_CONFIG environment variable",
+          note: "Run migrations to create default sensor_outputs entries",
+        });
+        return;
+      }
+
+      // Get all enabled protocols (only create pipes for enabled protocol adapters)
+      const allSensors = await DeviceSensorModel.getAll();
+      const enabledProtocols = new Set(
+        allSensors.filter(s => s.enabled).map(s => s.protocol)
+      );
+
+      if (enabledProtocols.size === 0) {
+        this.agentLogger?.warnSync("No enabled protocol adapters found", {
+          component: LogComponents.agent,
+          note: "Enable protocol adapters in database before starting Sensor Publish",
+        });
+        return;
+      }
+
+      // Build sensor configs only for enabled protocols
+      const sensors = sensorOutputs
+        .filter(output => enabledProtocols.has(output.protocol))
+        .map((output) => ({
+          name: `${output.protocol}-pipe`,
+          addr: output.socket_path,
+          eomDelimiter: output.delimiter || '\n',
+          mqttTopic: output.protocol, // Will become: iot/device/{uuid}/sensor/{protocol}
+          bufferCapacity: 4096,
+          bufferSize: 12, // Batch up to 12 messages (1 minute worth at 5s poll)
+          bufferTimeMs: 60000, // Or publish every 60 seconds
+          enabled: true,
+        }));
+
+      if (sensors.length === 0) {
+        this.agentLogger?.warnSync("No pipes to read from (no enabled protocols)", {
+          component: LogComponents.agent,
+          enabledProtocols: Array.from(enabledProtocols),
         });
         return;
       }
@@ -945,7 +970,7 @@ export default class DeviceAgent {
       // Build final configuration
       const sensorConfig = {
         enabled: true,
-        sensors: mergedSensors,
+        sensors,
       };
 
       // Create and start sensor publish feature
@@ -966,7 +991,7 @@ export default class DeviceAgent {
           'Configured edge AI anomaly detection for sensor data',
           {
             component: LogComponents.agent,
-            sensorCount: mergedSensors.length,
+            sensorCount: sensors.length,
           }
         );
       }
@@ -975,9 +1000,9 @@ export default class DeviceAgent {
 
       this.agentLogger?.infoSync("Sensor Publish Feature initialized", {
         component: LogComponents.agent,
-        sensorsConfigured: mergedSensors.length,
-        fromEnv: envSensors.length,
-        fromTargetState: targetStateSensors.length,
+        pipeCount: sensors.length,
+        enabledProtocols: Array.from(enabledProtocols),
+        pipes: sensors.map(s => s.addr),
         mqttTopicPattern: "iot/device/{deviceUuid}/sensor/{topic}",
       });
     } catch (error) {
@@ -1002,6 +1027,20 @@ export default class DeviceAgent {
         enabled: true,
         ...configFeatures.protocolAdapters,
       };
+
+      // Enable Modbus by default if ENABLE_PROTOCOL_ADAPTERS is set
+      if (process.env.ENABLE_PROTOCOL_ADAPTERS === 'true') {
+        sensorsConfig.modbus = {
+          enabled: true,
+          ...(sensorsConfig.modbus || {})
+        };
+        this.agentLogger?.debugSync(
+          "Enabled Modbus protocol adapter from ENABLE_PROTOCOL_ADAPTERS",
+          {
+            component: LogComponents.agent,
+          }
+        );
+      }
 
       // Check environment variable for config override
       const envConfigStr = process.env.PROTOCOL_ADAPTERS_CONFIG;

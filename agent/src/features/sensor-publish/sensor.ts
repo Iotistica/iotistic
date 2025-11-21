@@ -434,12 +434,10 @@ export class Sensor extends EventEmitter {
     this.messageBatch.totalBytes += Buffer.byteLength(message, 'utf8');
     this.stats.messagesReceived++;
     
-    // Check if should publish batch
+    // Check if should publish batch immediately (buffer size reached)
+    // Timer will handle time-based publishing (bufferTimeMs)
     const bufferSize = this.config.bufferSize ?? 0;
-    const bufferTimeMs = this.config.bufferTimeMs ?? 0;
-    const shouldPublish = 
-      (bufferSize > 0 && this.messageBatch.messages.length >= bufferSize) ||
-      (bufferSize === 0 && bufferTimeMs === 0);
+    const shouldPublish = bufferSize > 0 && this.messageBatch.messages.length >= bufferSize;
     
     if (shouldPublish) {
       this.publishBatch();

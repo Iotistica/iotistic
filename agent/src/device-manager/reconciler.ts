@@ -127,9 +127,9 @@ export class StateReconciler extends EventEmitter {
 		// Get current state from container manager (Docker runtime state)
 		const containerState = await this.containerManager.getCurrentState();
 		
-		// Get current config from config manager (reconciled device config)
-		const currentConfig = this.configManager.getCurrentConfig();
-		
+		// Get current config from config manager (reconciled device config + database sensors)
+		const currentConfig = await this.configManager.getCurrentConfig();
+	
 		const state: DeviceState = {
 			apps: containerState.apps || {},
 			config: currentConfig || {},
@@ -311,15 +311,15 @@ export class StateReconciler extends EventEmitter {
 	/**
 	 * Get status information
 	 */
-	public getStatus(): {
+	public async getStatus(): Promise<{
 		isReconciling: boolean;
 		currentApps: number;
 		targetApps: number;
 		currentDevices: number;
 		targetDevices: number;
-	} {
+	}> {
 		const containerStatus = this.containerManager.getStatus();
-		const currentConfig = this.configManager.getCurrentConfig();
+		const currentConfig = await this.configManager.getCurrentConfig();
 		
 		return {
 			isReconciling: this.isReconciling,

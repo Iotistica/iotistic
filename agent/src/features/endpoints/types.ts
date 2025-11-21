@@ -29,13 +29,30 @@ export interface SensorDataPoint {
 
 /**
  * Device Status interface
+ * Contains both static metadata and dynamic health metrics
  */
 export interface DeviceStatus {
+  // Basic identity
   deviceName: string;
+  
+  // Connection state
   connected: boolean;
   lastPoll: Date | null;
+  lastSeen: Date | null;  // Last successful communication (different from lastPoll which can be failed attempt)
+  
+  // Error tracking
   errorCount: number;
   lastError: string | null;
+  
+  // Performance metrics
+  responseTimeMs: number | null;  // Last response time in milliseconds
+  pollSuccessRate: number;  // Rolling success rate 0-1 (calculated from recent polls)
+  
+  // Data quality
+  registersUpdated: number;  // How many registers/values changed in last poll
+  
+  // Overall health indicator
+  communicationQuality: 'good' | 'degraded' | 'poor' | 'offline';
 }
 
 /**

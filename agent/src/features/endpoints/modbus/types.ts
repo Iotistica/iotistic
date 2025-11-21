@@ -37,7 +37,32 @@ export enum ModbusDataType {
 }
 
 /**
- * Endianness for multi-register data types
+ * Byte Order for multi-register data types (32-bit)
+ * Industry-standard notation for Modbus register ordering
+ * 
+ * For a 32-bit value across 2 registers (reg0, reg1):
+ * - ABCD: Big-endian words, big-endian bytes (standard Modbus)
+ * - CDAB: Little-endian words, big-endian bytes (common in many devices)
+ * - BADC: Big-endian words, little-endian bytes (rare)
+ * - DCBA: Little-endian words, little-endian bytes (Intel order)
+ * 
+ * Example: Float value 123.456 = 0x42F6E979
+ * ABCD: [0x42F6, 0xE979] → reg0=0x42F6, reg1=0xE979
+ * CDAB: [0xE979, 0x42F6] → reg0=0xE979, reg1=0x42F6
+ * BADC: [0xF642, 0x79E9] → reg0=0xF642, reg1=0x79E9
+ * DCBA: [0x79E9, 0xF642] → reg0=0x79E9, reg1=0xF642
+ */
+export enum ByteOrder {
+  ABCD = 'ABCD', // Big-endian (most common in Modbus)
+  CDAB = 'CDAB', // Word-swapped (common in inverters, meters)
+  BADC = 'BADC', // Byte-swapped
+  DCBA = 'DCBA'  // Little-endian (rare)
+}
+
+/**
+ * Legacy Endianness enum for backward compatibility
+ * Maps to ByteOrder: BIG → ABCD, LITTLE → CDAB
+ * @deprecated Use ByteOrder instead
  */
 export enum Endianness {
   BIG = 'big',
@@ -53,10 +78,12 @@ export const ModbusRegisterSchema = z.object({
   functionCode: z.nativeEnum(ModbusFunctionCode),
   dataType: z.nativeEnum(ModbusDataType),
   count: z.number().min(1).max(125).optional().default(1), // For multiple registers
-  endianness: z.nativeEnum(Endianness).optional().default(Endianness.BIG),
+  byteOrder: z.nativeEnum(ByteOrder).optional().default(ByteOrder.ABCD), // For 32-bit values
+  endianness: z.nativeEnum(Endianness).optional(), // Legacy - maps to byteOrder
   scale: z.number().optional().default(1), // Scaling factor
   offset: z.number().optional().default(0), // Offset value
   unit: z.string().optional().default(''), // Unit of measurement
+  encoding: z.enum(['ascii', 'utf8', 'utf-8', 'latin1', 'binary']).optional().default('ascii'), // For STRING type
   description: z.string().optional().default('')
 });
 

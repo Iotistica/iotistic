@@ -27,6 +27,7 @@ import { LogComponents } from '../logging/types';
 import { buildDeviceEndpoint, buildApiEndpoint } from '../utils/api-utils';
 import { HttpClient, FetchHttpClient } from '../lib/http-client';
 import { RetryPolicy, CircuitBreaker, AsyncLock, isAuthError } from '../utils/retry-policy';
+import { createHash } from 'crypto';
 
 interface DeviceStateReport {
 	[deviceUuid: string]: {
@@ -102,6 +103,11 @@ export class CloudSync extends EventEmitter {
 	private lastAgentVersion?: string;
 	private lastLocalIp?: string;
 	
+	// Hash tracking for bandwidth optimization
+	private lastConfigHash?: string;
+	private lastEndpointHealthHash?: string;
+	private isFirstReport: boolean = true;
+	
 	// ETag caching for target state
 	private targetStateETag?: string;
 	
@@ -126,7 +132,7 @@ export class CloudSync extends EventEmitter {
 	private reportQueue: OfflineQueue<DeviceStateReport>;
 	private logger?: AgentLogger;
 	private sensorPublish?: any; // Optional sensor-publish feature for health reporting
-	private protocolAdapters?: any; // Optional protocol-adapters feature for health reporting
+	private endpoints?: any; // Optional endpoints feature for health reporting
 	private mqttManager?: any; // Optional MQTT manager for state reporting
 	
 	// Event handlers (stored for proper cleanup)
@@ -177,7 +183,7 @@ export class CloudSync extends EventEmitter {
 		config: CloudSyncConfig,
 		logger?: AgentLogger,
 		sensorPublish?: any,
-		protocolAdapters?: any,
+		endpoints?: any,
 		mqttManager?: any,
 		httpClient?: HttpClient
 	) {
@@ -186,7 +192,7 @@ export class CloudSync extends EventEmitter {
 		this.deviceManager = deviceManager;
 		this.logger = logger;
 		this.sensorPublish = sensorPublish;
-		this.protocolAdapters = protocolAdapters;
+		this.endpoints = endpoints;
 		this.mqttManager = mqttManager;
 		
 		// Set defaults FIRST (needed by createHttpClient)
@@ -926,8 +932,9 @@ export class CloudSync extends EventEmitter {
 		}
 		
 		// Build current state report
-		const currentState = await this.stateReconciler.getCurrentState();
 		
+		const currentState = await this.stateReconciler.getCurrentState();
+	
 		// Get metrics if interval elapsed
 		const includeMetrics = timeSinceLastMetrics >= this.config.metricsInterval;
 		
@@ -935,15 +942,39 @@ export class CloudSync extends EventEmitter {
 		const osVersionChanged = deviceInfo.osVersion !== this.lastOsVersion;
 		const agentVersionChanged = deviceInfo.agentVersion !== this.lastAgentVersion;
 		
-		// Build base state report (always include)
+		// Hash-based config change detection (bandwidth optimization)
+		const configHash = this.calculateHash(currentState.config);
+		const configChanged = configHash !== this.lastConfigHash || this.isFirstReport;
+		
+		// Collect endpoint health (dynamic runtime status) - now async
+		const endpointHealth = await this.collectEndpointHealth();
+		const healthHash = this.calculateHash(endpointHealth);
+		const healthChanged = healthHash !== this.lastEndpointHealthHash || this.isFirstReport;
+		
+		// Build base state report
 		const stateReport: DeviceStateReport = {
 			[deviceInfo.uuid]: {
 				apps: currentState.apps,
-				config: currentState.config,
 				is_online: this.connectionMonitor.isOnline(),
-				version: this.currentVersion, // Report which version we've applied
+				version: this.currentVersion,
 			},
 		};
+		
+		// Only include config if changed or first report (HUGE bandwidth savings!)
+		if (configChanged) {
+			stateReport[deviceInfo.uuid].config = currentState.config;
+			this.logger?.infoSync('Config changed - including in report', {
+				component: LogComponents.cloudSync,
+				operation: 'config-change-detected',
+				configHash,
+				sensorCount: currentState.config?.sensors?.length || 0
+			});
+		}
+		
+		// Only include endpoint health if changed, or always on metrics cycle
+		if (healthChanged || includeMetrics) {
+			(stateReport[deviceInfo.uuid] as any).endpoints_health = endpointHealth;
+		}
 		
 		// Only include static fields if changed (bandwidth optimization)
 		if (osVersionChanged || this.lastOsVersion === undefined) {
@@ -1008,25 +1039,7 @@ export class CloudSync extends EventEmitter {
 			}
 		}
 		
-		// Add protocol adapter health stats (if protocol-adapters is enabled)
-		if (this.protocolAdapters) {
-			try {
-				const adapterStatuses = this.protocolAdapters.getAllDeviceStatuses();
-				if (adapterStatuses && adapterStatuses.size > 0) {
-					const protocolHealth: any = {};
-					adapterStatuses.forEach((devices: any, protocolType: string) => {
-						protocolHealth[protocolType] = devices;
-					});
-					(stateReport[deviceInfo.uuid] as any).protocol_adapters_health = protocolHealth;
-				}
-			} catch (error) {
-				this.logger?.warnSync('Failed to collect protocol adapter stats', {
-					component: LogComponents.cloudSync,
-					operation: 'collect-adapter-stats',
-					error: error instanceof Error ? error.message : String(error)
-				});
-			}
-		}
+		
 
 		// Log complete metrics report if metrics were collected
 		if (includeMetrics) {
@@ -1036,38 +1049,104 @@ export class CloudSync extends EventEmitter {
 			});
 		}
 	}	// Build state-only report for diff comparison (without metrics)
+	// This represents the CURRENT state that should be compared for changes
 	const stateOnlyReport: DeviceStateReport = {
 		[deviceInfo.uuid]: {
 			apps: currentState.apps,
-			config: currentState.config,
 			is_online: this.connectionMonitor.isOnline(),
-			version: this.currentVersion, // Report which version we've applied
+			version: this.currentVersion,
 		},
 	};
 	
-	// Include static fields in diff comparison if they were included in the report
+	// Include config in state comparison only if it was included in stateReport
+	if (configChanged && stateReport[deviceInfo.uuid].config) {
+		stateOnlyReport[deviceInfo.uuid].config = stateReport[deviceInfo.uuid].config;
+	}
+	
+	// Include endpoint health in state comparison only if it was included
+	if ((healthChanged || includeMetrics) && (stateReport[deviceInfo.uuid] as any).endpoints_health) {
+		(stateOnlyReport[deviceInfo.uuid] as any).endpoints_health = (stateReport[deviceInfo.uuid] as any).endpoints_health;
+	}
+	
+	// Include static fields in state comparison if they were included in the report
 	if (stateReport[deviceInfo.uuid].os_version !== undefined) {
 		stateOnlyReport[deviceInfo.uuid].os_version = stateReport[deviceInfo.uuid].os_version;
 	}
 	if (stateReport[deviceInfo.uuid].agent_version !== undefined) {
 		stateOnlyReport[deviceInfo.uuid].agent_version = stateReport[deviceInfo.uuid].agent_version;
-	}		// Calculate diff - only compare app state (no metrics)
-		const diff = this.calculateStateDiff(this.lastReport, stateOnlyReport);
-		
-		// If there are changes OR we need to send metrics, send the full report (with metrics if applicable)
-		const shouldReport = Object.keys(diff).length > 0 || includeMetrics;
-		
-		if (!shouldReport) {
-			// No changes to report
-			return;
-		}
-		
-		// Prepare report to send (include metrics if needed)
-		const reportToSend = includeMetrics ? stateReport : stateOnlyReport;
+	}
+	
+	// Calculate diff - compare against last report to see what changed
+	const diff = this.calculateStateDiff(this.lastReport, stateOnlyReport);
+	
+	// Determine if we should report
+	// Report if: there are changes in state OR we need to send metrics OR it's first report
+	const shouldReport = Object.keys(diff).length > 0 || includeMetrics || configChanged || healthChanged;
+	
+	if (!shouldReport) {
+		// No changes to report
+		return;
+	}
+	
+	// Build the actual report to send
+	// Start with base (always include apps, online status, version)
+	const reportToSend: DeviceStateReport = {
+		[deviceInfo.uuid]: {
+			apps: currentState.apps,
+			is_online: this.connectionMonitor.isOnline(),
+			version: this.currentVersion,
+		},
+	};
+	
+	// Add config only if it changed
+	if (configChanged) {
+		reportToSend[deviceInfo.uuid].config = currentState.config;
+	}
+	
+	// Add endpoint health only if it changed or metrics cycle
+	if (healthChanged || includeMetrics) {
+		(reportToSend[deviceInfo.uuid] as any).endpoints_health = endpointHealth;
+	}
+	
+	// Add static fields only if they changed
+	if (osVersionChanged || this.lastOsVersion === undefined) {
+		reportToSend[deviceInfo.uuid].os_version = deviceInfo.osVersion;
+	}
+	if (agentVersionChanged || this.lastAgentVersion === undefined) {
+		reportToSend[deviceInfo.uuid].agent_version = deviceInfo.agentVersion;
+	}
+	
+	// Add metrics if needed
+	if (includeMetrics && stateReport[deviceInfo.uuid].cpu_usage !== undefined) {
+		reportToSend[deviceInfo.uuid].cpu_usage = stateReport[deviceInfo.uuid].cpu_usage;
+		reportToSend[deviceInfo.uuid].memory_usage = stateReport[deviceInfo.uuid].memory_usage;
+		reportToSend[deviceInfo.uuid].memory_total = stateReport[deviceInfo.uuid].memory_total;
+		reportToSend[deviceInfo.uuid].storage_usage = stateReport[deviceInfo.uuid].storage_usage;
+		reportToSend[deviceInfo.uuid].storage_total = stateReport[deviceInfo.uuid].storage_total;
+		reportToSend[deviceInfo.uuid].temperature = stateReport[deviceInfo.uuid].temperature;
+		reportToSend[deviceInfo.uuid].uptime = stateReport[deviceInfo.uuid].uptime;
+		reportToSend[deviceInfo.uuid].top_processes = stateReport[deviceInfo.uuid].top_processes;
+		reportToSend[deviceInfo.uuid].network_interfaces = stateReport[deviceInfo.uuid].network_interfaces;
+		reportToSend[deviceInfo.uuid].local_ip = stateReport[deviceInfo.uuid].local_ip;
+	}
+	
+	// Add sensor health if available and metrics cycle
+	if (includeMetrics && (stateReport[deviceInfo.uuid] as any).sensor_health) {
+		(reportToSend[deviceInfo.uuid] as any).sensor_health = (stateReport[deviceInfo.uuid] as any).sensor_health;
+	}
 		
 		// Send report to cloud
 		try {
 			await this.sendReport(reportToSend);
+
+			// Update hashes after successful send (ALWAYS, even if unchanged)
+			this.lastConfigHash = configHash;
+			this.lastEndpointHealthHash = healthHash;
+			
+			// Clear first report flag
+			if (this.isFirstReport) {
+				this.isFirstReport = false;
+			}
 			
 			// Update last report (state only, no metrics)
 			this.lastReport = stateOnlyReport;
@@ -1078,8 +1157,11 @@ export class CloudSync extends EventEmitter {
 				component: LogComponents.cloudSync,
 				operation: 'report',
 				includeMetrics,
-				version: this.currentVersion, // Show which version we're reporting
-				reportedVersion: stateReport[deviceInfo.uuid].version // Show version in report
+				version: this.currentVersion,
+				reportedVersion: stateReport[deviceInfo.uuid].version,
+				configIncluded: configChanged,
+				endpointHealthIncluded: healthChanged || includeMetrics,
+				isFirstReport: this.isFirstReport
 			};
 			
 			// Track which static fields were included (for debugging)
@@ -1094,7 +1176,13 @@ export class CloudSync extends EventEmitter {
 				optimizationDetails.staticFieldsOptimized = true; // Saved bandwidth!
 			}
 			
-			this.logger?.infoSync('Reported current state', optimizationDetails);
+			// Log what was actually sent
+			this.logger?.infoSync('Reported current state', {
+				...optimizationDetails,
+				reportKeys: Object.keys(reportToSend[deviceInfo.uuid] || {}),
+				sensorCount: reportToSend[deviceInfo.uuid]?.config?.sensors?.length || 0,
+				endpointCount: Object.keys(endpointHealth).length
+			});
 			
 		} catch (error) {
 			// Failed to send - queue for later (regardless of connection state)
@@ -1152,12 +1240,15 @@ export class CloudSync extends EventEmitter {
 				const payload = JSON.stringify(report);
 				const payloadSize = Buffer.byteLength(payload, 'utf8');
 				
+			// DEBUG: Log payload structure to verify version is included
 			this.logger?.debugSync('Sending state report via MQTT', {
 				component: LogComponents.cloudSync,
 				operation: 'mqtt-publish',
 				topic,
 				bytes: payloadSize,
-				transport: 'mqtt'
+				transport: 'mqtt',
+				hasVersion: report[deviceInfo.uuid]?.version !== undefined,
+				versionValue: report[deviceInfo.uuid]?.version
 			});
 			
 			// QoS 1 is better - will help for small network blips
@@ -1284,6 +1375,37 @@ export class CloudSync extends EventEmitter {
 		
 		return false;
 	}
+
+	/**
+	 * Calculate MD5 hash of any object
+	 * Used for detecting config and health changes
+	 */
+	private calculateHash(obj: any): string {
+		return createHash('md5')
+			.update(JSON.stringify(obj))
+			.digest('hex');
+	}
+
+	/**
+	 * Collect endpoint health data from endpoints feature
+	 * Returns dynamic runtime status (NOT static metadata)
+	 */
+	private async collectEndpointHealth(): Promise<Record<string, any>> {
+		if (!this.endpoints) return {};
+		
+		try {
+			// getAllDeviceStatuses() queries database + overlays adapter runtime status
+			const health = await this.endpoints.getAllDeviceStatuses();
+			return health;
+		} catch (error) {
+			this.logger?.warnSync('Failed to collect endpoint health', {
+				component: LogComponents.cloudSync,
+				operation: 'collect-endpoint-health',
+				error: error instanceof Error ? error.message : String(error)
+			});
+			return {};
+		}
+	}
 	
 	/**
 	 * Calculate diff between two state reports
@@ -1313,7 +1435,16 @@ export class CloudSync extends EventEmitter {
 						deviceDiff[key] = newValue;
 					}
 				}
-				// Shallow comparison for other primitives (is_online, local_ip, etc.)
+				// Deep comparison for config object (sensors, features, settings)
+				// This prevents sending verbose sensor configs on every report
+				else if (key === 'config') {
+					const oldConfigStr = JSON.stringify(oldValue || {});
+					const newConfigStr = JSON.stringify(newValue || {});
+					if (oldConfigStr !== newConfigStr) {
+						deviceDiff[key] = newValue;
+					}
+				}
+				// Shallow comparison for other primitives (is_online, local_ip, version, etc.)
 				else {
 					if (oldValue !== newValue) {
 						deviceDiff[key] = newValue;

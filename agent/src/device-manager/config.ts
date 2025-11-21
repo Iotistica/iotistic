@@ -12,6 +12,7 @@
 import { EventEmitter } from 'events';
 import _ from 'lodash';
 import { models as db } from '../db/connection.js';
+import { DeviceSensorModel } from '../db/models/sensors.model.js';
 import type { AgentLogger } from '../logging/agent-logger.js';
 import { LogComponents } from '../logging/types.js';
 import type {
@@ -78,10 +79,29 @@ export class ConfigManager extends EventEmitter {
 
 	/**
 	 * Get current configuration
+	 * Augments with all sensors from database (including discovered ones)
 	 */
-	public getCurrentConfig(): DeviceConfig {
-		// Log what we're returning (for debugging)
-		return _.cloneDeep(this.currentConfig);
+	public async getCurrentConfig(): Promise<DeviceConfig> {
+		// Get all sensors from database (includes discovered devices)
+		const allSensors = await DeviceSensorModel.getAll();
+		
+		// Convert to ProtocolAdapterDevice format
+		const sensorsConfig: ProtocolAdapterDevice[] = allSensors.map(sensor => ({
+			id: sensor.uuid || sensor.name,  // Use UUID as id, fallback to name
+			name: sensor.name,
+			protocol: sensor.protocol,
+			connectionString: JSON.stringify(sensor.connection), // Serialize connection object
+			pollInterval: sensor.poll_interval,
+			enabled: sensor.enabled,
+			metadata: sensor.metadata
+		}));
+		
+		const result: DeviceConfig = {
+			..._.cloneDeep(this.currentConfig),
+			sensors: sensorsConfig  // Override with full database state
+		};
+		
+		return result;
 	}
 
 	/**

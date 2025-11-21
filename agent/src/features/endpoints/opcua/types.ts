@@ -59,6 +59,15 @@ export const OPCUAConnectionSchema = z.object({
   
   /** Keep-alive interval in milliseconds */
   keepAliveInterval: z.number().int().positive().default(5000),
+  
+  /** Enable subscription mode (real-time streaming instead of polling) */
+  useSubscription: z.boolean().default(false),
+  
+  /** Subscription publishing interval in milliseconds (only if useSubscription=true) */
+  publishingInterval: z.number().int().positive().default(1000),
+  
+  /** Subscription sampling interval in milliseconds (only if useSubscription=true) */
+  samplingInterval: z.number().int().positive().default(500),
 });
 export type OPCUAConnection = z.infer<typeof OPCUAConnectionSchema>;
 

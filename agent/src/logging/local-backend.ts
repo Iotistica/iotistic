@@ -34,7 +34,7 @@ export class LocalLogBackend implements LogBackend {
 			maxLogs: options.maxLogs ?? 10000,
 			maxAge: options.maxAge ?? 24 * 60 * 60 * 1000, // 24 hours
 			enableFilePersistence: options.enableFilePersistence ?? false,
-			logDir: options.logDir ?? './data/logs',
+			logDir: options.logDir ?? '/app/data/logs',
 			maxFileSize: options.maxFileSize ?? 10 * 1024 * 1024, // 10MB
 		};
 	}

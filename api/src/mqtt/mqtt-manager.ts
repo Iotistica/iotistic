@@ -474,10 +474,11 @@ export class MqttManager extends EventEmitter {
         case 'state':
           logOperation.step('mqtt-message', 'Processing state update', { 
             deviceUuid: deviceUuid.substring(0, 8) + '...',
-            hasVersion: 'version' in data
+            hasVersion: data && data[deviceUuid] && 'version' in data[deviceUuid]
           });
-          // Emit in format expected by handleDeviceState: { [uuid]: state }
-          this.emit('state', { [deviceUuid]: data });
+          // Agent already sends full report: { [uuid]: state }
+          // Don't double-wrap - emit the parsed data directly
+          this.emit('state', data);
           break;
           
         case 'agent':

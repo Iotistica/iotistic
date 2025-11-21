@@ -227,6 +227,39 @@ export class DeviceModel {
   }
 
   /**
+   * Upsert device - insert or update with all fields atomically
+   */
+  static async upsert(uuid: string, data: Partial<Device>): Promise<Device> {
+    const insertFields: string[] = ['uuid'];
+    const insertPlaceholders: string[] = ['$1'];
+    const updateFields: string[] = [];
+    const values: any[] = [uuid];
+    let paramIndex = 2;
+
+    // Build field lists for INSERT and UPDATE
+    Object.entries(data).forEach(([key, value]) => {
+      if (value !== undefined && key !== 'uuid' && key !== 'id') {
+        insertFields.push(key);
+        insertPlaceholders.push(`$${paramIndex}`);
+        updateFields.push(`${key} = EXCLUDED.${key}`);
+        values.push(value);
+        paramIndex++;
+      }
+    });
+
+    const result = await query<Device>(
+      `INSERT INTO devices (${insertFields.join(', ')})
+       VALUES (${insertPlaceholders.join(', ')})
+       ON CONFLICT (uuid) DO UPDATE SET
+         ${updateFields.join(', ')}
+       RETURNING *`,
+      values
+    );
+
+    return result.rows[0];
+  }
+
+  /**
    * Mark device as offline
    */
   static async markOffline(uuid: string): Promise<void> {

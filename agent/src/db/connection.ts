@@ -9,8 +9,24 @@ type DBTransactionCallback = (trx: Knex.Transaction) => void;
 
 export type Transaction = Knex.Transaction;
 
-// Database path - will be created in the current directory or use env variable
-const databasePath = process.env.DATABASE_PATH || path.join(process.cwd(), 'data', 'device.sqlite');
+// Database path - auto-detect environment
+// Docker: /app/data/device.sqlite (matches volume mount)
+// Local dev: ./data/device.sqlite (relative to project root)
+const getDefaultDatabasePath = (): string => {
+	// Check if running in Docker container (common indicators)
+	const isDocker = fs.existsSync('/.dockerenv') || 
+	                 fs.existsSync('/app/package.json') ||
+	                 process.env.DOCKER_CONTAINER === 'true';
+	
+	if (isDocker) {
+		return '/app/data/device.sqlite';
+	} else {
+		// Local development - use relative path
+		return path.join(process.cwd(), 'data', 'device.sqlite');
+	}
+};
+
+const databasePath = process.env.DATABASE_PATH || getDefaultDatabasePath();
 
 // Ensure the data directory exists
 const dataDir = path.dirname(databasePath);

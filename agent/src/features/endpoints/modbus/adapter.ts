@@ -26,6 +26,11 @@ export class ModbusAdapter extends EventEmitter {
   private pollTimers: Map<string, NodeJS.Timeout> = new Map();
   private deviceStatuses: Map<string, DeviceStatus> = new Map();
   private running = false;
+  
+  // Performance tracking
+  private pollHistory: Map<string, boolean[]> = new Map(); // Track last N poll results
+  private lastValues: Map<string, Map<string, any>> = new Map(); // Track last register values for change detection
+  private readonly pollHistorySize = 100; // Track last 100 polls for success rate
 
   constructor(config: ModbusAdapterConfig, logger: Logger) {
     super();
@@ -179,9 +184,18 @@ export class ModbusAdapter extends EventEmitter {
         deviceName: device.name,
         connected: false,
         lastPoll: null,
+        lastSeen: null,
         errorCount: 0,
-        lastError: null
+        lastError: null,
+        responseTimeMs: null,
+        pollSuccessRate: 1.0, // Start optimistic
+        registersUpdated: 0,
+        communicationQuality: 'offline'
       });
+      
+      // Initialize poll history and last values tracking
+      this.pollHistory.set(device.name, []);
+      this.lastValues.set(device.name, new Map());
     }
   }
 
@@ -263,10 +277,15 @@ export class ModbusAdapter extends EventEmitter {
    */
   private startPolling(deviceConfig: ModbusDevice): void {
     const pollDevice = async () => {
+      const startTime = Date.now();
+      
       try {
         const client = this.clients.get(deviceConfig.name);
         if (!client || !client.isConnected()) {
           this.logger.warn(`Device ${deviceConfig.name} is not connected, skipping poll`);
+          
+          // Record failed poll
+          this.recordPollResult(deviceConfig.name, false);
           
           // ✅ Still send BAD quality data points to indicate device is offline
           const timestamp = new Date().toISOString();
@@ -287,12 +306,15 @@ export class ModbusAdapter extends EventEmitter {
           return;
         }
 
-        // Read all registers
+        // Read all registers (measure time)
         const dataPoints = await client.readAllRegisters();
+        const responseTime = Date.now() - startTime;
 
-        // Update device status
-        const status = this.deviceStatuses.get(deviceConfig.name)!;
-        status.lastPoll = new Date();
+        // Track register changes
+        const registersUpdated = this.trackRegisterChanges(deviceConfig.name, dataPoints);
+        
+        // Record successful poll with metrics
+        this.recordPollResult(deviceConfig.name, true, responseTime, registersUpdated);
 
         // Emit data event with sensor readings
         if (dataPoints.length > 0) {
@@ -353,17 +375,103 @@ export class ModbusAdapter extends EventEmitter {
     if (errorMessage.includes('ECONNREFUSED')) {
       return 'CONNECTION_REFUSED';
     }
-    if (errorMessage.includes('EHOSTUNREACH')) {
-      return 'HOST_UNREACHABLE';
+    if (errorMessage.includes('ENOTFOUND')) {
+      return 'HOST_NOT_FOUND';
     }
-    if (errorMessage.includes('ECONNRESET')) {
-      return 'CONNECTION_RESET';
+    if (errorMessage.includes('not open')) {
+      return 'DEVICE_OFFLINE';
     }
-    if (errorMessage.includes('File not found') || errorMessage.includes('ENOENT')) {
-      return 'PORT_NOT_FOUND';
+    return 'UNKNOWN_ERROR';
+  }
+
+  /**
+   * Track register changes for a device
+   */
+  private trackRegisterChanges(deviceName: string, dataPoints: SensorDataPoint[]): number {
+    const lastValues = this.lastValues.get(deviceName);
+    if (!lastValues) return 0;
+    
+    let changedCount = 0;
+    
+    for (const point of dataPoints) {
+      if (point.quality !== 'GOOD') continue; // Only count good quality data
+      
+      const key = point.registerName;
+      const lastValue = lastValues.get(key);
+      
+      // Check if value changed
+      if (lastValue !== point.value) {
+        changedCount++;
+        lastValues.set(key, point.value);
+      }
     }
     
-    return 'DEVICE_ERROR';
+    return changedCount;
+  }
+
+  /**
+   * Record poll result and update metrics
+   */
+  private recordPollResult(
+    deviceName: string,
+    success: boolean,
+    responseTimeMs?: number,
+    registersUpdated?: number
+  ): void {
+    const status = this.deviceStatuses.get(deviceName);
+    if (!status) return;
+
+    const now = new Date();
+    status.lastPoll = now;
+
+    // Update success/failure tracking
+    const history = this.pollHistory.get(deviceName) || [];
+    history.push(success);
+
+    // Keep only last N results
+    if (history.length > this.pollHistorySize) {
+      history.shift();
+    }
+    this.pollHistory.set(deviceName, history);
+
+    // Calculate success rate
+    const successCount = history.filter((r) => r).length;
+    status.pollSuccessRate = history.length > 0 ? successCount / history.length : 1.0;
+
+    if (success) {
+      status.lastSeen = now;
+      status.responseTimeMs = responseTimeMs ?? null;
+      status.registersUpdated = registersUpdated ?? 0;
+      status.errorCount = 0; // Reset on success
+      status.lastError = null;
+      status.connected = true;
+    } else {
+      status.errorCount++;
+    }
+
+    // Update communication quality based on success rate and connection state
+    status.communicationQuality = this.calculateCommunicationQuality(status);
+  }
+
+  /**
+   * Calculate communication quality based on metrics
+   */
+  private calculateCommunicationQuality(
+    status: DeviceStatus
+  ): 'good' | 'degraded' | 'poor' | 'offline' {
+    if (!status.connected) {
+      return 'offline';
+    }
+
+    const successRate = status.pollSuccessRate;
+
+    if (successRate >= 0.95) {
+      return 'good';
+    } else if (successRate >= 0.75) {
+      return 'degraded';
+    } else {
+      return 'poor';
+    }
   }
 
   /**

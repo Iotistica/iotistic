@@ -18,6 +18,7 @@
 
 import { EventEmitter } from 'events';
 import type { AgentLogger } from '../logging/agent-logger.js';
+import { DeviceSensorModel } from '../db/models/sensors.model.js';
 
 export interface ConfigChangeEvent {
 	key: string;
@@ -137,9 +138,41 @@ export class ConfigManager extends EventEmitter {
 
 	/**
 	 * Get full current configuration
+	 * Augments with all sensors from database (including discovered ones)
 	 */
-	getCurrentConfig(): Record<string, any> {
-		return { ...this.currentConfig };
+	async getCurrentConfig(): Promise<Record<string, any>> {
+		try {
+			// Get all sensors from database (includes discovered devices)
+			console.log('[ConfigManager] getCurrentConfig called');
+			console.log('[ConfigManager] About to call DeviceSensorModel.getAll()');
+			const allSensors = await DeviceSensorModel.getAll();
+			console.log('[ConfigManager] Loaded sensors:', allSensors.length, 'sensors');
+			console.log('[ConfigManager] Sensor details:', JSON.stringify(allSensors, null, 2));
+			
+			// Convert to config format
+			const sensorsConfig = allSensors.map(sensor => ({
+				uuid: sensor.uuid,
+				name: sensor.name,
+				protocol: sensor.protocol,
+				enabled: sensor.enabled,
+				poll_interval: sensor.poll_interval,
+				connection: sensor.connection,
+				data_points: sensor.data_points,
+				metadata: sensor.metadata
+			}));
+			
+			console.log('[ConfigManager] Returning config with sensors:', sensorsConfig.length);
+			console.log('[ConfigManager] currentConfig keys:', Object.keys(this.currentConfig));
+			const result = { 
+				...this.currentConfig,
+				sensors: sensorsConfig // Override with full database state
+			};
+			console.log('[ConfigManager] Final result sensors count:', result.sensors?.length || 0);
+			return result;
+		} catch (error) {
+			console.error('[ConfigManager] ERROR loading sensors:', error);
+			return { ...this.currentConfig };
+		}
 	}
 
 	/**

@@ -72,11 +72,13 @@ export async function processDeviceStateReport(
       versionType: typeof deviceState.version
     });
 
-    // 🔍 DEBUG: Log what agent is sending
+    // 🔍 DEBUG: Log complete device state keys to verify all fields
+    logger.info('DEBUG - Agent state report keys:', Object.keys(deviceState));
     logger.info('DEBUG - Agent state report structure:');
     logger.info('  - apps:', deviceState.apps ? Object.keys(deviceState.apps).slice(0, 3) : 'empty');
     logger.info('  - config:', deviceState.config ? Object.keys(deviceState.config).slice(0, 3) : 'empty');
     logger.info('  - config.sensors:', deviceState.config?.sensors ? `${deviceState.config.sensors.length} sensors` : 'missing');
+    logger.info('  - version field:', deviceState.version);
     
     // Ensure device exists and mark as online
     await DeviceModel.getOrCreate(uuid);

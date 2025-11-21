@@ -201,34 +201,28 @@ export class SocketServer {
 
   /**
    * Format data as JSON
+   * Returns flat array of readings for cleaner database storage
    */
   private formatAsJson(dataPoints: SensorDataPoint[]): string {
-    const data: any = {};
-
-    if (this.config.includeTimestamp) {
-      data.timestamp = new Date().toISOString();
-    }
-
-    // Group data points by device
-    const deviceData: { [key: string]: any } = {};
+    const timestamp = new Date().toISOString();
     
-    for (const point of dataPoints) {
-      if (!deviceData[point.deviceName]) {
-        deviceData[point.deviceName] = {};
-      }
-      
-      deviceData[point.deviceName][point.registerName] = {
-        value: point.value,
-        unit: point.unit,
-        quality: point.quality,
-        qualityCode: point.qualityCode,
-        timestamp: point.timestamp
-      };
-    }
-
-    data.devices = deviceData;
+    // Create flat array of readings (one per register)
+    const readings = dataPoints.map(point => ({
+      timestamp: point.timestamp,
+      deviceName: point.deviceName,
+      registerName: point.registerName,
+      value: point.value,
+      unit: point.unit,
+      quality: point.quality,
+      ...(point.qualityCode && { qualityCode: point.qualityCode })
+    }));
     
-    return JSON.stringify(data);
+    // Return array directly for single reading, or wrapped for batch
+    if (readings.length === 1) {
+      return JSON.stringify(readings[0]);
+    } else {
+      return JSON.stringify({ timestamp, readings });
+    }
   }
 
   /**

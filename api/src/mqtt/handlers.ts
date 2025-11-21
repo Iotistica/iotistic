@@ -12,26 +12,60 @@ import logger from '../utils/logger';
 /**
  * Handle incoming sensor data
  * Store in sensor_data table or time-series database
+ * Supports both single messages and batches
  */
 export async function handleSensorData(data: SensorData): Promise<void> {
   try {
-    // Store sensor data in database
-    // You can create a sensor_data table or use InfluxDB for time-series data
+    // Check if this is a batch (from Sensor Publish feature)
+    const isBatch = data.data && Array.isArray((data.data as any).messages);
     
-    await query(
-      `INSERT INTO sensor_data (device_uuid, sensor_name, data, timestamp, metadata)
-       VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT DO NOTHING`,
-      [
-        data.deviceUuid,
-        data.sensorName,
-        JSON.stringify(data.data),
-        data.timestamp,
-        JSON.stringify(data.metadata || {})
-      ]
-    );
+    if (isBatch) {
+      // Process batch of messages
+      const batch = data.data as any;
+      const messages = batch.messages as string[];
+      
+      logger.info(`Processing sensor data batch: ${messages.length} messages from ${data.deviceUuid}/${data.sensorName}`);
+      
+      // Parse and insert all messages in batch
+      for (const messageStr of messages) {
+        try {
+          const message = JSON.parse(messageStr);
+          
+          await query(
+            `INSERT INTO sensor_data (device_uuid, sensor_name, data, timestamp, metadata)
+             VALUES ($1, $2, $3, $4, $5)
+             ON CONFLICT DO NOTHING`,
+            [
+              data.deviceUuid,
+              data.sensorName,
+              JSON.stringify(message),
+              message.timestamp || batch.timestamp || new Date().toISOString(),
+              JSON.stringify(data.metadata || {})
+            ]
+          );
+        } catch (parseError) {
+          logger.error(`Failed to parse message in batch: ${messageStr}`, parseError);
+        }
+      }
+      
+      logger.info(`Stored ${messages.length} sensor readings: ${data.deviceUuid}/${data.sensorName}`);
+    } else {
+      // Single message (legacy format)
+      await query(
+        `INSERT INTO sensor_data (device_uuid, sensor_name, data, timestamp, metadata)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT DO NOTHING`,
+        [
+          data.deviceUuid,
+          data.sensorName,
+          JSON.stringify(data.data),
+          data.timestamp,
+          JSON.stringify(data.metadata || {})
+        ]
+      );
 
-    logger.info(` Stored sensor data: ${data.deviceUuid}/${data.sensorName}`);
+      logger.info(` Stored sensor data: ${data.deviceUuid}/${data.sensorName}`);
+    }
 
   } catch (error) {
     logger.error(' Failed to store sensor data:', error);
@@ -49,7 +83,7 @@ export async function handleDeviceState(payload: any): Promise<void> {
     // Use shared service for consistent state processing
     await processDeviceStateReport(payload, {
       source: 'mqtt',
-      topic: 'device/+/state'
+      topic: 'iot/device/+/state'
     });
 
     // Publish to Redis for real-time distribution (MQTT-specific, non-blocking)
