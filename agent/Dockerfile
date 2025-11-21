@@ -6,28 +6,9 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install production dependencies only and aggressively clean
+# Install production dependencies only
 RUN npm ci --omit=dev --legacy-peer-deps && \
-    npm cache clean --force && \
-    # Remove entire unnecessary packages
-    rm -rf node_modules/prettier \
-           node_modules/node-opcua-generator \
-           node_modules/node-gyp && \
-    # Remove unnecessary files from node_modules
-    find node_modules -type f -name '*.md' -delete && \
-    find node_modules -type f -name '*.txt' -delete && \
-    find node_modules -type f -name 'LICENSE*' -delete && \
-    find node_modules -type f -name 'CHANGELOG*' -delete && \
-    find node_modules -type d -name 'test' -exec rm -rf {} + 2>/dev/null || true && \
-    find node_modules -type d -name 'tests' -exec rm -rf {} + 2>/dev/null || true && \
-    find node_modules -type d -name 'docs' -exec rm -rf {} + 2>/dev/null || true && \
-    find node_modules -type d -name 'examples' -exec rm -rf {} + 2>/dev/null || true && \
-    find node_modules -type d -name 'coverage' -exec rm -rf {} + 2>/dev/null || true && \
-    find node_modules -type d -name '.github' -exec rm -rf {} + 2>/dev/null || true && \
-    find node_modules -type d -name 'source' -exec rm -rf {} + 2>/dev/null || true && \
-    # Remove source maps and TypeScript source files (keep .d.ts for types)
-    find node_modules -type f -name '*.map' -delete && \
-    find node_modules -type f -name '*.ts' ! -name '*.d.ts' -delete
+    npm cache clean --force
 
 # ---- Build stage ----
 FROM node:20-alpine AS builder
