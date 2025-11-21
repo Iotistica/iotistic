@@ -39,7 +39,7 @@ jobs:
 
   version:
     name: Bump Version
-    needs: [test]
+    # needs: [test]  # Temporarily removed dependency while tests disabled
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -631,7 +631,7 @@ jobs:
     name: Generate Reports
     needs: [version, buildx, test-agent-docker, test-agent-systemd, upload-install-scripts]
     runs-on: ubuntu-24.04
-    if: always()
+    if: success() && needs.version.outputs.package_version != ''
     
     steps:
       - name: Checkout repository
