@@ -1,0 +1,135 @@
+<!-- CSS -->
+<link rel="stylesheet" href="https://unpkg.com/xterm@5.3.0/css/xterm.css" />
+<!-- JS -->
+<script src="https://unpkg.com/xterm@5.3.0/lib/xterm.js"></script>
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+
+<div class="device-tabs" style="margin-top:10px;">
+    <ul id="device-tabs-header"></ul>
+    <div id="device-tab-general" class="device-tab-content" style="display:none;">
+    <div class="form-row">
+        <label>Id</label>
+        <input type="text" id="ff-nr-tools-device-id" disabled>
+    </div>
+    <div class="form-row">
+        <label>Name</label>
+        <input type="text" id="ff-nr-tools-device-name">
+    </div>
+    <div class="form-row">
+        <label>Description</label>
+        <textarea id="ff-nr-tools-device-description"></textarea>
+    </div>
+    <div class="form-row">
+        <label>Type</label>
+        <textarea id="ff-nr-tools-device-type"></textarea>
+    </div>
+   
+    </div>
+    <div id="device-tab-connect" class="device-tab-content" style="display:none;"> <div class="form-row" style="margin-top: 1em;">
+        <p>
+            With the <strong>Iotistic Device Agent</strong> installed on your device, run the following command to setup its connection to the platform:
+        </p>
+        <div class="ff-nr-tools-code-block">
+            <pre class="ff-nr-tools-code-container">
+                <code id ="device-otc-code" style="white-space:nowrap; font-size:13px;"></code>
+            </pre>
+            <button id="copy-command" class="ff-nr-tools-copy-button">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="icon-xs">
+                    <path fill-rule="evenodd" clip-rule="evenodd" d="M7 5C7 3.34315 8.34315 2 10 2H19C20.6569 2 22 3.34315 22 5V14C22 15.6569 20.6569 17 19 17H17V19C17 20.6569 15.6569 22 14 22H5C3.34315 22 2 20.6569 2 19V10C2 8.34315 3.34315 7 5 7H7V5ZM9 7H14C15.6569 7 17 8.34315 17 10V15H19C19.5523 15 20 14.5523 20 14V5C20 4.44772 19.5523 4 19 4H10C9.44772 4 9 4.44772 9 5V7ZM5 9C4.44772 9 4 9.44772 4 10V19C4 19.5523 4.44772 20 5 20H14C14.5523 20 15 19.5523 15 19V10C15 9.44772 14.5523 9 14 9H5Z" fill="currentColor"></path>
+                </svg>
+                <span class="copy-label">Copy</span>
+            </button>
+        </div>
+        <p style="margin-top: 0.5em;">
+            <strong>Notes:</strong><br>
+            - This command is single use and expires in 24h<br>
+            - The new command will be generated only if this device is not in active state<br>
+            - Requires device-agent v1.0.1 or later
+        </p>
+    </div></div>
+    <div id="device-tab-logs" class="device-tab-content" style="display:none;">
+      
+          
+    </div>
+    <div id="device-tab-control" class="device-tab-content" style="display:none;">
+        <div style="display: flex; flex-direction: column; height: 100%;">
+            <div style="display: flex; align-items: center; margin-bottom: 10px;">
+              <label for="containerSelect" style="margin-right: 10px;">Container</label>
+              <select id="containerSelect">
+                <option value="app-display">app-display</option>
+                <option value="app-node-red">app-node-red</option>
+              </select>
+          
+              <label for="serviceSelect" style="margin: 0 10px;">Service</label>
+              <select id="serviceSelect">
+                <option value="ssh">SSH</option>
+                <option value="shell">Shell</option>
+              </select>
+          
+              <button id="sshConnectBtn" style="margin-left: auto;">CONNECT</button>
+            </div>
+          
+            <div id="sshTerminal" style="
+                background-color: #1e1e1e;
+                color: #ccc;
+                font-family: monospace;
+                padding: 10px;
+                overflow-y: auto;
+                height: 300px;
+                border: 1px solid #333;
+                resize: none;
+                white-space: pre-wrap;
+            ">
+              <!-- <span style="color: lime">bbb1657</span><span style="color: yellow">/app-display</span>:<span style="color: white">/usr/src/app$</span>  -->
+            </div>
+        </div> 
+    </div>
+</div>
+<script>
+    document.addEventListener("DOMContentLoaded", async function () {
+        var term = new Terminal();
+        term.open(document.getElementById('sshTerminal'));
+        term.write('Hello from \x1B[1;3;31mxterm.js\x1B[0m $ ')
+
+        // const creds = await api.getDeviceLogCreds(deviceId).then(res => res.json());
+
+        // const client = mqtt.connect(creds.url, {
+        //   username: creds.username,
+        //   password: creds.password,
+        //   reconnectPeriod: 0
+        // });
+    })
+
+   document.getElementById("connectBtn").addEventListener("click", () => {
+    const logArea = document.getElementById("logArea");
+    logArea.innerText = ""; // Clear previous logs
+
+    let counter = 0;
+    const interval = setInterval(() => {
+        logArea.innerText += `[${new Date().toISOString()}] Log line ${++counter}\n`;
+        logArea.scrollTop = logArea.scrollHeight; // Auto-scroll to bottom
+        if (counter >= 100) clearInterval(interval); // Stop after 100 lines
+    }, 100);
+});
+
+document.getElementById("sshConnectBtn").addEventListener("click", () => {
+    const terminal = document.getElementById("sshTerminal");
+    terminal.innerHTML += "\necho 'Connected to SSH...'\n";
+    terminal.innerHTML += "Running diagnostics...\n";
+
+    let counter = 1;
+    const interval = setInterval(() => {
+        terminal.innerHTML += `Log line ${counter++}: ping - OK\n`;
+        terminal.scrollTop = terminal.scrollHeight;
+
+        if (counter > 10) {
+            terminal.innerHTML += `\n<span style="color: lime">bbb1657</span><span style="color: yellow">/app-display</span>:<span style="color: white">/usr/src/app$</span> `;
+            clearInterval(interval);
+        }
+    }, 300);
+});
+   
+
+
+</script>
+

@@ -1,0 +1,66 @@
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<div id="log-container">Loading Logs...</div>
+
+  <script type="module">
+
+    document.addEventListener('DOMContentLoaded', async () => {
+    //   const { default: mqtt } = await import('mqtt');
+      const device = { id: 'DEVICE_ID',  status: 'running' }; // Simulated device prop
+      const container = document.getElementById('log-container');
+      const isDeviceOnline = !['stopped', 'offline', 'error'].includes(device.status);
+
+      if (!isDeviceOnline) {
+        container.textContent = 'Logs Unavailable';
+        return;
+      }
+ 
+
+      try {
+        // Simulate API call
+        const creds = await api.getDeviceLogCreds(deviceId).then(res => res.json());
+
+        const client = mqtt.connect(creds.url, {
+          username: creds.username,
+          password: creds.password,
+          reconnectPeriod: 0
+        });
+
+        const topic = `iot/v1/${device.accountId}/d/${device.id}/logs`;
+        let keepAliveInterval;
+
+        client.on('connect', () => {
+          client.subscribe(topic);
+          client.publish(`${topic}/heartbeat`, 'alive');
+          keepAliveInterval = setInterval(() => {
+            client.publish(`${topic}/heartbeat`, 'alive');
+          }, 10000);
+          container.textContent = ''; // Clear loading
+        });
+
+        client.on('message', (topic, message) => {
+          const entry = JSON.parse(message);
+          const entries = Array.isArray(entry) ? entry : [entry];
+
+          entries.forEach(item => {
+            const d = new Date(parseInt(String(item.ts).slice(0, -4)));
+            const date = `${d.toLocaleDateString()} ${d.toLocaleTimeString()}`;
+            const msg = typeof item.msg === 'string' ? item.msg : JSON.stringify(item.msg);
+            const level = item.level || 'info';
+            const div = document.createElement('div');
+            div.className = `forge-log-entry-level-${level}`;
+            div.textContent = `${date}  [${level.padEnd(10)}] ${msg}`;
+            container.appendChild(div);
+          });
+        });
+
+        window.addEventListener('beforeunload', () => {
+          if (client.connected) client.end();
+          clearInterval(keepAliveInterval);
+        });
+
+      } catch (e) {
+        container.textContent = 'Error loading logs';
+        console.error(e);
+      }
+    });
+  </script>

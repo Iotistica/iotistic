@@ -1,0 +1,290 @@
+.flowfuse-nr-tools-icon {
+    width: 14px;
+    height: 14px;
+    display: inline-block;
+    -webkit-mask-image: url(resources/@flowfuse/nr-devices-plugin/ff-nr.png);
+    mask-image: url(resources/@flowfuse/nr-devices-plugin/ff-nr.png);
+    -webkit-mask-size: contain;
+    mask-size: contain;
+    -webkit-mask-position: 50% 50%;
+    mask-position: 50% 50%;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    background-color: var(--red-ui-workspace-button-color);
+}
+.red-ui-tab .flowfuse-nr-tools-icon {
+    width: 16px !important;
+    height: 16px !important;
+    margin-right: 7px !important;
+    margin-left: -5px !important;
+}
+.red-ui-menu .flowfuse-nr-tools-icon {
+    float: left;
+    width: 13px;
+    height: 13px;
+    margin-left: -21px;
+    margin-top: 2px;
+}
+
+.ff-nr-tools {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+.ff-nr-tools-header {
+    display: flex;
+    align-items: center;
+}
+.ff-nr-tools-header > span:first-child {
+    flex-grow: 1;
+    text-align: left;
+}
+.ff-nr-tools-header > span > :not(:first-child) {
+    margin-left: 5px
+}
+#ff-nr-tools-body {
+    flex-grow: 1;
+    overflow-y: auto;
+}
+.ff-nr-tools-pane {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+}
+.ff-nr-tools-pane-centered {
+    flex-grow: 1;
+    align-items: center;
+    justify-content: center;
+}
+.ff-nr-tools-settings {
+    padding: 8px 20px 20px;
+}
+.ff-nr-tools-connection-status {
+    display: flex;
+    align-items: center;
+}
+.ff-nr-tools-connection-status-disconnected .fa {
+    color: var(--red-ui-text-color-error);
+}
+.ff-nr-tools-connection-status-connected .fa {
+    color: var(--red-ui-text-color-success);
+}
+#ff-nr-tools-team-list {
+    width: 200px;
+}
+
+.ff-nr-tools-pane-stack {
+    height: 100%;
+}
+.ff-nr-tools-pane-stack .red-ui-palette-category {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+.ff-nr-tools-pane-stack .red-ui-palette-category > div:last-child {
+    flex-grow: 1;
+}
+.ff-nr-tools-device {
+    padding: 5px 5px;
+    border: 1px solid var(--red-ui-secondary-border-color);
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.ff-nr-tools-device-list li.even {
+    background-color: #f4f4f4;  /* Light gray background for even items */
+}
+
+.ff-nr-tools-device-list li.odd {
+    background-color: #ffffff;  /* White background for odd items */
+}
+
+.ff-nr-tools-device:hover {
+    background: var(--red-ui-list-item-background-hover);
+}
+.ff-nr-tools-device > div {
+    clear: both
+}
+.ff-nr-tools-device:not(.expanded) > div:nth-child(3) {
+    display: none;
+}
+
+.ff-nr-tools-device-header {
+    background-color: rgba(238, 232, 232, 0.08); /* or use a light color like #f9f9f9 */
+    padding: 5px;
+    border-radius: 4px 4px 0 0; /* smooth top corners */
+    display: flex; 
+    align-items: center; 
+    justify-content: space-between;
+}
+.ff-nr-tools-device > div:nth-child(3) {
+    border-top: 1px solid #8b8888;
+    margin-top: 5px;
+    padding-top: 5px;
+    font-size: 0.9em;
+}
+.ff-nr-tools-device .fa-angle-right {
+    transition: transform 0.2s ease-in-out;
+    transform: rotate(0deg);
+}
+.ff-nr-tools-device.expanded .fa-angle-right {
+    transform: rotate(90deg);
+}
+
+.ff-nr-tools-device-name {
+    display: inline-block;
+    color: var(--red-ui-primary-text-color);
+}
+.ff-nr-tools-device-description {
+    white-space: pre-wrap;
+}
+.ff-nr-tools-device-lastseen {
+    color: var(--red-ui-secondary-text-color);
+    font-family: var(--red-ui-monospace-font);
+    font-size: .85em;
+}
+.ff-nr-tools-device-id {
+    float: right;
+    font-family: var(--red-ui-monospace-font);
+    color: var(--red-ui-secondary-text-color);
+    font-size: .85em;
+    margin-left: 5px;
+}
+.ff-nr-tools-device-state {
+    float: right;
+}
+.ff-nr-tools-device-controls {
+    float: right;
+}
+.ff-nr-tools-device-state img {
+    width: 20px;
+    height: 20px;
+}
+.ff-nr-tools-pane .red-ui-editableList-border {
+    border: none;
+    border-radius: 0;
+}
+.ff-nr-tools-pane .red-ui-editableList-container li {
+    border-bottom: none;
+    padding-top: 0;
+}
+
+.ff-nr-tools-form .form-row label {
+    display: block;
+    width: 100%;
+}
+.ff-nr-tools-form .form-row > input,
+.ff-nr-tools-form .form-row > textarea {
+    width: 100%;
+    display: block;
+}
+
+#ff-nr-tools-device-project-name {
+    margin-left: 8px;
+}
+
+.ff-nr-tools-device .ff-nr-tools-device-metrics {
+    display: none;
+}
+
+.ff-nr-tools-device.expanded .ff-nr-tools-device-metrics {
+    display: block;
+}
+
+
+.ff-nr-tools-code-block {
+    position: relative; /* For positioning the button */
+    padding: 5px;
+    /* border: 1px solid #ccc; */
+    border-radius: 5px;
+    /* background-color: #f9f9f9; */
+  }
+  
+  .ff-nr-tools-code-container {
+    white-space: nowrap;         /* Preserve spacing and prevent wrapping */
+    overflow-x: auto;         /* Horizontal scroll if too long */
+    padding: 10px;
+    font-family: monospace;
+    font-size: 0.95rem;
+    background-color: #1e1e1e; /* optional dark background like your modal */
+    color: var(--red-ui-text-color-code);            
+    border-radius: 5px;
+  }
+
+  .ff-nr-tools-code{
+    white-space: nowrap;      
+    font-size:13px;  
+
+  }
+  
+  .ff-nr-tools-copy-button {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+     padding: 2px 2px; 
+    /* background-color: #4CAF50; */
+    /* color: white; */
+    border: none;
+    cursor: pointer;
+    border-radius: 5px;
+  }
+
+  .ff-nr-tools-sidebar-device-header-button {
+    color: var(--red-ui-workspace-button-color);
+    border: none;
+    outline: none; /* Optional: removes focus outline */
+    background: none; /* Optional: removes background if needed */
+    box-shadow: none; /* Optional: removes any shadow */
+    padding: 6px; /* Optional: for spacing consistency */
+    cursor: pointer; /* Optional: keep cursor pointer for clarity */
+}
+
+.ff-nr-tools-sidebar-device-button-settings {
+    color: var(--red-ui-workspace-button-color);
+    border: none;
+    outline: none; /* Optional: removes focus outline */
+    background: none; /* Optional: removes background if needed */
+    box-shadow: none; /* Optional: removes any shadow */
+    padding: 6px; /* Optional: for spacing consistency */
+    cursor: pointer; /* Optional: keep cursor pointer for clarity */
+}
+
+.ff-nr-tools-pin-icon {
+    margin-right: 6px;
+    cursor: pointer;
+    color: #888;
+}
+
+.ff-nr-tools-pin-icon.pinned {
+    color: #f39c12;
+}
+
+.ff-nr-tools-device.pinned {
+    border-left: 3px solid #f39c12;
+}
+.ff-nr-tools-device-footer {
+    display: flex;
+    justify-content: space-between; /* places first child at start, second at end */
+    align-items: center; /* vertically centers the children */
+    padding: 0 5px; /* optional: adjust spacing as needed */
+  }
+
+  .ff-nr-tools-device-header-inner {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .ff-nr-tools-pagination-controls {
+    display:flex; 
+    justify-content:
+    center; gap:10px; 
+    margin-top:10px;
+  }
+
+
+
+  /* #ff-nr-tools-device-delete i {
+    color: red;
+  } */
+

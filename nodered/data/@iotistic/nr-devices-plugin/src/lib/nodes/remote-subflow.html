@@ -1,0 +1,760 @@
+<style>
+  /* Remote subflow node styles - dashed border */
+</style>
+
+<script type="text/javascript">
+  RED.nodes.registerType("remote subflow", {
+    category: "iotistic",
+    color: "rgb(74, 179, 255)",
+    defaults: {
+      name: { value: "" },
+      deviceUuid: { value: "", required: true },
+      deviceName: { value: "" },
+      subflowId: {
+        value: "",
+        required: true,
+        validate: function (v) {
+          return v !== "";
+        },
+      },
+      subflowName: { value: "" },
+    },
+    inputs: 1,
+    // outputs:1, //cant use this, core node-red reduces the number of wires to default
+    icon: "subflow.svg",
+    paletteLabel: "remote subflow",
+    label: function () {
+      return (
+        this.name || `remote subflow: ${this.subflowName}` || "remote subflow"
+      );
+    },
+    labelStyle: function() {
+      return this.name ? "node_label_italic" : "";
+    },
+    batch: 0,
+    rate: 0,
+    logLevel: "info",
+    keepAlive: 5,
+
+    oneditprepare: function () {
+      const node = this;
+
+      const subflowSelect = $("#node-input-subflows");
+
+      populateSubflows(node.subflowId);
+      setupEventListeners();
+      
+      // Load available devices from API
+      $('#node-input-deviceUuid-select').empty()
+      $('#node-input-deviceUuid-select').append('<option value="">Select a device...</option>')
+      $('#node-input-deviceUuid-select').append('<option value="__custom__">Custom UUID...</option>')
+
+      // Fetch devices from plugin API
+      fetch('/nr-tools/devices', {
+          method: 'GET',
+          headers: getAuthHeaders()
+      })
+      .then(response => response.json())
+      .then(data => {
+          if (data.devices && data.devices.length > 0) {
+              data.devices.forEach(device => {
+                  const option = $('<option></option>')
+                      .attr('value', device.id)
+                      .attr('data-online', device.is_online || false)
+                  
+                  // Format: "DeviceName (online)" or "DeviceName (offline)"
+                  const status = device.is_online ? '🟢 online' : '🔴 offline'
+                  const displayText = `${device.name || device.id} (${status})`
+                  option.text(displayText)
+                  
+                  $('#node-input-deviceUuid-select').append(option)
+              })
+          }
+          
+          // Set current value
+          if (node.deviceUuid) {
+              const exists = data.devices.find(d => d.id === node.deviceUuid)
+              if (exists) {
+                  $('#node-input-deviceUuid-select').val(node.deviceUuid)
+                  $('#node-input-deviceUuid-text').hide()
+              } else {
+                  $('#node-input-deviceUuid-select').val('__custom__')
+                  $('#node-input-deviceUuid-text').val(node.deviceUuid).show()
+              }
+          }
+      })
+      .catch(err => {
+          console.warn('Failed to load devices:', err)
+          // Fall back to custom input
+          $('#node-input-deviceUuid-select').val('__custom__')
+          $('#node-input-deviceUuid-text').val(node.deviceUuid || '').show()
+      })
+
+      // Handle dropdown change
+      $('#node-input-deviceUuid-select').on('change', function() {
+          const val = $(this).val()
+          if (val === '__custom__') {
+              $('#node-input-deviceUuid-text').show().focus()
+          } else {
+              $('#node-input-deviceUuid-text').hide()
+          }
+      })
+    },
+
+    oneditsave: function () {
+      const selectVal = $('#node-input-deviceUuid-select').val()
+      if (selectVal === '__custom__') {
+          this.deviceUuid = $('#node-input-deviceUuid-text').val()
+          this.deviceName = ''
+      } else {
+          this.deviceUuid = selectVal
+          // Extract device name from dropdown text (remove emoji and status suffix)
+          const selectedText = $('#node-input-deviceUuid-select option:selected').text()
+          // Remove "🟢 online" or "🔴 offline" pattern
+          this.deviceName = selectedText.replace(/\s*\(.*?\)\s*$/g, '').replace(/[🟢🔴]\s*/g, '').trim()
+          console.log('Saving device - UUID:', this.deviceUuid, 'Name:', this.deviceName, 'Original text:', selectedText)
+      }
+      
+      var selectedSubflowId = $("#node-input-subflows").val();
+      console.log('oneditsave: selectedSubflowId from dropdown:', selectedSubflowId);
+      
+      // Check if user wants to create a new subflow
+      if (selectedSubflowId === '__create_new__') {
+          var newSubflow = createNewSubflow();
+          
+          if (!newSubflow) {
+              console.error('Failed to create new subflow');
+              alert('Failed to create new subflow. Please try again.');
+              return false;
+          }
+          
+          selectedSubflowId = newSubflow.id;
+          this.subflowName = newSubflow.name;
+          
+          console.log('oneditsave: created new subflow, setting this.subflowId to:', selectedSubflowId);
+          
+          // Add the new subflow to the dropdown and select it
+          var $subflowSelect = $("#node-input-subflows");
+          $subflowSelect.append(
+              $("<option></option>")
+                  .attr("value", newSubflow.id)
+                  .text(newSubflow.name)
+          );
+          $subflowSelect.val(newSubflow.id);
+          console.log('oneditsave: dropdown value set to:', $subflowSelect.val());
+      } else {
+          this.subflowName = $("#node-input-subflows option:selected").text();
+          console.log('oneditsave: using existing subflow:', selectedSubflowId);
+      }
+      
+      this.subflowId = selectedSubflowId;
+      console.log('oneditsave: final this.subflowId:', this.subflowId, 'this.subflowName:', this.subflowName);
+
+      if (this.subflowId) {
+        var subflow = RED.nodes.subflow(this.subflowId);
+        if (subflow && subflow.type === "subflow") {
+          var newOutputs = subflow.out.length;
+          var oldOutputs = this.outputs || 0;
+          
+          // If outputs are being reduced, clean up wires from removed outputs
+          if (newOutputs < oldOutputs && this.wires && Array.isArray(this.wires)) {
+            console.log(`oneditsave: Outputs reduced from ${oldOutputs} to ${newOutputs}, cleaning up wires`);
+            
+            var node = this;
+            var removedWires = [];
+            
+            // Collect all wires that need to be removed (from outputs that no longer exist)
+            for (var i = newOutputs; i < this.wires.length; i++) {
+              if (this.wires[i] && Array.isArray(this.wires[i])) {
+                this.wires[i].forEach(function(w) {
+                  if (w) {
+                    removedWires.push({
+                      source: node,
+                      sourcePort: i,
+                      target: RED.nodes.node(w.id || w),
+                      targetPort: w.port || 0
+                    });
+                  }
+                });
+              }
+            }
+            
+            // Use RED.nodes.removeLink to properly remove each wire
+            removedWires.forEach(function(link) {
+              if (link.target) {
+                RED.nodes.removeLink(link);
+                console.log(`Removed wire from output ${link.sourcePort} to node ${link.target.id}`);
+              }
+            });
+          }
+          
+          this.outputs = newOutputs;
+        }
+
+        // Update subflow environment variables
+        if (!subflow.env) {
+          subflow.env = [];
+        }
+
+        // Check if 'DeviceId' env variable already exists
+        var existingEnv = subflow.env.find((e) => e.name === "DeviceId");
+
+        if (existingEnv) {
+          existingEnv.value = this.deviceUuid;
+        } else {
+          subflow.env.push({
+            name: "DeviceId",
+            type: "str",
+            value: this.deviceUuid,
+          });
+        }
+
+        // Trigger Node-RED UI to recognize the change
+        RED.nodes.dirty(true); // Mark as changed
+        RED.view.redraw(); // Redraw the editor UI
+      }
+    }
+  });
+
+  // Apply dashed border to remote subflow nodes
+  (function() {
+  function applyDashedBorder() {
+    RED.nodes.eachNode(function(node) {
+      if (node.type === "remote subflow") {
+        var nodeElement = document.getElementById(node.id);
+        if (nodeElement) {
+          var rect = nodeElement.querySelector('rect.red-ui-flow-node');
+          if (rect) {
+            rect.setAttribute('stroke-dasharray', '12, 6');
+            rect.setAttribute('stroke-width', '3');
+            rect.style.strokeDasharray = '12, 6';
+            rect.style.strokeWidth = '3px';
+            rect.style.stroke = '#9370db';
+          }
+        }
+      }
+    });
+  }    // Apply on view redraw
+    if (RED.view && RED.view.redraw) {
+      var originalRedraw = RED.view.redraw;
+      RED.view.redraw = function() {
+        var result = originalRedraw.apply(this, arguments);
+        setTimeout(applyDashedBorder, 50);
+        return result;
+      };
+    }
+    
+    // Apply on initial load
+    if (RED.events) {
+      RED.events.on("editor:open", function() {
+        setTimeout(applyDashedBorder, 200);
+      });
+      RED.events.on("nodes:add", applyDashedBorder);
+    }
+  })();
+
+  // Register action for editing subflow from remote subflow node
+  RED.actions.add("remote-subflow:edit-subflow", function() {
+    var selection = RED.view.selection();
+    if (selection && selection.nodes && selection.nodes.length === 1) {
+      var node = selection.nodes[0];
+      if (node.type === "remote subflow" && node.subflowId) {
+        RED.workspaces.show(node.subflowId);
+      }
+    }
+  });
+
+  // Add to context menu
+  RED.menu.addItem("node-context-menu", {
+    id: "remote-subflow-edit",
+    label: "Edit Subflow",
+    options: [],
+    selected: function() {
+      var selection = RED.view.selection();
+      if (selection && selection.nodes && selection.nodes.length === 1) {
+        var node = selection.nodes[0];
+        return node.type === "remote subflow" && node.subflowId;
+      }
+      return false;
+    },
+    onselect: function() {
+      RED.actions.invoke("remote-subflow:edit-subflow");
+    }
+  });
+
+function getAuthHeaders () {
+    const headers = {
+        Accept: 'application/json',
+        'Content-Type': 'application/json'
+    }
+    
+    try {
+        const authTokens = localStorage.getItem('auth-tokens')
+        if (authTokens) {
+            const tokenObj = JSON.parse(authTokens)
+            const accessToken = tokenObj?.access_token
+            if (accessToken && typeof accessToken === 'string') {
+                headers.Authorization = `Bearer ${accessToken}`
+            }
+        }
+    } catch (err) {
+        console.warn('Failed to get token from localStorage:', err)
+    }
+
+    return headers
+}
+
+function createNewSubflow() {
+    // Generate unique ID for the subflow
+    var subflowId = RED.nodes.id();
+    
+    // Determine the next subflow number
+    var lastIndex = 0;
+    RED.nodes.eachSubflow(function(sf) {
+        var m = (new RegExp("^Subflow (\\d+)$")).exec(sf.name);
+        if (m) {
+            lastIndex = Math.max(lastIndex, parseInt(m[1]));
+        }
+    });
+    
+    var name = "Subflow " + (lastIndex + 1);
+    
+    // Create the subflow object structure
+    var subflowData = {
+        id: subflowId,
+        type: "subflow",
+        name: name,
+        info: "",
+        in: [],
+        out: [],
+        env: []
+    };
+    
+    // Add to Node-RED's registry
+    RED.nodes.addSubflow(subflowData);
+    
+    // Retrieve the subflow from the registry to ensure we have the actual object
+    var newSubflow = RED.nodes.subflow(subflowId);
+    
+    if (!newSubflow) {
+        console.error('Failed to create subflow - not found in registry');
+        return null;
+    }
+    
+    // Add default input port
+    addSubflowInput(subflowId);
+    
+    // Add default output port
+    addSubflowOutput(subflowId);
+    
+    // Mark workspace as dirty first
+    RED.nodes.dirty(true);
+    
+    // Add to history for undo/redo
+    RED.history.push({
+        t: 'createSubflow',
+        subflow: { subflow: newSubflow },
+        dirty: RED.nodes.dirty()
+    });
+    
+    console.log('Created new subflow:', newSubflow.id, newSubflow.name);
+    
+    return newSubflow;
+}
+
+function populateSubflows(selectedSubflowId) {
+    var $subflowSelect = $("#node-input-subflows").empty();
+    $subflowSelect.append(
+      $("<option></option>").attr("value", "").text("Select a subflow...")
+    );
+    $subflowSelect.append(
+      $("<option></option>").attr("value", "__create_new__").text("➕ Create New Subflow...")
+    );
+
+    console.log('populateSubflows called with selectedSubflowId:', selectedSubflowId);
+    var foundSelected = false;
+    
+    RED.nodes.eachSubflow(function (subflow) {
+      console.log('Adding subflow to dropdown:', subflow.id, subflow.name);
+      $subflowSelect.append(
+        $("<option></option>")
+          .attr("value", subflow.id)
+          .text(subflow.name || subflow.id)
+      );
+      if (subflow.id === selectedSubflowId) {
+        foundSelected = true;
+      }
+    });
+
+    if (selectedSubflowId) {
+      $subflowSelect.val(selectedSubflowId);
+      console.log('Set dropdown value to:', selectedSubflowId, 'Found in list:', foundSelected, 'Actual value after setting:', $subflowSelect.val());
+    }
+
+    // Add "Edit Subflow" button if not already added
+    if ($("#node-dialog-edit-subflow").length === 0) {
+      var $editBtn = $(
+        '<button type="button" class="ui-button ui-corner-all ui-widget leftButton" id="node-dialog-edit-subflow">Open subflow</button>'
+      );
+
+      // Insert before "Done" button
+      $("#node-dialog-delete").before($editBtn);
+
+      // Handle click event
+      $editBtn.click(function () {
+        var subflowId = $subflowSelect.val();
+        if (subflowId && subflowId !== '__create_new__' && subflowId !== '') {
+          $("#node-dialog-ok").trigger("click"); // Save changes
+          setTimeout(function () {
+            RED.tray.close(); // Close config window
+            setTimeout(function () {
+              RED.workspaces.show(subflowId); // Open subflow tab
+            }, 300);
+          }, 300);
+        } else {
+          alert("Please select a subflow to edit.");
+        }
+      });
+    }
+  }
+
+function createAndOpenSubflow() {
+    const subflowId = RED.nodes.id(); // Generate a unique ID
+
+    var lastIndex = 0;
+
+    RED.nodes.eachSubflow(function(sf) {
+           var m = (new RegExp("^Subflow (\\d+)$")).exec(sf.name);
+           if (m) {
+               lastIndex = Math.max(lastIndex,m[1]);
+           }
+        });
+
+    var name = "Subflow "+(lastIndex+1);
+
+    // Create a new subflow with the unique name
+    const newSubflow = RED.nodes.addSubflow({
+        id: subflowId, // Generate a unique ID
+        type: "subflow",
+        name: name, // Use the unique name
+        info: "",
+        in: [
+                   
+        ],
+        out: [
+            
+        ],
+        env: []
+    });
+
+    RED.history.push({
+            t:'createSubflow',
+            subflow: {
+                subflow:newSubflow
+            },
+            dirty:RED.nodes.dirty()
+        });
+
+
+    // Close the configuration window
+    RED.tray.close();
+
+    // Use a timeout to ensure the subflow is fully registered
+    setTimeout(() => {
+        const registeredSubflow = RED.nodes.subflow(subflowId);
+        if (registeredSubflow) {
+            console.log("Switching to new subflow:", registeredSubflow);
+            RED.workspaces.show(registeredSubflow.id);
+            //add default input and output
+            addSubflowInput(registeredSubflow.id)
+            addSubflowOutput(registeredSubflow.id)
+        } else {
+            console.error("Failed to retrieve the new subflow.");
+        }
+    }, 100); // Adjust the delay if necessary
+
+
+    RED.nodes.dirty(true);
+
+  
+}
+
+function findAvailableSubflowIOPosition(subflow,isInput) {
+        const scrollPos = RED.view.scroll()
+        const scaleFactor = RED.view.scale()
+        var pos = { x: (scrollPos[0]/scaleFactor)+50, y: (scrollPos[1]/scaleFactor)+30 };
+        if (!isInput) {
+            pos.x += 110;
+        }
+        var ports = [].concat(subflow.out).concat(subflow.in);
+        if (subflow.status) {
+            ports.push(subflow.status);
+        }
+        ports.sort(function(A,B) {
+            return A.x-B.x;
+        });
+        for (var i=0; i<ports.length; i++) {
+            var port = ports[i];
+            if (port.x == pos.x && port.y == pos.y) {
+                pos.x += 55;
+            }
+        }
+        return pos;
+    }
+
+function addSubflowOutput(id) {
+        var subflow = RED.nodes.subflow(id);
+        var position = findAvailableSubflowIOPosition(subflow,false);
+
+        var newOutput = {
+            type:"subflow",
+            direction:"out",
+            z:subflow.id,
+            i:subflow.out.length,
+            x:position.x,
+            y:position.y,
+            id:RED.nodes.id()
+        };
+        var oldOutCount = subflow.out.length;
+        subflow.out.push(newOutput);
+        subflow.dirty = true;
+        var wasDirty = RED.nodes.dirty();
+        var wasChanged = subflow.changed;
+        subflow.changed = true;
+
+        // var result = refresh(true);
+
+        // var historyEvent = {
+        //     t:'edit',
+        //     node:subflow,
+        //     dirty:wasDirty,
+        //     changed:wasChanged,
+        //     subflow: {
+        //         outputCount: oldOutCount,
+        //         instances: result.instances
+        //     }
+        // };
+        // RED.history.push(historyEvent);
+        RED.view.select();
+        RED.nodes.dirty(true);
+        RED.view.redraw();
+        $("#red-ui-subflow-output .spinner-value").text(subflow.out.length);
+        RED.events.emit("subflows:change",subflow);
+    }
+
+function addSubflowInput(subflowId) {
+        var subflow = RED.nodes.subflow(subflowId);
+        if (subflow.in.length === 1) {
+            return;
+        }
+        var position = findAvailableSubflowIOPosition(subflow,true);
+        var newInput = {
+            type:"subflow",
+            direction:"in",
+            z:subflow.id,
+            i:subflow.in.length,
+            x:position.x,
+            y:position.y,
+            id:RED.nodes.id()
+        };
+        var oldInCount = subflow.in.length;
+        subflow.in.push(newInput);
+        subflow.dirty = true;
+        var wasDirty = RED.nodes.dirty();
+        var wasChanged = subflow.changed;
+        subflow.changed = true;
+        //var result = refresh(true);
+        // var historyEvent = {
+        //     t:'edit',
+        //     node:subflow,
+        //     dirty:wasDirty,
+        //     changed:wasChanged,
+        //     subflow: {
+        //         inputCount: oldInCount,
+        //         instances: result.instances
+        //     }
+        // };
+        // RED.history.push(historyEvent);
+        RED.view.select();
+        RED.nodes.dirty(true);
+        RED.view.redraw();
+        $("#red-ui-subflow-input-add").addClass("active");
+        $("#red-ui-subflow-input-remove").removeClass("active");
+        RED.events.emit("subflows:change",subflow);
+    }
+
+function refresh(markChange) {
+        var activeSubflow = RED.nodes.subflow(RED.workspaces.active());
+        refreshToolbar(activeSubflow);
+        var subflowInstances = [];
+        if (activeSubflow) {
+            RED.nodes.filterNodes({type:"remote subflow:"+activeSubflow.id}).forEach(function(n) {
+                const parentFlow = RED.nodes.workspace(n.z)
+                const wasLocked = parentFlow && parentFlow.locked
+                if (wasLocked) {
+                    parentFlow.locked = false
+                }
+                subflowInstances.push({
+                    id: n.id,
+                    changed: n.changed
+                });
+                if (markChange) {
+                    n.changed = true;
+                }
+                n.inputs = activeSubflow.in.length;
+                n.outputs = activeSubflow.out.length;
+                n.resize = true;
+                n.dirty = true;
+                RED.editor.updateNodeProperties(n);
+                if (wasLocked) {
+                    parentFlow.locked = true
+                }
+            });
+            RED.editor.validateNode(activeSubflow);
+            return {
+                instances: subflowInstances
+            }
+        }
+    }
+
+function setupEventListeners() {
+    $("#edit-subflow-btn").on("click", function () {
+      var subflowId = $("#node-input-subflows").val();
+      RED.tray.close();
+      // Switch to the subflow tab
+      setTimeout(function () {
+        RED.workspaces.show(subflowId);
+      }, 300);
+    });
+  }
+
+function updateNodeOutputs() {
+    RED.nodes.eachNode(function (node) {
+      if (node.type === "remote subflow" && node.subflowId) {
+        let subflow = RED.nodes.subflow(node.subflowId);
+        if (subflow) {
+          let newOutputs = subflow.out.length;
+          let oldOutputs = node.outputs || 0;
+
+          if (oldOutputs !== newOutputs && newOutputs < oldOutputs) {
+            // Get the node from the workspace
+            var workspaceNode = RED.nodes.node(node.id);
+            
+            // Use RED.nodes.filterLinks to find all links from this node
+            if (typeof RED.nodes.filterLinks === 'function') {
+              var allLinks = RED.nodes.filterLinks({source: workspaceNode});
+              
+              // Remove links from outputs that no longer exist
+              allLinks.forEach(function(link) {
+                if (link.sourcePort >= newOutputs) {
+                  RED.nodes.removeLink(link);
+                }
+              });
+            }
+            
+            // Update output count
+            node.outputs = newOutputs;
+            workspaceNode.outputs = newOutputs;
+            
+            // Mark as dirty and force redraw
+            node.dirty = true;
+            workspaceNode.dirty = true;
+            RED.nodes.dirty(true);
+            
+            // Force a complete view update
+            if (RED.view && RED.view.redraw) {
+              RED.view.redraw(true);
+            }
+            
+            // Trigger a nodes:change event to ensure UI updates
+            RED.events.emit("nodes:change", workspaceNode);
+          } else if (oldOutputs !== newOutputs) {
+            // Just update output count if increased
+            node.outputs = newOutputs;
+            node.dirty = true;
+            RED.nodes.dirty(true);
+            RED.view.redraw();
+          }
+        }
+      } else if (node.type === "remote subflow" && !node.subflowId) {
+        node.outputs = 0;
+        node.dirty = true;
+        RED.view.redraw();
+      }
+    });
+  }
+
+  // Set up global event listeners for subflow changes
+  (function() {
+    var initialized = false;
+    
+    function initEventListeners() {
+      if (initialized) return;
+      initialized = true;
+      
+      // Hook into the subflow edit tray close event
+      var originalClose = RED.tray.close;
+      RED.tray.close = function() {
+        setTimeout(function() {
+          updateNodeOutputs();
+        }, 100);
+        return originalClose.apply(this, arguments);
+      };
+      
+      // Listen for nodes:change event which fires when any node is modified
+      RED.events.on("nodes:change", function(node) {
+        if (node && node.type === "subflow") {
+          setTimeout(function() {
+            updateNodeOutputs();
+          }, 100);
+        }
+      });
+      
+      // Listen for workspace changes
+      RED.events.on("workspace:change", function(event) {
+        setTimeout(function() {
+          updateNodeOutputs();
+        }, 100);
+      });
+    }
+    
+    // Initialize on editor ready
+    RED.events.on("editor:open", initEventListeners);
+    
+    // Also try to initialize immediately if RED is already loaded
+    if (RED && RED.events) {
+      setTimeout(initEventListeners, 100);
+    }
+  })();
+  
+  // Note: Deploy Remote button removed (v2.0 - 2025-11-21)
+  // Device flow extraction now happens automatically in cloud API
+  // when flows are saved via storage API
+  console.log('[Remote Subflow] Deploy button code removed - v2.0');
+</script>
+
+<script type="text/html" data-template-name="remote subflow">
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name" placeholder="Name" />
+  </div>
+
+  <div class="form-row">
+    <label for="node-input-subflows"><i class="fa fa-cogs"></i> Subflow</label>
+    <div style="display: flex; align-items: center; gap: 5px; width: 100%;">
+      <select id="node-input-subflows" style="flex: 1;"></select>
+    </div>
+  </div>
+
+  <div class="form-row">
+    <label for="node-input-deviceUuid-select"><i class="fa fa-microchip"></i> Device</label>
+    <select id="node-input-deviceUuid-select" style="width: 70%;">
+        <option value="">Loading...</option>
+    </select>
+  </div>
+
+  <div class="form-row" id="node-input-deviceUuid-text-row" style="display: none;">
+    <label for="node-input-deviceUuid-text"><i class="fa fa-key"></i> Device UUID</label>
+    <input type="text" id="node-input-deviceUuid-text" placeholder="Enter device UUID" style="display: none;">
+  </div>
+</script>

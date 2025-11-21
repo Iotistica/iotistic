@@ -1,0 +1,34 @@
+{
+    "name": "@iotistic/nr-storage",
+    "version": "1.3.0",
+    "description": "A HTTP REST Storage Plugin for Node-RED",
+    "main": "index.js",
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1",
+        "lint": "eslint -c .eslintrc *.js",
+        "lint:fix": "eslint -c .eslintrc *.js --fix"
+    },
+    "keywords": [
+        "node-red",
+        "iotistic"
+    ],
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/flowforge/flowforge-nr-storage.git"
+    },
+    "author": {
+        "name": "Iotistic Inc."
+    },
+    "license": "Apache-2.0",
+    "bugs": {
+        "url": "https://github.com/flowforge/flowforge-nr-storage/issues"
+    },
+    "homepage": "https://github.com/flowforge/flowforge-nr-storage#readme",
+    "dependencies": {
+        "got": "^11.8.6"
+    },
+    "devDependencies": {
+        "eslint": "^8.25.0",
+        "eslint-config-standard": "^17.0.0"
+    }
+}

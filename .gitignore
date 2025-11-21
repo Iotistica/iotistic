@@ -3,9 +3,10 @@ node_modules/
 **/node_modules/
 
 # Node-RED specific - ignore ALL runtime data EXCEPT our plugins
-nodered/data/
+nodered/data/*
 # But DO track our custom plugins
 !nodered/data/@iotistic/
+!nodered/data/@iotistic/**
 
 # InfluxDB data - ignore ALL runtime data
 influx/data/

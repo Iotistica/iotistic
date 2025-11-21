@@ -1,0 +1,278 @@
+<script type="text/javascript">
+    RED.nodes.registerType('mqtt-tree-viewer', {
+        category: 'iotistic',
+        color: '#3FADB5',
+        defaults: {
+            name: { value: "" },
+            deviceUuid: { value: "", required: false }
+        },
+        inputs: 1,
+        outputs: 0,
+        icon: "font-awesome/fa-sitemap",
+        label: function() {
+            return this.name || "MQTT Tree Viewer";
+        },
+        oneditprepare: function() {
+            // Initialize sidebar when node is edited
+        }
+    });
+
+    // Register sidebar tab
+    RED.plugins.registerPlugin('mqtt-tree-viewer-ui', {
+        type: 'red-ui-sidebar',
+        show: function() {
+            // Called when sidebar is shown
+        },
+        create: function() {
+            const container = $('<div>', { id: 'mqtt-tree-viewer-panel' }).css({
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden'
+            });
+
+            // Header
+            const header = $('<div>').css({
+                padding: '8px 12px',
+                borderBottom: '1px solid var(--red-ui-secondary-border-color)',
+                fontWeight: 'bold',
+                backgroundColor: 'var(--red-ui-secondary-background)'
+            }).text('MQTT Topic Tree');
+
+            // Topic tree container (top section - 50%)
+            const topSection = $('<div>').css({
+                flex: '1',
+                overflow: 'auto',
+                borderBottom: '1px solid var(--red-ui-secondary-border-color)',
+                padding: '8px'
+            });
+
+            const topicTree = $('<div>', { id: 'mqtt-topic-tree' }).css({
+                fontFamily: 'monospace',
+                fontSize: '12px'
+            });
+            topSection.append(topicTree);
+
+            // Message viewer container (bottom section - 50%)
+            const bottomHeader = $('<div>').css({
+                padding: '8px 12px',
+                borderBottom: '1px solid var(--red-ui-secondary-border-color)',
+                fontWeight: 'bold',
+                backgroundColor: 'var(--red-ui-secondary-background)'
+            }).text('Message Content');
+
+            const bottomSection = $('<div>').css({
+                flex: '1',
+                overflow: 'auto',
+                padding: '8px'
+            });
+
+            const messageContent = $('<pre>', { id: 'mqtt-message-content' }).css({
+                fontFamily: 'monospace',
+                fontSize: '12px',
+                whiteSpace: 'pre-wrap',
+                wordWrap: 'break-word',
+                margin: 0
+            }).text('Select a topic to view messages...');
+            bottomSection.append(messageContent);
+
+            // Assemble container
+            container.append(header);
+            container.append(topSection);
+            container.append(bottomHeader);
+            container.append(bottomSection);
+
+            // Topic tree data structure
+            const topicData = {};
+            let selectedTopic = null;
+
+            // Function to render topic tree
+            function renderTopicTree() {
+                const tree = $('#mqtt-topic-tree');
+                tree.empty();
+
+                function buildTree(obj, prefix = '', indent = 0) {
+                    const sortedKeys = Object.keys(obj).sort();
+                    
+                    sortedKeys.forEach(key => {
+                        if (key === '__messages') return;
+                        
+                        const fullPath = prefix ? `${prefix}/${key}` : key;
+                        const hasChildren = Object.keys(obj[key]).filter(k => k !== '__messages').length > 0;
+                        const messageCount = obj[key].__messages ? obj[key].__messages.length : 0;
+                        
+                        const itemDiv = $('<div>').css({
+                            paddingLeft: `${indent * 16}px`,
+                            padding: '4px 8px',
+                            cursor: 'pointer',
+                            borderRadius: '3px'
+                        }).hover(
+                            function() { $(this).css('backgroundColor', 'var(--red-ui-secondary-background-hover)'); },
+                            function() { $(this).css('backgroundColor', selectedTopic === fullPath ? 'var(--red-ui-primary-background)' : 'transparent'); }
+                        );
+
+                        if (selectedTopic === fullPath) {
+                            itemDiv.css('backgroundColor', 'var(--red-ui-primary-background)');
+                        }
+
+                        const icon = hasChildren ? '📁' : '📄';
+                        const badge = messageCount > 0 ? ` <span style="background: #3FADB5; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 4px;">${messageCount}</span>` : '';
+                        
+                        itemDiv.html(`${icon} ${key}${badge}`);
+                        itemDiv.on('click', function(e) {
+                            e.stopPropagation();
+                            selectedTopic = fullPath;
+                            renderTopicTree();
+                            displayMessages(fullPath, obj[key].__messages || []);
+                        });
+
+                        tree.append(itemDiv);
+
+                        if (hasChildren) {
+                            buildTree(obj[key], fullPath, indent + 1);
+                        }
+                    });
+                }
+
+                buildTree(topicData);
+            }
+
+            // Function to display messages
+            function displayMessages(topic, messages) {
+                const content = $('#mqtt-message-content');
+                
+                if (messages.length === 0) {
+                    content.text(`No messages received on topic: ${topic}`);
+                    return;
+                }
+
+                const latest = messages[messages.length - 1];
+                let output = `Topic: ${topic}\n`;
+                output += `Time: ${new Date(latest.timestamp).toLocaleString()}\n`;
+                output += `Messages: ${messages.length}\n`;
+                output += `\n--- Latest Message ---\n\n`;
+                
+                try {
+                    const parsed = JSON.parse(latest.payload);
+                    output += JSON.stringify(parsed, null, 2);
+                } catch (e) {
+                    output += latest.payload;
+                }
+
+                if (messages.length > 1) {
+                    output += `\n\n--- Previous Messages (${messages.length - 1}) ---\n\n`;
+                    messages.slice(0, -1).reverse().forEach((msg, idx) => {
+                        output += `[${idx + 1}] ${new Date(msg.timestamp).toLocaleTimeString()}\n`;
+                        try {
+                            const parsed = JSON.parse(msg.payload);
+                            output += JSON.stringify(parsed, null, 2);
+                        } catch (e) {
+                            output += msg.payload;
+                        }
+                        output += '\n\n';
+                    });
+                }
+
+                content.text(output);
+            }
+
+            // Function to add message to topic tree
+            function addMessage(topic, payload) {
+                const parts = topic.split('/');
+                let current = topicData;
+
+                parts.forEach(part => {
+                    if (!current[part]) {
+                        current[part] = { __messages: [] };
+                    }
+                    current = current[part];
+                });
+
+                if (!current.__messages) {
+                    current.__messages = [];
+                }
+
+                current.__messages.push({
+                    timestamp: Date.now(),
+                    payload: payload
+                });
+
+                // Keep only last 10 messages per topic
+                if (current.__messages.length > 10) {
+                    current.__messages.shift();
+                }
+
+                renderTopicTree();
+
+                // Auto-update if this topic is selected
+                if (selectedTopic === topic) {
+                    displayMessages(topic, current.__messages);
+                }
+            }
+
+            // Subscribe to MQTT messages from mqtt-tree-viewer nodes
+            RED.comms.subscribe('mqtt-tree-viewer/#', function(topic, msg) {
+                if (msg.topic && msg.payload !== undefined) {
+                    addMessage(msg.topic, msg.payload);
+                }
+            });
+
+            // Initial render
+            renderTopicTree();
+
+            return container;
+        }
+    });
+</script>
+
+<script type="text/html" data-template-name="mqtt-tree-viewer">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="MQTT Tree Viewer">
+    </div>
+    <div class="form-row">
+        <label for="node-input-deviceUuid"><i class="fa fa-microchip"></i> Device UUID</label>
+        <input type="text" id="node-input-deviceUuid" placeholder="Optional: filter by device">
+    </div>
+    <div class="form-tips">
+        <p><strong>Usage:</strong> Connect any MQTT source to this node to visualize the topic tree and messages in the sidebar.</p>
+        <p>Open the sidebar by clicking <strong>View → Show Sidebar → MQTT Tree Viewer</strong></p>
+    </div>
+</script>
+
+<script type="text/html" data-help-name="mqtt-tree-viewer">
+    <p>Visualizes MQTT topics in a hierarchical tree structure with message content viewer.</p>
+    
+    <h3>Details</h3>
+    <p>This node receives MQTT messages from its input and displays them in a custom sidebar panel with:</p>
+    <ul>
+        <li><strong>Topic Tree</strong> - Hierarchical view of all topics (top section)</li>
+        <li><strong>Message Content</strong> - JSON-formatted message details (bottom section)</li>
+    </ul>
+
+    <h3>Inputs</h3>
+    <dl class="message-properties">
+        <dt>payload <span class="property-type">string | buffer | object</span></dt>
+        <dd>The message payload from MQTT</dd>
+        
+        <dt>topic <span class="property-type">string</span></dt>
+        <dd>The MQTT topic path</dd>
+    </dl>
+
+    <h3>Configuration</h3>
+    <dl class="message-properties">
+        <dt>Device UUID <span class="property-type">string</span></dt>
+        <dd>Optional filter to show only topics for a specific device</dd>
+    </dl>
+
+    <h3>Usage</h3>
+    <ol>
+        <li>Add this node to your flow</li>
+        <li>Connect MQTT In or Virtual Device nodes to its input</li>
+        <li>Deploy the flow</li>
+        <li>Open sidebar: <strong>View → Show Sidebar → MQTT Tree Viewer</strong></li>
+        <li>Click topics in the tree to view messages</li>
+    </ol>
+
+    <p><strong>Note:</strong> Keeps last 10 messages per topic. Tree updates in real-time as messages arrive.</p>
+</script>

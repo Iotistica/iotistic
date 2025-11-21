@@ -1,0 +1,41 @@
+{
+    "name": "@iotistic/nr-auth",
+    "version": "1.0.0",
+    "description": "A Node-RED Authentication Plugin for the Iotistic platform",
+    "exports": {
+        ".": "./lib/adminAuth.js",
+        "./middleware": "./lib/httpAuthMiddleware.js"
+    },
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1",
+        "lint": "eslint -c .eslintrc lib/*.js",
+        "lint:fix": "eslint -c .eslintrc lib/*.js --fix"
+    },
+    "keywords": [],
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/flowforge/flowforge-nr-auth.git"
+    },
+    "bugs": {
+        "url": "https://github.com/flowforge/flowforge-nr-auth/issues"
+    },
+    "homepage": "https://github.com/flowforge/flowforge-nr-auth#readme",
+    "author": {
+        "name": "Iotistic Inc."
+    },
+    "license": "Apache-2.0",
+    "dependencies": {
+        "passport": "0.6.0",
+        "passport-strategy": "^1.0.0",
+        "undici": "^5.12.0"
+    },
+    "devDependencies": {
+        "eslint": "^8.25.0",
+        "eslint-config-standard": "^17.0.0"
+    },
+    "node-red": {
+        "plugins": {
+            "auth-plugin": "lib/httpAuthPlugin.js"
+        }
+    }
+}

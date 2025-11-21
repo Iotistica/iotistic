@@ -1,0 +1,223 @@
+<script type="text/javascript">
+    RED.nodes.registerType('virtual-device', {
+        category: 'iotistic',
+        color: '#4DB3FF',
+        defaults: {
+            name: { value: '' },
+            deviceUuid: { value: '', required: true },
+            subscribeMetrics: { value: true },
+            subscribeSensors: { value: true }
+        },
+        inputs: 0,
+        outputs: 2,
+        icon: 'bridge.svg',
+        outputLabels: ['state/metrics', 'sensor data'],
+        label: function () {
+            return this.name || `Virtual Device: ${this.deviceUuid?.substring(0, 8) || 'unconfigured'}`
+        },
+        oneditprepare: function () {
+            const node = this
+
+            // Load available devices from API
+            $('#node-input-deviceUuid-select').empty()
+            $('#node-input-deviceUuid-select').append('<option value="">Select a device...</option>')
+            $('#node-input-deviceUuid-select').append('<option value="__custom__">Custom UUID...</option>')
+
+            // Fetch devices from plugin API
+            fetch('/nr-tools/devices', {
+                method: 'GET',
+                headers: getAuthHeaders()
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.devices && data.devices.length > 0) {
+                    data.devices.forEach(device => {
+                        const option = $('<option></option>')
+                            .attr('value', device.id)
+                            .attr('data-online', device.is_online || false)
+                        
+                        // Format: "DeviceName (online)" or "DeviceName (offline)"
+                        const status = device.is_online ? '🟢 online' : '🔴 offline'
+                        const displayText = `${device.name || device.id} (${status})`
+                        option.text(displayText)
+                        
+                        $('#node-input-deviceUuid-select').append(option)
+                    })
+                }
+                
+                // Set current value
+                if (node.deviceUuid) {
+                    const exists = data.devices.find(d => d.id === node.deviceUuid)
+                    if (exists) {
+                        $('#node-input-deviceUuid-select').val(node.deviceUuid)
+                        $('#node-input-deviceUuid-text').hide()
+                    } else {
+                        $('#node-input-deviceUuid-select').val('__custom__')
+                        $('#node-input-deviceUuid-text').val(node.deviceUuid).show()
+                    }
+                }
+            })
+            .catch(err => {
+                console.warn('Failed to load devices:', err)
+                // Fall back to custom input
+                $('#node-input-deviceUuid-select').val('__custom__')
+                $('#node-input-deviceUuid-text').val(node.deviceUuid || '').show()
+            })
+
+            // Handle dropdown change
+            $('#node-input-deviceUuid-select').on('change', function() {
+                const val = $(this).val()
+                if (val === '__custom__') {
+                    $('#node-input-deviceUuid-text').show().focus()
+                } else {
+                    $('#node-input-deviceUuid-text').hide()
+                }
+            })
+        },
+        oneditsave: function () {
+            const selectVal = $('#node-input-deviceUuid-select').val()
+            if (selectVal === '__custom__') {
+                this.deviceUuid = $('#node-input-deviceUuid-text').val()
+            } else {
+                this.deviceUuid = selectVal
+            }
+        }
+    })
+
+    function getAuthHeaders () {
+        const headers = {
+            Accept: 'application/json',
+            'Content-Type': 'application/json'
+        }
+        
+        try {
+            const authTokens = localStorage.getItem('auth-tokens')
+            if (authTokens) {
+                const tokenObj = JSON.parse(authTokens)
+                const accessToken = tokenObj?.access_token
+                if (accessToken && typeof accessToken === 'string') {
+                    headers.Authorization = `Bearer ${accessToken}`
+                }
+            }
+        } catch (err) {
+            console.warn('Failed to get token from localStorage:', err)
+        }
+
+        return headers
+    }
+</script>
+
+<script type="text/html" data-template-name="virtual-device">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Virtual Device Name">
+    </div>
+
+    <div class="form-row">
+        <label for="node-input-deviceUuid-select"><i class="fa fa-microchip"></i> Device</label>
+        <select id="node-input-deviceUuid-select" style="width: 70%;">
+            <option value="">Loading...</option>
+        </select>
+    </div>
+
+    <div class="form-row" id="node-input-deviceUuid-text-row" style="display: none;">
+        <label for="node-input-deviceUuid-text"><i class="fa fa-key"></i> Device UUID</label>
+        <input type="text" id="node-input-deviceUuid-text" placeholder="Enter device UUID" style="display: none;">
+    </div>
+
+    <div class="form-row">
+        <label>&nbsp;</label>
+        <input type="checkbox" id="node-input-subscribeMetrics" style="display: inline-block; width: auto; vertical-align: top;">
+        <label for="node-input-subscribeMetrics" style="width: auto; margin-left: 5px;">Subscribe to device state</label>
+        <div style="margin-left: 25px; color: #999; font-size: 11px;">
+            Receives CPU, memory, temperature, uptime data
+        </div>
+    </div>
+
+    <div class="form-row">
+        <label>&nbsp;</label>
+        <input type="checkbox" id="node-input-subscribeSensors" style="display: inline-block; width: auto; vertical-align: top;">
+        <label for="node-input-subscribeSensors" style="width: auto; margin-left: 5px;">Subscribe to sensor data</label>
+        <div style="margin-left: 25px; color: #999; font-size: 11px;">
+            Receives temperature, humidity, pressure, gas sensor data
+        </div>
+    </div>
+</script>
+
+<script type="text/html" data-help-name="virtual-device">
+    <p>Simulates a device by subscribing to MQTT topics for metrics and sensor data.</p>
+    
+    <h3>Configuration</h3>
+    <dl class="message-properties">
+        <dt>Device <span class="property-type">string</span></dt>
+        <dd>Select a device from the list or enter a custom UUID</dd>
+        
+        <dt>Subscribe to device state <span class="property-type">boolean</span></dt>
+        <dd>Receives state, CPU, memory, temperature, and uptime data from <code>device/{uuid}/state</code></dd>
+        
+        <dt>Subscribe to sensor data <span class="property-type">boolean</span></dt>
+        <dd>Receives sensor readings from <code>device/{uuid}/sensors/#</code> (temperature, humidity, pressure, gas)</dd>
+    </dl>
+
+    <h3>Outputs</h3>
+    <ol class="node-ports">
+        <li>State/Metrics Output
+            <dl class="message-properties">
+                <dt>payload <span class="property-type">object</span></dt>
+                <dd>Device system metrics (CPU, memory, temperature, uptime)</dd>
+                
+                <dt>topic <span class="property-type">string</span></dt>
+                <dd>The MQTT topic: <code>device/{uuid}/state</code></dd>
+                
+                <dt>deviceUuid <span class="property-type">string</span></dt>
+                <dd>The UUID of the device</dd>
+                
+                <dt>messageType <span class="property-type">string</span></dt>
+                <dd>Always "state"</dd>
+            </dl>
+        </li>
+        <li>Sensor Data Output
+            <dl class="message-properties">
+                <dt>payload <span class="property-type">object</span></dt>
+                <dd>Sensor readings with value, unit, timestamp, and sensorType</dd>
+                
+                <dt>topic <span class="property-type">string</span></dt>
+                <dd>The MQTT topic: <code>device/{uuid}/sensors/{type}</code></dd>
+                
+                <dt>deviceUuid <span class="property-type">string</span></dt>
+                <dd>The UUID of the device</dd>
+                
+                <dt>messageType <span class="property-type">string</span></dt>
+                <dd>Always "sensor"</dd>
+            </dl>
+        </li>
+    </ol>
+
+    <h3>Details</h3>
+    <p>This node connects to the MQTT broker configured in the plugin settings and subscribes to device-specific topics.</p>
+    
+    <p><b>Metrics data example:</b></p>
+    <pre>{
+  "cpu": 45.2,
+  "memory": 62.8,
+  "temperature": 58.3,
+  "uptime": 3600
+}</pre>
+
+    <p><b>Sensor data example:</b></p>
+    <pre>{
+  "value": 23.5,
+  "unit": "°C",
+  "timestamp": "2025-11-19T10:30:00Z",
+  "sensorType": "temperature"
+}</pre>
+
+    <h3>MQTT Topics</h3>
+    <ul>
+        <li><code>device/{uuid}/state</code> - Device system metrics</li>
+        <li><code>device/{uuid}/sensors/temperature</code> - Temperature readings</li>
+        <li><code>device/{uuid}/sensors/humidity</code> - Humidity readings</li>
+        <li><code>device/{uuid}/sensors/pressure</code> - Pressure readings</li>
+        <li><code>device/{uuid}/sensors/gas</code> - Air quality/gas readings</li>
+    </ul>
+</script>

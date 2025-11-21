@@ -124,8 +124,8 @@ services:
             - DB_PASSWORD=${DB_PASSWORD:-postgres}
             - DB_POOL_SIZE=${DB_POOL_SIZE:-20}
             - MQTT_BROKER_URL=${MQTT_BROKER_URL:-mqtt://mosquitto:1883}
-            - MQTT_USERNAME=${MQTT_USERNAME:-admin}
-            - MQTT_PASSWORD=${MQTT_PASSWORD:-iotistic42!}
+            - MQTT_USERNAME=${MQTT_USERNAME:-nodered}
+            - MQTT_PASSWORD=${MQTT_PASSWORD:-secret}
             - MQTT_PERSIST_TO_DB=${MQTT_PERSIST_TO_DB:-true}
             - MQTT_DB_SYNC_INTERVAL=${MQTT_DB_SYNC_INTERVAL:-10000}
             - MQTT_MONITOR_ENABLED=${MQTT_MONITOR_ENABLED:-true}
@@ -179,7 +179,7 @@ services:
             postgres:
                 condition: service_healthy
         healthcheck:
-            test: ["CMD-SHELL", "timeout 5 mosquitto_sub -h localhost -p 1883 -u ${MQTT_USERNAME:-admin} -P ${MQTT_PASSWORD:-iotistic42!} -t '$$SYS/#' -C 1 || exit 1"]
+            test: ["CMD-SHELL", "timeout 5 mosquitto_sub -h localhost -p 1883 -u ${MQTT_USERNAME:-nodered} -P ${MQTT_PASSWORD:-secret} -t '$$SYS/#' -C 1 || exit 1"]
             interval: 30s
             timeout: 10s
             retries: 3
@@ -388,8 +388,8 @@ services:
             - DB_PASSWORD=${DB_PASSWORD:-postgres}
             - DB_POOL_SIZE=10
             - MQTT_BROKER_URL=${MQTT_BROKER_URL:-mqtt://mosquitto:1883}
-            - MQTT_USERNAME=${MQTT_USERNAME:-admin}
-            - MQTT_PASSWORD=${MQTT_PASSWORD:-iotistic42!}
+            - MQTT_USERNAME=${MQTT_USERNAME:-nodered}
+            - MQTT_PASSWORD=${MQTT_PASSWORD:-secret}
             - MQTT_PERSIST_DB=${MQTT_PERSIST_DB:-true}
             - MQTT_DB_SYNC_INTERVAL=${MQTT_DB_SYNC_INTERVAL:-30000}
             - MQTT_METRICS_UPDATE_INTERVAL=${MQTT_METRICS_UPDATE_INTERVAL:-5000}
