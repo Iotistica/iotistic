@@ -54,7 +54,7 @@ on:
 jobs:
   determine-versions:
     name: Determine Versions to Test
-    runs-on: self-hosted
+    runs-on: ubuntu-24.04
     outputs:
       agent_version: ${{ steps.versions.outputs.agent_version }}
       api_version: ${{ steps.versions.outputs.api_version }}
@@ -162,7 +162,7 @@ jobs:
   setup:
     name: Setup Environment
     needs: determine-versions
-    runs-on: self-hosted
+    runs-on: ubuntu-24.04
     
     steps:
       - name: Display test suite information
@@ -208,7 +208,7 @@ jobs:
   test-postgres:
     name: Test PostgreSQL
     needs: [determine-versions, setup]
-    runs-on: self-hosted
+    runs-on: ubuntu-24.04
     
     env:
       AGENT_VERSION: ${{ needs.determine-versions.outputs.agent_version }}
@@ -251,7 +251,7 @@ jobs:
   test-redis:
     name: Test Redis
     needs: [determine-versions, setup]
-    runs-on: self-hosted
+    runs-on: ubuntu-24.04
     
     env:
       AGENT_VERSION: ${{ needs.determine-versions.outputs.agent_version }}
@@ -294,7 +294,7 @@ jobs:
   test-neo4j:
     name: Test Neo4j
     needs: [determine-versions, setup]
-    runs-on: self-hosted
+    runs-on: ubuntu-24.04
     
     env:
       AGENT_VERSION: ${{ needs.determine-versions.outputs.agent_version }}
@@ -337,7 +337,7 @@ jobs:
   test-mosquitto:
     name: Test Mosquitto MQTT
     needs: [determine-versions, setup]
-    runs-on: self-hosted
+    runs-on: ubuntu-24.04
     
     env:
       AGENT_VERSION: ${{ needs.determine-versions.outputs.agent_version }}
@@ -381,7 +381,7 @@ jobs:
   test-api:
     name: Test API Server
     needs: [determine-versions, setup]
-    runs-on: self-hosted
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     
     env:
@@ -491,7 +491,7 @@ jobs:
   test-agents:
     name: Test Agent 
     needs: [determine-versions, test-postgres, test-redis, test-api]
-    runs-on: self-hosted
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     
     env:
@@ -550,7 +550,7 @@ jobs:
   test-sensors:
     name: Test Simulators
     needs: [determine-versions, test-mosquitto, test-api]
-    runs-on: self-hosted
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     
     env:
@@ -618,7 +618,7 @@ jobs:
   test-dashboard:
     name: Test Dashboard
     needs: [determine-versions, test-agents]
-    runs-on: self-hosted
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     
     env:
@@ -681,7 +681,7 @@ jobs:
   test-agent-upgrade:
     name: Test Agent Upgrade Path
     needs: [determine-versions, test-mosquitto, test-api]
-    runs-on: self-hosted
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     
     env:
@@ -967,7 +967,7 @@ jobs:
   report:
     name: Generate Test Report
     needs: [determine-versions, test-postgres, test-redis, test-neo4j, test-mosquitto, test-api, test-sensors, test-dashboard, test-agents, test-agent-upgrade]
-    runs-on: self-hosted
+    runs-on: ubuntu-24.04
     if: always()
     
     env:
