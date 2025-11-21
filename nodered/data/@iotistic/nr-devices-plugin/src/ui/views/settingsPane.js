@@ -66,9 +66,21 @@ function getSettingsPane () {
     // Save URL when changed (only when disconnected)
     pane.find('#flowfuse-nr-tools-settings-iotisticURL').on('change', function() {
         const { connected } = getSettings()
-        if (!connected) {
-            // URL will be saved when connecting via login form
-            RED.notify('Server URL updated. Use sidebar to login.', 'info')
+        const newUrl = $(this).val()
+        
+        if (!connected && newUrl) {
+            // Save URL immediately to plugin settings
+            $.ajax({
+                url: 'nr-tools/settings/iotisticURL',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ iotisticURL: newUrl })
+            }).then(() => {
+                RED.notify('Server URL saved', 'success')
+            }).catch(err => {
+                console.error('Failed to save URL:', err)
+                RED.notify('Failed to save server URL', 'error')
+            })
         }
     })
 

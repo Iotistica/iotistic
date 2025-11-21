@@ -1,35 +1,26 @@
-// Settings object populated from Node-RED's global settings on init()
-// All values come from Node-RED settings.js
-const settings = {}
+// Settings object - user-configurable via plugin UI
+// Falls back to Node-RED's global settings if not configured
+const settings = {
+    iotisticURL: null  // User will configure via settings UI
+}
 
 function init (RED) {
-    // Initialize iotisticURL from Node-RED's global settings
-    if (RED.settings && RED.settings.iotisticURL) {
-        settings.iotisticURL = RED.settings.iotisticURL
-        console.log('[nr-devices-plugin] Initialized iotisticURL from settings:', settings.iotisticURL)
+    // Use user-configured URL if available, otherwise fall back to RED.settings
+    if (!settings.iotisticURL) {
+        if (RED.settings && RED.settings.iotisticURL) {
+            settings.iotisticURL = RED.settings.iotisticURL
+            console.log('[nr-devices-plugin] Using iotisticURL from Node-RED settings:', settings.iotisticURL)
+        } else {
+            // Default for standalone installations
+            settings.iotisticURL = 'https://api.iotistic.ca'
+            console.log('[nr-devices-plugin] Using default iotisticURL:', settings.iotisticURL)
+        }
     } else {
-        console.warn('[nr-devices-plugin] No iotisticURL found in Node-RED settings')
+        console.log('[nr-devices-plugin] Using user-configured iotisticURL:', settings.iotisticURL)
     }
 
-    // Initialize MQTT broker URL from Node-RED's global settings
-    if (RED.settings && RED.settings.mqttBroker) {
-        settings.mqttBroker = RED.settings.mqttBroker
-        console.log('[nr-devices-plugin] Initialized mqttBroker from settings:', settings.mqttBroker)
-    } else {
-        console.warn('[nr-devices-plugin] No mqttBroker found in Node-RED settings, using default: mqtt://mosquitto:1883')
-        settings.mqttBroker = 'mqtt://mosquitto:1883'
-    }
-
-    // Initialize MQTT credentials from Node-RED's global settings
-    if (RED.settings && RED.settings.mqttUsername) {
-        settings.mqttUsername = RED.settings.mqttUsername
-        console.log('[nr-devices-plugin] Initialized mqttUsername from settings:', settings.mqttUsername)
-    }
-    
-    if (RED.settings && RED.settings.mqttPassword) {
-        settings.mqttPassword = RED.settings.mqttPassword
-        console.log('[nr-devices-plugin] Initialized mqttPassword from settings: ****')
-    }
+    // Note: MQTT credentials now come from API /auth/me response (brokerClient)
+    // RED.settings values are no longer used for MQTT
 }
 
 const get = key => settings[key]
@@ -38,6 +29,7 @@ const set = (key, value) => {
         if (value && !/^https?:\/\//i.test(value)) {
             value = `https://${value}`
         }
+        console.log('[nr-devices-plugin] User configured iotisticURL:', value)
     }
     settings[key] = value
 }

@@ -57,7 +57,7 @@ function setupRoutes (RED) {
                     }
                     if (userProfile.brokerClient && !mqttInitialized) {
                         // Setup shared MQTT connection pool
-                        console.log('[nr-devices-plugin] Initializing MQTT connection pool:', userProfile.brokerClient)
+                        console.log('[nr-devices-plugin] Initializing MQTT connection pool')
                         const mqttManager = getMqttManager(RED, userProfile.brokerClient)
                         
                         // Register this plugin instance
@@ -93,6 +93,21 @@ function setupRoutes (RED) {
             }
         }
         response.send(body)
+    })
+
+    RED.httpAdmin.post('/nr-tools/settings/iotisticURL', async (request, response) => {
+        try {
+            const { iotisticURL } = request.body
+            if (iotisticURL) {
+                settings.set('iotisticURL', iotisticURL.replace(/\/$/, ''))
+                response.send({ success: true })
+            } else {
+                response.status(400).send({ error: 'iotisticURL required' })
+            }
+        } catch (err) {
+            console.error('Failed to save iotisticURL:', err)
+            response.status(500).send({ error: err.message })
+        }
     })
 
     // ** All routes after this point must have a valid  Token associated with the session **

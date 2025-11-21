@@ -2,16 +2,19 @@ const fetch = require('undici').fetch
 const { Strategy } = require('./strategy')
 
 module.exports = (options) => {
-    ['iotisticURL', 'baseURL'].forEach(prop => {
-        if (!options[prop]) {
-            throw new Error(`Missing configuration option ${prop}`)
-        }
-    })
+    if (!options.iotisticURL) {
+        throw new Error('Missing configuration option iotisticURL')
+    }
 
     const iotisticURL = options.iotisticURL
-    const baseURL = options.baseURL
+    
+    // Note: baseURL will be constructed at runtime when we have access to settings.uiPort
+    // For now, we'll defer URL construction until the strategy is actually used
+    
+    // Note: baseURL will be constructed at runtime when we have access to settings.uiPort
+    // For now, we'll defer URL construction until the strategy is actually used
 
-    const callbackURL = `${baseURL}/auth/strategy/callback`
+    const callbackURL = `http://localhost:${options.uiPort || 1880}/auth/strategy/callback`
     const loginURL = `${iotisticURL}/api/v1/auth/login`
     const refreshURL = `${iotisticURL}/api/v1/auth/refresh`
     const userInfoURL = `${iotisticURL}/api/v1/auth/me`
