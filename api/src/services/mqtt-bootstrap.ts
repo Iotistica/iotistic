@@ -1,14 +1,22 @@
 /**
  * MQTT Bootstrap Service
  * 
- * Handles initialization of MQTT admin user and ACLs
+ * Handles initialization of MQTT users and ACLs:
+ * 1. Admin user (superuser with full access)
+ * 2. Node-RED instance user (instance-level credentials)
+ * 
  * Replaces the Kubernetes postgres-init-job
+ * Follows FlowFuse pattern of instance-level MQTT credentials
  */
 
 import bcrypt from 'bcrypt';
+import crypto from 'crypto';
 import { query } from '../db/connection';
 import logger from '../utils/logger';
 
+/**
+ * Initialize MQTT admin user (superuser)
+ */
 export async function initializeMqttAdmin() {
   const username = process.env.MQTT_USERNAME || 'admin';
   const password = process.env.MQTT_PASSWORD;
@@ -53,5 +61,62 @@ export async function initializeMqttAdmin() {
   } catch (error) {
     logger.error('Failed to initialize MQTT admin user:', error);
     // Don't throw - not critical for API startup
+  }
+}
+
+/**
+ * Initialize Node-RED instance MQTT credentials
+ * Creates instance-specific credentials (FlowFuse pattern)
+ * Credentials are stored and returned for Node-RED to use
+ */
+export async function initializeNodeRedMqttCredentials(): Promise<{ username: string; password: string } | null> {
+  const instanceId = process.env.NODERED_INSTANCE_ID || 'default';
+  const username = `nodered_${instanceId}`;
+
+  try {
+    logger.info(`Initializing Node-RED MQTT credentials for instance: ${instanceId}...`);
+
+    // Check if user already exists
+    const existingUser = await query(`
+      SELECT username FROM mqtt_users WHERE username = $1
+    `, [username]);
+
+    let password: string;
+
+    if (existingUser.rows.length > 0) {
+      logger.info(`Node-RED MQTT user '${username}' already exists, skipping creation`);
+      // Cannot retrieve existing password (bcrypt is one-way)
+      // This is expected - credentials should be set once and persisted in environment
+      return null;
+    }
+
+    // Generate secure random password (32 chars, URL-safe)
+    password = crypto.randomBytes(24).toString('base64url');
+    
+    // Hash password with bcrypt
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    // Create Node-RED MQTT user (superuser for full access)
+    await query(`
+      INSERT INTO mqtt_users (username, password_hash, is_superuser, is_active)
+      VALUES ($1, $2, TRUE, TRUE)
+    `, [username, passwordHash]);
+
+    // Grant full access ACL (redundant for superuser, but explicit is good)
+    await query(`
+      INSERT INTO mqtt_acls (username, topic, access, priority)
+      VALUES ($1, '#', 3, 100)
+    `, [username]);
+
+    logger.info(`Node-RED MQTT user '${username}' created with generated credentials`);
+    logger.warn(`IMPORTANT: Set these environment variables for Node-RED:`);
+    logger.warn(`  MQTT_USERNAME=${username}`);
+    logger.warn(`  MQTT_PASSWORD=${password}`);
+
+    return { username, password };
+
+  } catch (error) {
+    logger.error('Failed to initialize Node-RED MQTT credentials:', error);
+    return null;
   }
 }

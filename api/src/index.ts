@@ -30,6 +30,7 @@ import { router as trafficRoutes } from './routes/traffic';
 import { router as deviceTagsRoutes } from './routes/device-tags';
 import dashboardLayoutsRoutes from './routes/dashboard-layouts';
 import mosquittoAuthRoutes from './routes/mosquitto-auth';
+import { router as noderedStorageRoutes } from './routes/nodered-storage';
 import { trafficLogger} from "./middleware/traffic-logger";
 import { startTrafficFlushService, stopTrafficFlushService } from './services/traffic-flush.service';
 import alertsRoutes from './routes/alerts';
@@ -192,6 +193,7 @@ app.use(API_BASE, trafficRoutes);
 app.use(API_BASE, deviceTagsRoutes);
 app.use(`${API_BASE}/dashboard-layouts`, dashboardLayoutsRoutes);
 app.use(`${API_BASE}/alerts`, alertsRoutes);
+app.use(API_BASE, noderedStorageRoutes);
 
 
 // 404 handler
@@ -245,9 +247,16 @@ async function startServer() {
     await db.initializeSchema();
     logger.info('PostgreSQL database initialized successfully');
     
-    // Initialize MQTT admin user (replaces K8s postgres-init-job)
-    const { initializeMqttAdmin } = await import('./services/mqtt-bootstrap');
+    // Initialize MQTT users (replaces K8s postgres-init-job)
+    const { initializeMqttAdmin, initializeNodeRedMqttCredentials } = await import('./services/mqtt-bootstrap');
     await initializeMqttAdmin();
+    
+    // Initialize Node-RED instance MQTT credentials (FlowFuse pattern)
+    const nodeRedCreds = await initializeNodeRedMqttCredentials();
+    if (nodeRedCreds) {
+      // New credentials generated - these should be persisted in environment
+      logger.info('Node-RED MQTT credentials generated (first-time setup)');
+    }
   } catch (error) {
     logger.error('Database initialization error:', error);
     if (error instanceof Error) {

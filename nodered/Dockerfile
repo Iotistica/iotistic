@@ -9,8 +9,8 @@ COPY data/@iotistic/nr-devices-plugin/dist /data/@iotistic/nr-devices-plugin/dis
 COPY data/@iotistic/nr-auth/package*.json /data/@iotistic/nr-auth/
 COPY data/@iotistic/nr-auth/lib /data/@iotistic/nr-auth/lib
 
-COPY data/@iotistic/nr-remote-subflow/package*.json /data/@iotistic/nr-remote-subflow/
-COPY data/@iotistic/nr-remote-subflow/src /data/@iotistic/nr-remote-subflow/src
+COPY data/@iotistic/nr-storage/package*.json /data/@iotistic/nr-storage/
+COPY data/@iotistic/nr-storage/*.js /data/@iotistic/nr-storage/
 
 # Copy Node-RED config files
 COPY data/package.json /data/
@@ -35,11 +35,11 @@ RUN npm install --no-fund --no-update-notifier --production
 WORKDIR /data/@iotistic/nr-devices-plugin
 RUN npm install --no-fund --no-update-notifier --production
 
-WORKDIR /data/@iotistic/nr-remote-subflow
+WORKDIR /data/@iotistic/nr-storage
 RUN npm install --no-fund --no-update-notifier --production
 
 # Install plugins into Node-RED
 WORKDIR /usr/src/node-red
 RUN npm install --no-fund --no-update-notifier /data/@iotistic/nr-devices-plugin
 RUN npm install --no-fund --no-update-notifier /data/@iotistic/nr-auth
-RUN npm install --no-fund --no-update-notifier /data/@iotistic/nr-remote-subflow
+RUN npm install --no-fund --no-update-notifier /data/@iotistic/nr-storage

@@ -1,0 +1,263 @@
+/**
+ * Node-RED Storage Routes
+ * HTTP endpoints for Node-RED storage plugin to access flows, credentials, settings, sessions, and library
+ * Single instance storage (no device isolation)
+ * Protected by API key authentication
+ */
+
+import express from 'express';
+import { NodeRedStorageService } from '../services/nodered-storage.service';
+import { validateApiKey } from '../middleware/api-key-auth';
+import logger from '../utils/logger';
+
+export const router = express.Router();
+
+// Apply API key authentication to all storage routes
+router.use('/nr/storage', validateApiKey);
+
+/**
+ * GET /api/v1/nr/storage/flows
+ * Get Node-RED flows
+ */
+router.get('/nr/storage/flows', async (req, res) => {
+  try {
+    const data = await NodeRedStorageService.getFlows();
+    res.json(data);
+  } catch (error: any) {
+    logger.error('Error getting flows:', error);
+    res.status(500).json({
+      error: 'Failed to get flows',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/v1/nr/storage/flows
+ * Save Node-RED flows
+ */
+router.post('/nr/storage/flows', async (req, res) => {
+  try {
+    const flows = req.body;
+    
+    if (!Array.isArray(flows)) {
+      return res.status(400).json({
+        error: 'Invalid flows format',
+        message: 'Flows must be an array'
+      });
+    }
+    
+    await NodeRedStorageService.saveFlows(flows);
+    res.json({ success: true });
+  } catch (error: any) {
+    logger.error('Error saving flows:', error);
+    res.status(500).json({
+      error: 'Failed to save flows',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/v1/nr/storage/credentials
+ * Get Node-RED credentials
+ */
+router.get('/nr/storage/credentials', async (req, res) => {
+  try {
+    const data = await NodeRedStorageService.getCredentials();
+    res.json(data);
+  } catch (error: any) {
+    logger.error('Error getting credentials:', error);
+    res.status(500).json({
+      error: 'Failed to get credentials',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/v1/nr/storage/credentials
+ * Save Node-RED credentials
+ */
+router.post('/nr/storage/credentials', async (req, res) => {
+  try {
+    const credentials = req.body;
+    
+    if (typeof credentials !== 'object') {
+      return res.status(400).json({
+        error: 'Invalid credentials format',
+        message: 'Credentials must be an object'
+      });
+    }
+    
+    await NodeRedStorageService.saveCredentials(credentials);
+    res.json({ success: true });
+  } catch (error: any) {
+    logger.error('Error saving credentials:', error);
+    res.status(500).json({
+      error: 'Failed to save credentials',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/v1/nr/storage/settings
+ * Get Node-RED settings
+ */
+router.get('/nr/storage/settings', async (req, res) => {
+  try {
+    const data = await NodeRedStorageService.getSettings();
+    res.json(data);
+  } catch (error: any) {
+    logger.error('Error getting settings:', error);
+    res.status(500).json({
+      error: 'Failed to get settings',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/v1/nr/storage/settings
+ * Save Node-RED settings
+ */
+router.post('/nr/storage/settings', async (req, res) => {
+  try {
+    const settings = req.body;
+    
+    if (typeof settings !== 'object') {
+      return res.status(400).json({
+        error: 'Invalid settings format',
+        message: 'Settings must be an object'
+      });
+    }
+    
+    await NodeRedStorageService.saveSettings(settings);
+    res.json({ success: true });
+  } catch (error: any) {
+    logger.error('Error saving settings:', error);
+    res.status(500).json({
+      error: 'Failed to save settings',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/v1/nr/storage/sessions
+ * Get Node-RED sessions
+ */
+router.get('/nr/storage/sessions', async (req, res) => {
+  try {
+    const data = await NodeRedStorageService.getSessions();
+    res.json(data);
+  } catch (error: any) {
+    logger.error('Error getting sessions:', error);
+    res.status(500).json({
+      error: 'Failed to get sessions',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/v1/nr/storage/sessions
+ * Save Node-RED sessions
+ */
+router.post('/nr/storage/sessions', async (req, res) => {
+  try {
+    const sessions = req.body;
+    
+    if (typeof sessions !== 'object') {
+      return res.status(400).json({
+        error: 'Invalid sessions format',
+        message: 'Sessions must be an object'
+      });
+    }
+    
+    await NodeRedStorageService.saveSessions(sessions);
+    res.json({ success: true });
+  } catch (error: any) {
+    logger.error('Error saving sessions:', error);
+    res.status(500).json({
+      error: 'Failed to save sessions',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/v1/nr/storage/library/:type?name=xxx
+ * Get Node-RED library entry
+ */
+router.get('/nr/storage/library/:type', async (req, res) => {
+  try {
+    const { type } = req.params;
+    const { name } = req.query;
+    
+    if (!name || typeof name !== 'string') {
+      return res.status(400).json({
+        error: 'Missing name parameter',
+        message: 'Library entry name is required'
+      });
+    }
+    
+    const entry = await NodeRedStorageService.getLibraryEntry(type, name);
+    
+    if (!entry) {
+      return res.status(404).json({
+        error: 'Library entry not found',
+        message: `Library entry ${type}/${name} not found`
+      });
+    }
+    
+    // Return appropriate content type
+    if (typeof entry.body === 'string') {
+      res.setHeader('Content-Type', 'text/plain');
+      res.send(entry.body);
+    } else {
+      res.json(entry.body);
+    }
+  } catch (error: any) {
+    logger.error('Error getting library entry:', error);
+    res.status(500).json({
+      error: 'Failed to get library entry',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/v1/nr/storage/library/:type
+ * Save Node-RED library entry
+ */
+router.post('/nr/storage/library/:type', async (req, res) => {
+  try {
+    const { type } = req.params;
+    const { name, meta, body } = req.body;
+    
+    if (!name) {
+      return res.status(400).json({
+        error: 'Missing name',
+        message: 'Library entry name is required'
+      });
+    }
+    
+    if (!body) {
+      return res.status(400).json({
+        error: 'Missing body',
+        message: 'Library entry body is required'
+      });
+    }
+    
+    await NodeRedStorageService.saveLibraryEntry(type, name, meta || {}, body);
+    res.json({ success: true });
+  } catch (error: any) {
+    logger.error('Error saving library entry:', error);
+    res.status(500).json({
+      error: 'Failed to save library entry',
+      message: error.message
+    });
+  }
+});
