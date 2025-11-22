@@ -364,7 +364,7 @@ jobs:
           echo "Checking for device configuration in logs..."
           
           # Look for Device Configuration Summary in logs
-          if sudo pm2 logs iotistic-agent --nostream --lines 500 | grep -q "Device Configuration Summary"; then
+          if sudo pm2 logs iotistic-agent --nostream --lines 500 | grep -q "Device Agent initialized successfully"; then
             echo "✓ Agent started successfully - Device configuration found"
             
             # Extract and parse the device configuration JSON
