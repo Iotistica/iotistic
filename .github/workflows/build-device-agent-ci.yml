@@ -751,5 +751,4 @@ jobs:
        - name: Cleanup Docker
          if: always()
          run: |
-            rm -rf "${{ github.workspace }}"
             docker system prune -af
