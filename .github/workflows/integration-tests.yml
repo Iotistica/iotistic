@@ -640,18 +640,43 @@ jobs:
       - name: Wait for Dashboard to be ready
         run: |
           echo "Waiting for Dashboard to be ready..."
-          timeout 120 bash -c '
-            until curl -f http://localhost:3000 2>/dev/null; do
-              echo "Dashboard not ready yet..."
-              sleep 3
-            done
-          '
-          echo "Dashboard is ready!"
+          
+          # Check if container is running
+          if ! docker ps | grep -q iotistic-dashboard-e2e; then
+            echo "Dashboard container is not running!"
+            docker compose -f $COMPOSE_FILE logs dashboard --tail=50
+            exit 1
+          fi
+          
+          # Wait for dashboard to respond (dashboard is nginx/static, should be quick)
+          sleep 10
+          
+          # Try to connect
+          for i in {1..10}; do
+            if curl -s http://localhost:3000 > /dev/null; then
+              echo "✓ Dashboard is ready!"
+              break
+            fi
+            if [ $i -eq 10 ]; then
+              echo "✗ Dashboard did not become ready"
+              docker compose -f $COMPOSE_FILE logs dashboard --tail=100
+              exit 1
+            fi
+            echo "Waiting... (attempt $i/10)"
+            sleep 3
+          done
 
       - name: Test Dashboard endpoints
         run: |
           echo "Testing Dashboard home page..."
-          curl -f http://localhost:3000
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000)
+          if [ "$RESPONSE" = "200" ]; then
+            echo "✓ Dashboard returned 200 OK"
+          else
+            echo "✗ Dashboard returned $RESPONSE"
+            docker compose -f $COMPOSE_FILE logs dashboard --tail=50
+            exit 1
+          fi
           
 
       - name: Check Dashboard logs
