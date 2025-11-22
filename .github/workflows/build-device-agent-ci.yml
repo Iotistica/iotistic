@@ -747,7 +747,6 @@ jobs:
       name: Clean up
       runs-on: [self-hosted, iotistic-lab-sc]
       needs: [trigger-integration-tests, report]
-      if: runner.labels && contains('self-hosted')
       steps:
        - name: Cleanup Docker
          if: always()
