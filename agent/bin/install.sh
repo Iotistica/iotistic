@@ -368,10 +368,10 @@ elif [ "$INSTALL_METHOD" = "systemd" ]; then
 
     if [ -n "$CI" ] || [ ! -t 0 ]; then
         echo "Running in non-interactive mode"
-        PROVISIONING_KEY="${IOTISTIC_PROVISIONING_KEY:-}"
+        PROVISIONING_KEY="${PROVISIONING_KEY:-}"
         DEVICE_API_PORT="${IOTISTIC_DEVICE_PORT:-48484}"
         AGENT_VERSION="${IOTISTIC_AGENT_VERSION:-dev}"
-        CLOUD_API_ENDPOINT="${IOTISTIC_CLOUD_API_ENDPOINT:-}"
+        CLOUD_API_ENDPOINT="${CLOUD_API_ENDPOINT:-}"
         
         echo "Using current repository code (CI mode)"
     else

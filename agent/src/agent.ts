@@ -334,44 +334,19 @@ export default class DeviceAgent {
           "Auto-provisioning failed",
           error instanceof Error ? error : new Error(error.message),
           {
-            component: LogComponents.agent,
+            componet: LogComponents.agent,
             note: "Device will remain unprovisioned. Set PROVISIONING_KEY to retry.",
           }
         );
 
-        // Optional: Fail-fast if REQUIRE_PROVISIONING is set
-        if (process.env.REQUIRE_PROVISIONING === "true") {
-          this.agentLogger.errorSync(
-            "REQUIRE_PROVISIONING enabled - exiting due to provisioning failure",
-            undefined,
-            {
-              component: LogComponents.agent,
-            }
-          );
-          process.exit(1);
-        }
       }
-    } else if (
-      !deviceInfo.provisioned &&
-      this.CLOUD_API_ENDPOINT &&
-      !provisioningApiKey
+    } else if (!deviceInfo.provisioned && this.CLOUD_API_ENDPOINT && !provisioningApiKey
     ) {
       this.agentLogger.warnSync("Device not provisioned", {
         component: LogComponents.agent,
         note: "Set PROVISIONING_KEY environment variable to enable auto-provisioning",
       });
 
-      // Optional: Fail-fast if REQUIRE_PROVISIONING is set
-      if (process.env.REQUIRE_PROVISIONING === "true") {
-        this.agentLogger.errorSync(
-          "REQUIRE_PROVISIONING enabled - exiting due to missing provisioning",
-          undefined,
-          {
-            component: LogComponents.agent,
-          }
-        );
-        process.exit(1);
-      }
     } else if (!deviceInfo.provisioned && !this.CLOUD_API_ENDPOINT) {
       // Local mode - device never provisioned and no cloud endpoint
       this.agentLogger.infoSync("Running in local mode (no cloud connection)", {
