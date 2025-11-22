@@ -11,7 +11,7 @@ on:
 jobs:
   test:
     name: Run Tests
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, iotistic-lab-sc]
     defaults:
       run:
         working-directory: ./dashboard
@@ -85,7 +85,7 @@ jobs:
   version:
     name: Bump Version
     needs: test
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, iotistic-lab-sc]
     outputs:
       new_version: ${{ steps.version_bump.outputs.new_version }}
     
@@ -133,7 +133,7 @@ jobs:
   buildx:
     name: Build & Push Dashboard Image
     needs: version
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, iotistic-lab-sc]
     strategy:
       matrix:
         include:
@@ -209,7 +209,7 @@ jobs:
   report:
     name: Generate Build Report
     needs: buildx
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, iotistic-lab-sc]
     if: always()
     
     steps:
@@ -240,7 +240,7 @@ jobs:
   trigger-integration-tests:
     name: Trigger Integration Tests
     needs: [version, buildx]
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, iotistic-lab-sc]
     permissions:
       actions: write
       contents: read
