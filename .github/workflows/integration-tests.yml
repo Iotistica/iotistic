@@ -393,12 +393,12 @@ jobs:
           IOTISTIC_INSTALL_METHOD: systemd
           IOTISTIC_AGENT_VERSION: ${{ needs.determine-versions.outputs.agent_version }}
           IOTISTIC_DEVICE_PORT: 48484
-          IOTISTIC_CLOUD_API_ENDPOINT: http://localhost:4002
-          IOTISTIC_PROVISIONING_KEY: ${{ steps.provision.outputs.provisioning_key }}
+          CLOUD_API_ENDPOINT: http://localhost:4002
+          PROVISIONING_KEY: ${{ steps.provision.outputs.provisioning_key }}
         run: |
           echo "Installing agent with systemd method..."
-          echo "Provisioning key (first 20 chars): ${IOTISTIC_PROVISIONING_KEY:0:20}..."
-          echo "Cloud API endpoint: $IOTISTIC_CLOUD_API_ENDPOINT"
+          echo "Provisioning key (first 20 chars): ${PROVISIONING_KEY:0:20}..."
+          echo "Cloud API endpoint: $CLOUD_API_ENDPOINT"
           sudo -E bash agent/bin/install.sh
           
           echo "✓ Agent installed"

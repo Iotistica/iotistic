@@ -172,17 +172,17 @@ if [ "$INSTALL_METHOD" = "docker" ]; then
     # Check if running in non-interactive mode
     if [ -n "$CI" ]; then
         echo "Running in CI mode (non-interactive)"
-        PROVISIONING_KEY="${IOTISTIC_PROVISIONING_KEY:-}"
+        PROVISIONING_KEY="${PROVISIONING_KEY:-}"
         DEVICE_API_PORT="${IOTISTIC_DEVICE_PORT:-48484}"
         AGENT_VERSION="${IOTISTIC_AGENT_VERSION:-latest}"
-        CLOUD_API_ENDPOINT="${IOTISTIC_CLOUD_API_ENDPOINT:-}"
+        CLOUD_API_ENDPOINT="${CLOUD_API_ENDPOINT:-}"
     elif [ ! -t 0 ] && [ -z "$FORCE_INTERACTIVE" ]; then
         echo "Running in non-interactive mode (stdin is not a terminal)"
         echo "Using default/environment variable configuration"
-        PROVISIONING_KEY="${IOTISTIC_PROVISIONING_KEY:-}"
+        PROVISIONING_KEY="${PROVISIONING_KEY:-}"
         DEVICE_API_PORT="${IOTISTIC_DEVICE_PORT:-48484}"
         AGENT_VERSION="${IOTISTIC_AGENT_VERSION:-latest}"
-        CLOUD_API_ENDPOINT="${IOTISTIC_CLOUD_API_ENDPOINT:-}"
+        CLOUD_API_ENDPOINT="${CLOUD_API_ENDPOINT:-}"
     else
         # Interactive mode - prompt user
         read -p "Enter cloud API endpoint (leave empty for local mode): " CLOUD_API_ENDPOINT
