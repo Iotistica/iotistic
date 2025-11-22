@@ -6,9 +6,9 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install production dependencies only
-RUN npm ci --omit=dev --legacy-peer-deps && \
-    npm cache clean --force
+# Install production dependencies only - using cache mount
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --omit=dev --legacy-peer-deps
 
 # ---- Build stage ----
 FROM node:20-alpine AS builder
@@ -21,9 +21,9 @@ RUN apk add --no-cache make g++ sqlite-dev
 # Copy package files
 COPY package*.json tsconfig.json tsconfig.build.json ./
 
-# Install all deps (including dev)
-RUN npm ci --legacy-peer-deps && \
-    npm cache clean --force
+# Install all deps (including dev) - using cache mount for faster builds
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --legacy-peer-deps
 
 # Copy source code
 COPY src ./src

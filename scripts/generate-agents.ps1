@@ -62,6 +62,17 @@ param(
     [string]$AnomalyDetectionEnabled = "true",
     [string]$FirewallEnabled = "false",
     
+    # Protocol Adapter Configuration
+    [string]$EnableProtocolAdapters = "true",
+    [string]$EnableSensorPublish = "true",
+    [string]$EnableFirstBootDiscovery = "true",
+    [string]$ModbusTcpHost = "iotistic-modbus-sim",
+    [int]$ModbusTcpPort = 502,
+    [int]$ModbusSlaveRangeStart = 1,
+    [int]$ModbusSlaveRangeEnd = 10,
+    [int]$ModbusTimeout = 2000,
+    [string]$OpcuaDiscoveryUrls = "",
+    
     # Simulation Control
     [switch]$EnableSimulation,
     
@@ -303,20 +314,20 @@ for ($i = $StartIndex; $i -lt ($StartIndex + $Count); $i++) {
       - LOG_MAX_AGE=$LogMaxAge
       - MAX_LOG_FILE_SIZE=$MaxLogFileSize
       - MAX_LOGS=$MaxLogs
-      - SIMULATE_MEMORY_LEAK=$SimulateMemoryLeak
       - ANOMALY_DETECTION_ENABLED=$AnomalyDetectionEnabled
       - SIMULATION_MODE=$($simConfig.enabled)
       - SIMULATION_CONFIG=$($simConfig.config)
+      - SIMULATE_MEMORY_LEAK=$SimulateMemoryLeak
       - FIREWALL_ENABLED=$FirewallEnabled
-      - ENABLE_PROTOCOL_ADAPTERS=true
-      - ENABLE_SENSOR_PUBLISH=true
-      - ENABLE_FIRST_BOOT_DISCOVERY=true
-      - MODBUS_TCP_HOST=iotistic-modbus-sim
-      - MODBUS_TCP_PORT=502
-      - MODBUS_SLAVE_RANGE_START=1
-      - MODBUS_SLAVE_RANGE_END=10
-      - MODBUS_TIMEOUT=2000
-      - OPCUA_DISCOVERY_URLS=
+      - ENABLE_PROTOCOL_ADAPTERS=$EnableProtocolAdapters
+      - ENABLE_SENSOR_PUBLISH=$EnableSensorPublish
+      - ENABLE_FIRST_BOOT_DISCOVERY=$EnableFirstBootDiscovery
+      - MODBUS_TCP_HOST=$ModbusTcpHost
+      - MODBUS_TCP_PORT=$ModbusTcpPort
+      - MODBUS_SLAVE_RANGE_START=$ModbusSlaveRangeStart
+      - MODBUS_SLAVE_RANGE_END=$ModbusSlaveRangeEnd
+      - MODBUS_TIMEOUT=$ModbusTimeout
+      - OPCUA_DISCOVERY_URLS=$OpcuaDiscoveryUrls
     networks:
       - iotistic-net
 "@
