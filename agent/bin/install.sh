@@ -421,13 +421,13 @@ elif [ "$INSTALL_METHOD" = "systemd" ]; then
     echo "✓ Agent built successfully"
 
     # Install update script
-    if [ -f /opt/iotistic/agent/bin/update-agent-systemd.sh ]; then
-        echo ""
-        echo "Installing update script..."
-        cp /opt/iotistic/agent/bin/update-agent-systemd.sh /usr/local/bin/update-agent-systemd.sh
-        chmod +x /usr/local/bin/update-agent-systemd.sh
-        echo "✓ Update script installed"
-    fi
+    # if [ -f /opt/iotistic/agent/bin/update-agent-systemd.sh ]; then
+    #     echo ""
+    #     echo "Installing update script..."
+    #     cp /opt/iotistic/agent/bin/update-agent-systemd.sh /usr/local/bin/update-agent-systemd.sh
+    #     chmod +x /usr/local/bin/update-agent-systemd.sh
+    #     echo "✓ Update script installed"
+    # fi
 
     # Create environment file
     echo ""
