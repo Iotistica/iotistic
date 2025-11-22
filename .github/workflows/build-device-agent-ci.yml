@@ -1,8 +1,5 @@
 name: CI Build, Test & Push Device Agent
 
-env:
-  RUNNER: GHRUN01  # Change this to use different runner (e.g., ubuntu-24.04 for GitHub-hosted)
-
 on: 
   push:
     branches:
@@ -14,7 +11,7 @@ on:
 jobs:
   test:
     name: Run Unit Tests
-    runs-on: ${{ env.RUNNER }}
+    runs-on: GHRUN01 
     if: false  # Temporarily disabled while fixing UUID ESM/CommonJS compatibility
     
     steps:
@@ -43,7 +40,7 @@ jobs:
   version:
     name: Bump Version
     # needs: [test]  # Temporarily removed dependency while tests disabled
-    runs-on: ${{ env.RUNNER }}
+    runs-on: GHRUN01 
     permissions:
       contents: write
     outputs:
@@ -92,7 +89,7 @@ jobs:
   buildx:
     name: Build & Push to Docker
     needs: version
-    runs-on: ${{ env.RUNNER }}
+    runs-on: GHRUN01 
     permissions:
       contents: write
 
@@ -147,7 +144,7 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
 
-      # Build and push to registry2
+      # Build and push to registry1
       - name: Build & Push final image
         id: docker_build
         if: success()
@@ -179,7 +176,7 @@ jobs:
   test-agent-docker:
     name: Test Docker Installation (via install.sh)
     needs: [version, buildx]
-    runs-on: ${{ env.RUNNER }}
+    runs-on: GHRUN01 
     
     steps:
       - name: Checkout repository
@@ -203,7 +200,7 @@ jobs:
           IOTISTIC_CLOUD_API_ENDPOINT: ''
           IOTISTIC_PROVISIONING_KEY: ''
         run: |
-          echo "tTesting yunified installation script with Docker method..."
+          echo "Testing unified installation script with Docker method..."
           sudo -E bash agent/bin/install.sh
 
       - name: Check agent container is running
@@ -221,7 +218,7 @@ jobs:
         run: |
           echo "Testing agent API endpoints..."
           
-          # Try health endpoint (using wget since it's in alpine).
+          # Try health endpoint (using wget since it's in alpine)
           if docker exec iotistic-agent wget -q -O- http://localhost:48484/health 2>/dev/null || \
              docker exec iotistic-agent wget -q -O- http://localhost:48484/v2/device 2>/dev/null; then
             echo "✓ Agent API is responding"
@@ -283,7 +280,7 @@ jobs:
   test-agent-systemd:
     name: Test Systemd Installation (via install.sh)
     needs: version
-    runs-on: ${{ env.RUNNER }}
+    runs-on: GHRUN01 
     
     steps:
       - name: Checkout repository
@@ -461,7 +458,7 @@ jobs:
   upload-install-scripts:
     name: Upload Installation Scripts
     needs: [version, buildx, test-agent-docker, test-agent-systemd]
-    runs-on: ${{ env.RUNNER }}
+    runs-on: GHRUN01 
     if: success()
     
     steps:
@@ -634,7 +631,7 @@ jobs:
   report:
     name: Generate Reports
     needs: [version, buildx, test-agent-docker, test-agent-systemd, upload-install-scripts]
-    runs-on: ${{ env.RUNNER }}
+    runs-on: GHRUN01 
     if: success() && needs.version.outputs.package_version != ''
     
     steps:
@@ -722,7 +719,7 @@ jobs:
   trigger-integration-tests:
     name: Trigger Integration Tests
     needs: [version, buildx, test-agent-docker, test-agent-systemd, upload-install-scripts]
-    runs-on: ${{ env.RUNNER }}
+    runs-on: GHRUN01 
     permissions:
       actions: write
       contents: read
