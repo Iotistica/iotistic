@@ -743,12 +743,12 @@ jobs:
             
             console.log('Integration tests triggered with agent version: ${{ needs.version.outputs.package_version }}');
 
-  cleanup:
-      name: Clean up
-      runs-on: [self-hosted, iotistic-lab-sc]
-      needs: [trigger-integration-tests, report]
-      steps:
-       - name: Cleanup Docker
-         if: always()
-         run: |
-            docker system prune -af
+  # cleanup:
+  #     name: Clean up
+  #     runs-on: [self-hosted, iotistic-lab-sc]
+  #     needs: [trigger-integration-tests, report]
+  #     steps:
+  #      - name: Cleanup Docker
+  #        if: always()
+  #        run: |
+  #           docker system prune -af
