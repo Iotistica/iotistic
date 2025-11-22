@@ -287,7 +287,7 @@ export default class DeviceAgent {
     let deviceInfo = this.deviceManager.getDeviceInfo();
 
     // Auto-provision if not yet provisioned, cloud endpoint is set, AND provisioning key is available
-    const provisioningApiKey = process.env.PROVISIONING_API_KEY;
+    const provisioningApiKey = process.env.PROVISIONING_KEY;
     if (
       !deviceInfo.provisioned &&
       provisioningApiKey &&
@@ -335,7 +335,7 @@ export default class DeviceAgent {
           error instanceof Error ? error : new Error(error.message),
           {
             component: LogComponents.agent,
-            note: "Device will remain unprovisioned. Set PROVISIONING_API_KEY to retry.",
+            note: "Device will remain unprovisioned. Set PROVISIONING_KEY to retry.",
           }
         );
 
@@ -358,7 +358,7 @@ export default class DeviceAgent {
     ) {
       this.agentLogger.warnSync("Device not provisioned", {
         component: LogComponents.agent,
-        note: "Set PROVISIONING_API_KEY environment variable to enable auto-provisioning",
+        note: "Set PROVISIONING_KEY environment variable to enable auto-provisioning",
       });
 
       // Optional: Fail-fast if REQUIRE_PROVISIONING is set
