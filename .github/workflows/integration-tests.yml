@@ -403,6 +403,24 @@ jobs:
           
           echo "✓ Agent installed"
 
+      - name: Verify environment configuration
+        run: |
+          echo "=== Checking environment file ==="
+          echo "File: /etc/iotistic/agent.env"
+          if [ -f /etc/iotistic/agent.env ]; then
+            echo "Environment file exists"
+            echo ""
+            echo "Contents (sensitive values masked):"
+            sudo cat /etc/iotistic/agent.env | sed 's/PROVISIONING_KEY=.*/PROVISIONING_KEY=<masked>/'
+          else
+            echo "✗ Environment file NOT found!"
+            exit 1
+          fi
+          
+          echo ""
+          echo "=== Checking PM2 environment ==="
+          sudo pm2 show iotistic-agent | grep -A 20 "env:"
+
       - name: Check systemd service status
         run: |
           echo "Checking systemd service status..."

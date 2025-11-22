@@ -368,7 +368,7 @@ elif [ "$INSTALL_METHOD" = "systemd" ]; then
 
     if [ -n "$CI" ] || [ ! -t 0 ]; then
         echo "Running in non-interactive mode"
-        echo "[DEBUG] PROVISIONING_KEY (from env): ${PROVISIONING_KEY:0:20}..."
+        echo "[DEBUG] PROVISIONING_KEY (from env): ${PROVISIONING_KEY}..."
         DEVICE_API_PORT="${IOTISTIC_DEVICE_PORT:-48484}"
         AGENT_VERSION="${IOTISTIC_AGENT_VERSION:-dev}"
         CLOUD_API_ENDPOINT="${CLOUD_API_ENDPOINT:-}"
