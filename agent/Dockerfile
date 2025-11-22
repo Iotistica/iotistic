@@ -10,10 +10,9 @@ RUN apk add --no-cache python3 make g++ sqlite-dev
 COPY package*.json ./
 
 # Install production dependencies only - using cache mount
-# Set npm config for node-gyp to find Python
+# Set PYTHON env var for node-gyp to find Python
 RUN --mount=type=cache,target=/root/.npm \
-    npm config set python python3 && \
-    npm ci --omit=dev --legacy-peer-deps --build-from-source
+    PYTHON=python3 npm ci --omit=dev --legacy-peer-deps --build-from-source
 
 # ---- Build stage ----
 FROM node:20-alpine AS builder
@@ -27,10 +26,9 @@ RUN apk add --no-cache make g++ sqlite-dev
 COPY package*.json tsconfig.json tsconfig.build.json ./
 
 # Install all deps (including dev) - using cache mount for faster builds
-# Set npm config for node-gyp to find Python
+# Set PYTHON env var for node-gyp to find Python
 RUN --mount=type=cache,target=/root/.npm \
-    npm config set python python3 && \
-    npm ci --legacy-peer-deps --build-from-source
+    PYTHON=python3 npm ci --legacy-peer-deps --build-from-source
 
 # Copy source code
 COPY src ./src
