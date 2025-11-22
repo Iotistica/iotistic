@@ -5,7 +5,7 @@ env:
 
 # Concurrency control: Cancel in-progress runs when new commit is pushed
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: integration-tests-${{ github.ref }}
   cancel-in-progress: true
 
 on:
