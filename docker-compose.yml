@@ -186,24 +186,6 @@ services:
             start_period: 10s
         networks:
            - iotistic-net
-
-    mqtt-exporter:
-        build:
-            context: ./mqtt-exporter
-            dockerfile: Dockerfile
-        container_name: iotistic-mqtt-exporter
-        restart: unless-stopped
-        environment:
-            - MQTT_BROKER=mqtt://mosquitto:1883
-            - MQTT_USERNAME=${MQTT_USERNAME:-}
-            - MQTT_PASSWORD=${MQTT_PASSWORD:-}
-            - METRICS_PORT=9234
-        ports:
-            - "9234:9234"  # Prometheus metrics endpoint
-        depends_on:
-            - mosquitto
-        networks:
-            - iotistic-net
     
 
     # VPN Services - Commented out until TypeScript code is complete

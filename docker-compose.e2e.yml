@@ -107,10 +107,8 @@ services:
       - IOTISTIC_LICENSE_KEY=${IOTISTIC_LICENSE_KEY}
       - REDIS_HOST=${REDIS_HOST:-redis}
       - REDIS_PORT=${REDIS_PORT:-6379}
-      - VPN_ENABLED=true
-      - VPN_SERVER_HOST=vpn-server
-      - VPN_SERVER_PORT=1194
-      - VPN_CA_URL=http://vpn-server:8080
+      - VPN_ENABLED=false
+      
     ports:
       - "${API_PORT_EXT:-4002}:3002"
     healthcheck:

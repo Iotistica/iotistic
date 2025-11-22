@@ -367,6 +367,26 @@ jobs:
       - name: Make install script executable
         run: chmod +x agent/bin/install.sh
 
+      - name: Generate provisioning key via API
+        id: provision
+        run: |
+          echo "Generating provisioning key via API..."
+          
+          RESPONSE=$(curl -s -X POST http://localhost:4002/api/v1/provisioning-keys/generate \
+            -H "Content-Type: application/json" \
+            -d '{"fleetId":"test-fleet","newKey":false}')
+          
+          PROVISIONING_KEY=$(echo "$RESPONSE" | jq -r '.key')
+          
+          if [ -z "$PROVISIONING_KEY" ] || [ "$PROVISIONING_KEY" == "null" ]; then
+            echo "Failed to generate provisioning key"
+            echo "Response: $RESPONSE"
+            exit 1
+          fi
+          
+          echo "✓ Provisioning key generated: ${PROVISIONING_KEY:0:20}..."
+          echo "provisioning_key=$PROVISIONING_KEY" >> $GITHUB_OUTPUT
+
       - name: Install agent via systemd method
         env:
           CI: true
@@ -374,7 +394,7 @@ jobs:
           IOTISTIC_AGENT_VERSION: ${{ needs.determine-versions.outputs.agent_version }}
           IOTISTIC_DEVICE_PORT: 48484
           IOTISTIC_CLOUD_API_ENDPOINT: http://localhost:4002
-          IOTISTIC_PROVISIONING_KEY: ${{ secrets.TEST_PROVISIONING_KEY }}
+          IOTISTIC_PROVISIONING_KEY: ${{ steps.provision.outputs.provisioning_key }}
         run: |
           echo "Installing agent with systemd method..."
           sudo -E bash agent/bin/install.sh
