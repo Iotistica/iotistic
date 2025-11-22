@@ -225,7 +225,7 @@ if [ "$INSTALL_METHOD" = "docker" ]; then
         -e ORCHESTRATOR_INTERVAL=30000"
 
     if [ -n "$PROVISIONING_KEY" ]; then
-        ENV_VARS="$ENV_VARS -e PROVISIONING_API_KEY=${PROVISIONING_KEY}"
+        ENV_VARS="$ENV_VARS -e PROVISIONING_KEY=${PROVISIONING_KEY}"
     fi
 
     if [ -n "$CLOUD_API_ENDPOINT" ]; then
@@ -453,7 +453,7 @@ STATE_FILE=/var/lib/iotistic/agent/target-state.json
 EOF
 
     if [ -n "$PROVISIONING_KEY" ]; then
-        echo "PROVISIONING_API_KEY=${PROVISIONING_KEY}" >> /etc/iotistic/agent.env
+        echo "PROVISIONING_KEY=${PROVISIONING_KEY}" >> /etc/iotistic/agent.env
     fi
 
     if [ -n "$CLOUD_API_ENDPOINT" ]; then
