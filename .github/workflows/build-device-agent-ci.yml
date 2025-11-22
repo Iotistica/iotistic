@@ -301,8 +301,8 @@ jobs:
           IOTISTIC_INSTALL_METHOD: systemd
           IOTISTIC_AGENT_VERSION: ${{ needs.version.outputs.package_version }}
           IOTISTIC_DEVICE_PORT: 48484
-          IOTISTIC_CLOUD_API_ENDPOINT: ''
-          IOTISTIC_PROVISIONING_KEY: ''
+          CLOUD_API_ENDPOINT: ''
+          PROVISIONING_KEY: ''
         run: |
           echo "Testing unified installation script with Systemd method..."
           sudo -E bash agent/bin/install.sh
@@ -743,12 +743,12 @@ jobs:
             
             console.log('Integration tests triggered with agent version: ${{ needs.version.outputs.package_version }}');
 
-  # cleanup:
-  #     name: Clean up
-  #     runs-on: [self-hosted, iotistic-lab-sc]
-  #     needs: [trigger-integration-tests, report]
-  #     steps:
-  #      - name: Cleanup Docker
-  #        if: always()
-  #        run: |
-  #           docker system prune -af
+  cleanup:
+      name: Clean up
+      runs-on: [self-hosted, iotistic-lab-sc]
+      needs: [trigger-integration-tests, report]
+      steps:
+       - name: Cleanup Docker
+         if: always()
+         run: |
+            docker system prune -af
