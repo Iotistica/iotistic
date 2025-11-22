@@ -744,12 +744,13 @@ jobs:
             console.log('Integration tests triggered with agent version: ${{ needs.version.outputs.package_version }}');
 
   cleanup:
+      name: Clean up
       runs-on: [self-hosted, iotistic-lab-sc]
       needs: [trigger-integration-tests, report]
-      if: runner.labels && contains(runner.labels, 'self-hosted')
-      name: Clean up
+      if: runner.labels && contains('self-hosted')
       steps:
        - name: Cleanup Docker
          if: always()
          run: |
+            rm -rf "${{ github.workspace }}"
             docker system prune -af
