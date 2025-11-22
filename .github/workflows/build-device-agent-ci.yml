@@ -218,7 +218,7 @@ jobs:
         run: |
           echo "Testing agent API endpoints..."
           
-          # Try health endpoint (using wget since it's in alpine)
+          # Try health endpoint (using wget since it's in alpine).
           if docker exec iotistic-agent wget -q -O- http://localhost:48484/health 2>/dev/null || \
              docker exec iotistic-agent wget -q -O- http://localhost:48484/v2/device 2>/dev/null; then
             echo "✓ Agent API is responding"
