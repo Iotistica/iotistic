@@ -3,6 +3,9 @@ FROM node:20-alpine AS deps
 
 WORKDIR /app
 
+# Install build tools needed for native dependencies (sqlite3)
+RUN apk add --no-cache python3 make g++ sqlite-dev
+
 # Copy package files
 COPY package*.json ./
 
