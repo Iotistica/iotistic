@@ -1,0 +1,50 @@
+name: Self-Hosted Runner Health Check
+
+on:
+  workflow_dispatch:
+
+jobs:
+  runner-health:
+    name: Check Self-Hosted Runner Health
+    runs-on: [self-hosted, iotistic-lab-sc]
+    steps:
+      - name: Print runner info
+        run: |
+          echo "Runner name: ${{ runner.name }}"
+          echo "Runner OS: ${{ runner.os }}"
+          echo "Runner architecture: ${{ runner.arch }}"
+
+      - name: Check Node.js
+        run: |
+          node --version || echo "Node.js not installed"
+          npm --version || echo "npm not installed"
+
+      - name: Check Docker
+        run: |
+          docker --version || echo "Docker not installed"
+          docker info || echo "Docker info unavailable"
+
+      - name: Check Python
+        run: |
+          python3 --version || python --version || echo "Python not installed"
+          pip3 --version || pip --version || echo "pip not installed"
+
+      - name: Check Git
+        run: |
+          git --version || echo "Git not installed"
+
+      - name: List installed packages (Node.js)
+        run: |
+          npm list -g --depth=0 || echo "Global npm packages unavailable"
+
+      - name: List installed packages (Python)
+        run: |
+          pip3 list || pip list || echo "Global pip packages unavailable"
+
+      - name: List installed packages (Docker)
+        run: |
+          docker images || echo "No Docker images found"
+
+      - name: Print environment variables
+        run: |
+          printenv | sort
