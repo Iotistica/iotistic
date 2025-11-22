@@ -368,7 +368,7 @@ elif [ "$INSTALL_METHOD" = "systemd" ]; then
 
     if [ -n "$CI" ] || [ ! -t 0 ]; then
         echo "Running in non-interactive mode"
-        PROVISIONING_KEY="${PROVISIONING_KEY:-}"
+        echo "[DEBUG] PROVISIONING_KEY (from env): ${PROVISIONING_KEY:0:20}..."
         DEVICE_API_PORT="${IOTISTIC_DEVICE_PORT:-48484}"
         AGENT_VERSION="${IOTISTIC_AGENT_VERSION:-dev}"
         CLOUD_API_ENDPOINT="${CLOUD_API_ENDPOINT:-}"
@@ -453,7 +453,10 @@ STATE_FILE=/var/lib/iotistic/agent/target-state.json
 EOF
 
     if [ -n "$PROVISIONING_KEY" ]; then
+        echo "[DEBUG] Writing PROVISIONING_KEY to agent.env: ${PROVISIONING_KEY:0:20}..."
         echo "PROVISIONING_KEY=${PROVISIONING_KEY}" >> /etc/iotistic/agent.env
+    else
+        echo "[DEBUG] PROVISIONING_KEY is empty, not writing to agent.env"
     fi
 
     if [ -n "$CLOUD_API_ENDPOINT" ]; then

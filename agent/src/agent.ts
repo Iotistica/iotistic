@@ -288,6 +288,17 @@ export default class DeviceAgent {
 
     // Auto-provision if not yet provisioned, cloud endpoint is set, AND provisioning key is available
     const provisioningApiKey = process.env.PROVISIONING_KEY;
+    
+    this.agentLogger.debugSync("Checking provisioning configuration", {
+      component: LogComponents.agent,
+      hasProvisioningKey: !!provisioningApiKey,
+      provisioningKeyLength: provisioningApiKey?.length || 0,
+      provisioningKeyPrefix: provisioningApiKey ? provisioningApiKey.substring(0, 20) + '...' : 'not set',
+      isProvisioned: deviceInfo.provisioned,
+      hasCloudEndpoint: !!this.CLOUD_API_ENDPOINT,
+      cloudEndpoint: this.CLOUD_API_ENDPOINT || 'not set',
+    });
+
     if (
       !deviceInfo.provisioned &&
       provisioningApiKey &&
