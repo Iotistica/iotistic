@@ -446,6 +446,58 @@ jobs:
             exit 1
           fi
 
+      - name: Verify agent provisioning status
+        run: |
+          echo "Checking agent provisioning status from logs..."
+          
+          # Wait a bit for device manager to initialize
+          sleep 5
+          
+          # Extract Device manager initialization log
+          DEVICE_INFO=$(sudo pm2 logs iotistic-agent --nostream --lines 200 | grep "Device manager initialized" | tail -1)
+          
+          if [ -z "$DEVICE_INFO" ]; then
+            echo "✗ Device manager initialization log not found"
+            echo "Showing recent logs:"
+            sudo pm2 logs iotistic-agent --nostream --lines 100
+            exit 1
+          fi
+          
+          echo "Device info found: $DEVICE_INFO"
+          
+          # Parse the JSON from the log line
+          DEVICE_JSON=$(echo "$DEVICE_INFO" | grep -o '{.*}')
+          echo "Device JSON: $DEVICE_JSON"
+          
+          # Check provisioned status
+          PROVISIONED=$(echo "$DEVICE_JSON" | jq -r '.provisioned')
+          HAS_API_KEY=$(echo "$DEVICE_JSON" | jq -r '.hasApiKey')
+          UUID=$(echo "$DEVICE_JSON" | jq -r '.uuid')
+          AGENT_VERSION=$(echo "$DEVICE_JSON" | jq -r '.agentVersion')
+          
+          echo ""
+          echo "Device Configuration:"
+          echo "  UUID: $UUID"
+          echo "  Agent Version: $AGENT_VERSION"
+          echo "  Has API Key: $HAS_API_KEY"
+          echo "  Provisioned: $PROVISIONED"
+          echo ""
+          
+          if [ "$PROVISIONED" != "true" ]; then
+            echo "✗ Agent is NOT provisioned (expected: true, got: $PROVISIONED)"
+            echo ""
+            echo "Full device manager logs:"
+            sudo pm2 logs iotistic-agent --nostream --lines 200 | grep -i "provision"
+            exit 1
+          fi
+          
+          if [ "$HAS_API_KEY" != "true" ]; then
+            echo "✗ Agent does not have API key (expected: true, got: $HAS_API_KEY)"
+            exit 1
+          fi
+          
+          echo "✓ Agent successfully provisioned with API key"
+
       - name: Verify agent connected to cloud API
         run: |
           echo "Checking if agent registered with API..."
