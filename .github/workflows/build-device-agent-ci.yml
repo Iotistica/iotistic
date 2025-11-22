@@ -200,7 +200,7 @@ jobs:
           IOTISTIC_CLOUD_API_ENDPOINT: ''
           IOTISTIC_PROVISIONING_KEY: ''
         run: |
-          echo "Testing yunified installation script with Docker method..."
+          echo "tTesting yunified installation script with Docker method..."
           sudo -E bash agent/bin/install.sh
 
       - name: Check agent container is running
