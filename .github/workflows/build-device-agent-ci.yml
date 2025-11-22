@@ -39,7 +39,7 @@ jobs:
 
   version:
     name: Bump Version
-    # needs: [test]  # Temporarily removed dependency while tests disabled
+    # needs: [test]  # Temporarily removed dependency while tests disablede
     runs-on: [self-hosted, iotistic-lab-sc]
     permissions:
       contents: write
