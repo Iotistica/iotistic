@@ -176,7 +176,7 @@ jobs:
   test-agent-docker:
     name: Test Docker Installation (via install.sh)
     needs: [version, buildx]
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, iotistic-lab-sc]
     
     steps:
       - name: Checkout repository
@@ -280,7 +280,7 @@ jobs:
   test-agent-systemd:
     name: Test Systemd Installation (via install.sh)
     needs: version
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, iotistic-lab-sc]
     
     steps:
       - name: Checkout repository
@@ -458,7 +458,7 @@ jobs:
   upload-install-scripts:
     name: Upload Installation Scripts
     needs: [version, buildx, test-agent-docker, test-agent-systemd]
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, iotistic-lab-sc]
     if: success()
     
     steps:
