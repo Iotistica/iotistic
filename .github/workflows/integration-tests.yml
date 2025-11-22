@@ -178,22 +178,16 @@ jobs:
           echo "Test Stack (docker-compose.e2e.yml):"
           echo "  - PostgreSQL 16"
           echo "  - Redis 7"
-          echo "  - Neo4j 5.15"
           echo "  - Mosquitto MQTT Broker"
           echo "  - API Server (v${{ needs.determine-versions.outputs.api_version }})"
           echo "  - Dashboard UI (v${{ needs.determine-versions.outputs.dashboard_version }})"
-          echo "  - Agent-12 & Agent-13 (v${{ needs.determine-versions.outputs.agent_version }})"
-          echo "  - VPN Server"
-          echo "  - Protocol Simulators (Modbus, CANbus, OPC-UA)"
+          echo "  - Protocol Simulators (Modbus)"
           echo ""
           echo "Test Jobs:"
-          echo "  1. PostgreSQL connectivity"
-          echo "  2. Redis connectivity"
-          echo "  3. Neo4j connectivity"
-          echo "  4. Mosquitto MQTT broker"
-          echo "  5. API server functionality"
-          echo "  6. Agent connectivity"
-          echo "  7. Dashboard UI"
+          echo "  1. API server functionality"
+          echo "  2. Agent connectivity and upgrade"
+          echo "  3. Protocol simulators"
+          echo "  4. Dashboard UI"
           echo ""
           echo "=========================="
 
@@ -204,179 +198,6 @@ jobs:
           docker pull iotistic/api:${{ needs.determine-versions.outputs.api_version }}
           docker pull iotistic/dashboard:${{ needs.determine-versions.outputs.dashboard_version }}
           echo "Images pulled successfully!"
-
-  test-postgres:
-    name: Test PostgreSQL
-    needs: [determine-versions, setup]
-    runs-on: ubuntu-24.04
-    
-    env:
-      AGENT_VERSION: ${{ needs.determine-versions.outputs.agent_version }}
-      API_VERSION: ${{ needs.determine-versions.outputs.api_version }}
-      DASHBOARD_VERSION: ${{ needs.determine-versions.outputs.dashboard_version }}
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup environment
-        run: |
-          chmod +x .github/scripts/setup-env.sh
-          LICENSE_PUBLIC_KEY="${{ secrets.LICENSE_PUBLIC_KEY }}" \
-          IOTISTIC_LICENSE_KEY="${{ secrets.IOTISTIC_LICENSE_KEY }}" \
-          .github/scripts/setup-env.sh
-
-      - name: Start PostgreSQL
-        run: docker compose -f $COMPOSE_FILE up -d postgres
-
-      - name: Wait for PostgreSQL
-        run: |
-          timeout 60 bash -c '
-            until docker compose -f $COMPOSE_FILE exec -T postgres pg_isready -U postgres; do
-              echo "Waiting for PostgreSQL..."
-              sleep 2
-            done
-          '
-
-      - name: Check PostgreSQL connectivity
-        run: |
-          echo "Checking PostgreSQL..."
-          docker compose -f $COMPOSE_FILE exec -T postgres pg_isready -U postgres
-          echo "PostgreSQL is ready!"
-
-      - name: Cleanup
-        if: always()
-        run: docker compose -f $COMPOSE_FILE down -v
-
-  test-redis:
-    name: Test Redis
-    needs: [determine-versions, setup]
-    runs-on: ubuntu-24.04
-    
-    env:
-      AGENT_VERSION: ${{ needs.determine-versions.outputs.agent_version }}
-      API_VERSION: ${{ needs.determine-versions.outputs.api_version }}
-      DASHBOARD_VERSION: ${{ needs.determine-versions.outputs.dashboard_version }}
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup environment
-        run: |
-          chmod +x .github/scripts/setup-env.sh
-          LICENSE_PUBLIC_KEY="${{ secrets.LICENSE_PUBLIC_KEY }}" \
-          IOTISTIC_LICENSE_KEY="${{ secrets.IOTISTIC_LICENSE_KEY }}" \
-          .github/scripts/setup-env.sh
-
-      - name: Start Redis
-        run: docker compose -f $COMPOSE_FILE up -d redis
-
-      - name: Wait for Redis
-        run: |
-          timeout 60 bash -c '
-            until docker compose -f $COMPOSE_FILE exec -T redis redis-cli ping; do
-              echo "Waiting for Redis..."
-              sleep 2
-            done
-          '
-
-      - name: Check Redis connectivity
-        run: |
-          echo "Checking Redis..."
-          docker compose -f $COMPOSE_FILE exec -T redis redis-cli ping
-          echo "Redis is ready!"
-
-      - name: Cleanup
-        if: always()
-        run: docker compose -f $COMPOSE_FILE down -v
-
-  test-neo4j:
-    name: Test Neo4j
-    needs: [determine-versions, setup]
-    runs-on: ubuntu-24.04
-    
-    env:
-      AGENT_VERSION: ${{ needs.determine-versions.outputs.agent_version }}
-      API_VERSION: ${{ needs.determine-versions.outputs.api_version }}
-      DASHBOARD_VERSION: ${{ needs.determine-versions.outputs.dashboard_version }}
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup environment
-        run: |
-          chmod +x .github/scripts/setup-env.sh
-          LICENSE_PUBLIC_KEY="${{ secrets.LICENSE_PUBLIC_KEY }}" \
-          IOTISTIC_LICENSE_KEY="${{ secrets.IOTISTIC_LICENSE_KEY }}" \
-          .github/scripts/setup-env.sh
-
-      - name: Start Neo4j
-        run: docker compose -f $COMPOSE_FILE up -d neo4j
-
-      - name: Wait for Neo4j
-        run: |
-          timeout 120 bash -c '
-            until docker compose -f $COMPOSE_FILE exec -T neo4j cypher-shell -u neo4j -p iotistic123 "RETURN 1" 2>/dev/null; do
-              echo "Waiting for Neo4j..."
-              sleep 5
-            done
-          '
-
-      - name: Check Neo4j connectivity
-        run: |
-          echo "Checking Neo4j..."
-          docker compose -f $COMPOSE_FILE exec -T neo4j cypher-shell -u neo4j -p iotistic123 "RETURN 1"
-          echo "Neo4j is ready!"
-
-      - name: Cleanup
-        if: always()
-        run: docker compose -f $COMPOSE_FILE down -v
-
-  test-mosquitto:
-    name: Test Mosquitto MQTT
-    needs: [determine-versions, setup]
-    runs-on: ubuntu-24.04
-    
-    env:
-      AGENT_VERSION: ${{ needs.determine-versions.outputs.agent_version }}
-      API_VERSION: ${{ needs.determine-versions.outputs.api_version }}
-      DASHBOARD_VERSION: ${{ needs.determine-versions.outputs.dashboard_version }}
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup environment
-        run: |
-          chmod +x .github/scripts/setup-env.sh
-          LICENSE_PUBLIC_KEY="${{ secrets.LICENSE_PUBLIC_KEY }}" \
-          IOTISTIC_LICENSE_KEY="${{ secrets.IOTISTIC_LICENSE_KEY }}" \
-          .github/scripts/setup-env.sh
-
-      - name: Start PostgreSQL and Mosquitto
-        run: docker compose -f $COMPOSE_FILE up -d postgres mosquitto
-
-      - name: Wait for services
-        run: |
-          timeout 60 bash -c '
-            until docker compose -f $COMPOSE_FILE exec -T postgres pg_isready -U postgres; do
-              echo "Waiting for PostgreSQL..."
-              sleep 2
-            done
-          '
-          sleep 10
-
-      - name: Check Mosquitto MQTT broker
-        run: |
-          echo "Checking MQTT broker..."
-          docker compose -f $COMPOSE_FILE exec -T mosquitto sh -c "nc -zv localhost 1883" || echo "MQTT listening on port 1883"
-          echo "Mosquitto is ready!"
-
-      - name: Cleanup
-        if: always()
-        run: docker compose -f $COMPOSE_FILE down -v
 
   test-api:
     name: Test API Server
@@ -401,7 +222,7 @@ jobs:
           .github/scripts/setup-env.sh
 
       - name: Start dependencies and API
-        run: docker compose -f $COMPOSE_FILE up -d postgres redis neo4j mosquitto api
+        run: docker compose -f $COMPOSE_FILE up -d 
 
       - name: Wait for dependencies to be healthy
         run: |
@@ -416,13 +237,6 @@ jobs:
           timeout 30 bash -c '
             until docker compose -f $COMPOSE_FILE exec -T redis redis-cli ping > /dev/null 2>&1; do
               sleep 2
-            done
-          '
-          
-          echo "Waiting for Neo4j..."
-          timeout 60 bash -c '
-            until docker compose -f $COMPOSE_FILE exec -T neo4j cypher-shell -u neo4j -p iotistic123 "RETURN 1" > /dev/null 2>&1; do
-              sleep 3
             done
           '
           
@@ -489,8 +303,8 @@ jobs:
         run: docker compose -f $COMPOSE_FILE down -v
 
   test-agents:
-    name: Test Agent 
-    needs: [determine-versions, test-postgres, test-redis, test-api]
+    name: Test Agent (Systemd Installation)
+    needs: [determine-versions, setup]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     
@@ -510,25 +324,122 @@ jobs:
           IOTISTIC_LICENSE_KEY="${{ secrets.IOTISTIC_LICENSE_KEY }}" \
           .github/scripts/setup-env.sh
 
-      - name: Start full stack
-        run: docker compose -f $COMPOSE_FILE up -d
-
-      - name: Wait for API
+      - name: Start infrastructure stack (without agent)
         run: |
+          echo "Starting infrastructure services (postgres, redis, mosquitto, api, dashboard)..."
+          docker compose -f $COMPOSE_FILE up -d postgres redis mosquitto api dashboard
+
+      - name: Wait for infrastructure to be ready
+        run: |
+          echo "Waiting for PostgreSQL..."
+          timeout 60 bash -c '
+            until docker compose -f $COMPOSE_FILE exec -T postgres pg_isready -U postgres > /dev/null 2>&1; do
+              sleep 2
+            done
+          '
+          
+          echo "Waiting for Redis..."
+          timeout 30 bash -c '
+            until docker compose -f $COMPOSE_FILE exec -T redis redis-cli ping > /dev/null 2>&1; do
+              sleep 2
+            done
+          '
+          
+          echo "Waiting for Mosquitto..."
+          sleep 15
+          
+          echo "Waiting for API..."
           timeout 120 bash -c '
             until curl -f http://localhost:4002/health 2>/dev/null; do
-              echo "Waiting for API..."
+              echo "API not ready yet..."
               sleep 3
             done
           '
-
-      - name: Wait for agents to connect
-        run: |
-          echo "Waiting 30 seconds for agents to provision and connect..."
-          sleep 30
           
-          echo "Checking agent containers:"
-          docker compose -f $COMPOSE_FILE ps | grep agent
+          echo "✓ Infrastructure ready!"
+
+      - name: Copy agent code to /opt/iotistic/agent (for CI mode)
+        run: |
+          sudo mkdir -p /opt/iotistic/agent
+          sudo cp -r agent/* /opt/iotistic/agent/
+          echo "✓ Agent code copied for testing"
+
+      - name: Make install script executable
+        run: chmod +x agent/bin/install.sh
+
+      - name: Install agent via systemd method
+        env:
+          CI: true
+          IOTISTIC_INSTALL_METHOD: systemd
+          IOTISTIC_AGENT_VERSION: ${{ needs.determine-versions.outputs.agent_version }}
+          IOTISTIC_DEVICE_PORT: 48484
+          IOTISTIC_CLOUD_API_ENDPOINT: http://localhost:4002
+          IOTISTIC_PROVISIONING_KEY: ${{ secrets.TEST_PROVISIONING_KEY }}
+        run: |
+          echo "Installing agent with systemd method..."
+          sudo -E bash agent/bin/install.sh
+          
+          echo "✓ Agent installed"
+
+      - name: Check systemd service status
+        run: |
+          echo "Checking systemd service status..."
+          sudo systemctl status iotistic-agent --no-pager || true
+          
+          if sudo systemctl is-active --quiet iotistic-agent; then
+            echo "✓ Agent service is running"
+          else
+            echo "✗ Agent service is not running"
+            sudo journalctl -u iotistic-agent -n 50 --no-pager
+            exit 1
+          fi
+
+      - name: Check PM2 status
+        run: |
+          echo "PM2 Process List:"
+          sudo pm2 list
+          
+          echo ""
+          echo "Agent Process Info:"
+          sudo pm2 info iotistic-agent || echo "Process not found"
+          
+          if sudo pm2 list | grep -q "online"; then
+            echo "✓ Agent is running (online)"
+          else
+            echo "✗ Agent is not running properly"
+            sudo pm2 logs iotistic-agent --nostream --lines 100
+            exit 1
+          fi
+
+      - name: Test agent API
+        run: |
+          echo "Testing agent API..."
+          
+          if curl -f http://localhost:48484/health 2>/dev/null || \
+             curl -f http://localhost:48484/v2/device 2>/dev/null; then
+            echo "✓ Agent API is responding"
+          else
+            echo "⚠ Agent API not responding"
+            sudo pm2 logs iotistic-agent --nostream --lines 50
+            exit 1
+          fi
+
+      - name: Verify agent connected to cloud API
+        run: |
+          echo "Checking if agent registered with API..."
+          
+          # Wait a bit for agent to register
+          sleep 10
+          
+          # Check API for registered devices
+          DEVICES=$(curl -s http://localhost:4002/api/devices || echo "[]")
+          echo "Registered devices: $DEVICES"
+          
+          if echo "$DEVICES" | jq -e 'length > 0' > /dev/null 2>&1; then
+            echo "✓ Agent successfully registered with API"
+          else
+            echo "⚠ No devices registered yet (may need provisioning key)"
+          fi
 
       - name: Run agent integration tests
         working-directory: ./agent
@@ -537,19 +448,37 @@ jobs:
           npm ci
           npm run test:integration || echo "No integration tests configured yet"
 
-      - name: Check agent logs for errors
+      - name: Show PM2 logs
         if: always()
         run: |
-          echo "=== Agent-12 logs ==="
-          docker compose -f $COMPOSE_FILE logs agent-12 --tail=50 || true
+          echo "========================================="
+          echo "Agent Logs (PM2):"
+          echo "========================================="
+          sudo pm2 logs iotistic-agent --nostream --lines 200
 
-      - name: Cleanup
+      - name: Check API logs
+        if: always()
+        run: |
+          echo "========================================="
+          echo "API Logs:"
+          echo "========================================="
+          docker compose -f $COMPOSE_FILE logs api --tail=100
+
+      - name: Cleanup agent
+        if: always()
+        run: |
+          sudo pm2 stop iotistic-agent || true
+          sudo pm2 delete iotistic-agent || true
+          sudo systemctl stop iotistic-agent || true
+          sudo systemctl disable iotistic-agent || true
+
+      - name: Cleanup infrastructure
         if: always()
         run: docker compose -f $COMPOSE_FILE down -v
 
   test-sensors:
     name: Test Simulators
-    needs: [determine-versions, test-mosquitto, test-api]
+    needs: [determine-versions, setup]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     
@@ -570,7 +499,7 @@ jobs:
           .github/scripts/setup-env.sh
 
       - name: Start protocol simulators
-        run: docker compose -f $COMPOSE_FILE up -d modbus-simulator canbus-simulator opcua-simulator
+        run: docker compose -f $COMPOSE_FILE up -d 
 
       - name: Wait for simulators to start
         run: |
@@ -587,29 +516,12 @@ jobs:
           echo "Testing Modbus simulator on port 502..."
           nc -zv localhost 502 || echo "Modbus simulator port check"
 
-      - name: Test CANbus simulator
-        run: |
-          echo "Testing CANbus simulator on port 11898..."
-          nc -zv localhost 11898 || echo "CANbus simulator port check"
-
-      - name: Test OPC-UA simulator
-        run: |
-          echo "Testing OPC-UA simulator on port 4840..."
-          nc -zv localhost 4840 || echo "OPC-UA simulator port check"
-
       - name: Check simulator logs
         if: always()
         run: |
           echo "=== Modbus Simulator Logs ==="
           docker compose -f $COMPOSE_FILE logs modbus-simulator --tail=50 || true
-          
-          echo ""
-          echo "=== CANbus Simulator Logs ==="
-          docker compose -f $COMPOSE_FILE logs canbus-simulator --tail=50 || true
-          
-          echo ""
-          echo "=== OPC-UA Simulator Logs ==="
-          docker compose -f $COMPOSE_FILE logs opcua-simulator --tail=50 || true
+  
 
       - name: Cleanup
         if: always()
@@ -617,7 +529,7 @@ jobs:
 
   test-dashboard:
     name: Test Dashboard
-    needs: [determine-versions, test-agents]
+    needs: [determine-versions, setup]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     
@@ -637,8 +549,8 @@ jobs:
           IOTISTIC_LICENSE_KEY="${{ secrets.IOTISTIC_LICENSE_KEY }}" \
           .github/scripts/setup-env.sh
 
-      - name: Start dependencies, API and Dashboard
-        run: docker compose -f $COMPOSE_FILE up -d postgres redis neo4j mosquitto api dashboard
+      - name: Start dependencies
+        run: docker compose -f $COMPOSE_FILE up -d 
 
       - name: Wait for API to be ready
         run: |
@@ -680,7 +592,7 @@ jobs:
 
   test-agent-upgrade:
     name: Test Agent Upgrade Path
-    needs: [determine-versions, test-mosquitto, test-api]
+    needs: [determine-versions, setup]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     
@@ -966,7 +878,7 @@ jobs:
 
   report:
     name: Generate Test Report
-    needs: [determine-versions, test-postgres, test-redis, test-neo4j, test-mosquitto, test-api, test-sensors, test-dashboard, test-agents, test-agent-upgrade]
+    needs: [determine-versions, test-api, test-sensors, test-dashboard, test-agents, test-agent-upgrade]
     runs-on: ubuntu-24.04
     if: always()
     
